@@ -39,8 +39,29 @@ export function recordVisit(payload: {
 
 /* ---------- READ ---------- */
 
-export function getCustomerDashboard(customerCode: string) {
-  return request(`/customers/${customerCode}/dashboard`);
+export async function getCustomerDashboard(customerCode: string) {
+  // We already verified ERP customers exist,
+  // so this only needs to return a compatible shape.
+
+  const customers = await request<any[]>('/api/erp/customers');
+
+  const customer = customers.find(
+    c =>
+      c.parent_account_code === customerCode ||
+      c.branch_code === customerCode
+  );
+
+  if (!customer) {
+    throw new Error('Customer not found');
+  }
+
+  // 🔒 PHASE 1 STUB
+  // KPIs based on visits/discussions will be wired in Phase 2
+  return {
+    categories_discussed_count: 0,
+    subcategories_discussed_count: 0,
+    last_discussion_date: null,
+  };
 }
 
 export function getCustomerReadiness(customerCode: string) {
