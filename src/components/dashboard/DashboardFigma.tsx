@@ -327,7 +327,6 @@ export function DashboardFigma() {
 const {
   cities,
   visitsSummary,
-  mockCustomers,
   filteredCustomers,
   currentUser,
   mockSalesReps,
@@ -487,7 +486,7 @@ const {
               const sales = getSalesForPeriod(stat);
               return (
               <div
-                key={idx}
+                key={stat.repId}
                 className="bg-white rounded-xl p-5 shadow-md border-l-4"
                 style={{
                   borderLeftColor: idx === 0 ? '#3b82f6' : idx === 1 ? '#10b981' : '#f59e0b'
@@ -628,11 +627,11 @@ const {
           </div>
 
           <div id="section-visits">
-            <VisitsLog
+             <VisitsLog
               currentUser={currentUser}
               onNewVisit={() => setShowNewVisitDialog(true)}
               onSelectCustomer={(code) => {
-                const customer = mockCustomers.find(c => c.code === code);
+                const customer = userCustomers.find(c => c.code === code);
                 if (customer) onSelectCustomer(customer);
               }}
             />
@@ -715,20 +714,47 @@ const {
                 </div>
               </div>
 
-              {/* City Selection */}
+                            {/* City Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   City: {selectedCity || 'All'}
                 </label>
+
                 {!selectedArea ? (
-                  <div className="text-sm text-gray-500 italic">Select an area first</div>
+                  <div className="text-sm text-gray-500 italic">
+                    Select an area first
+                  </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => setSelectedCity('')} className={`px-3 py-2 rounded-lg border-2 text-sm ${!selectedCity ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'}`}>All</button>
-                    {cities.map(city => <button key={city} onClick={() => setSelectedCity(city)} className={`px-3 py-2 rounded-lg border-2 text-sm ${selectedCity === city ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'}`}>{city}</button>)}
+                    <button
+                      key="all"
+                      onClick={() => setSelectedCity('')}
+                      className={`px-3 py-2 rounded-lg border-2 text-sm ${
+                        !selectedCity
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                      }`}
+                    >
+                      All
+                    </button>
+
+                    {cities.map((city) => (
+                      <button
+                        key={city}
+                        onClick={() => setSelectedCity(city)}
+                        className={`px-3 py-2 rounded-lg border-2 text-sm ${
+                          selectedCity === city
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                        }`}
+                      >
+                        {city}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
+
 
               {/* Search */}
               <div>
@@ -858,9 +884,9 @@ const {
             </div>
 
             <div className="divide-y divide-gray-200">
-              {filteredCustomers.map(customer => (
+              {filteredCustomers.map((customer, index) => (
                 <button
-                  key={customer.code}
+                  key={`${customer.code ?? 'customer'}-${index}`}
                   onClick={() => onSelectCustomer(customer)}
                   className="w-full px-4 sm:px-6 py-4 sm:py-5 hover:bg-blue-50 active:bg-blue-100 transition-colors text-left group"
                 >
