@@ -70,17 +70,28 @@ export function useProspectView(initialProspect: ProspectEntity) {
   };
 
   const saveProspectVisit = async (visitData: any) => {
+    const optimisticVisit = makeOptimisticVisit(visitData);
+
     try {
       setIsSavingVisit(true);
       setSaveVisitError(null);
+
+      // ✅ Optimistic insert
+      setVisits(prev => [optimisticVisit, ...prev]);
 
       await createProspectVisit({
         prospectId: prospect.id,
         ...visitData,
       });
 
-      await refetchVisits(); // ✅ refetch after save
+      // ✅ Reconcile with server
+      await refetchVisits();
     } catch (err) {
+      // ❌ Rollback optimistic insert
+      setVisits(prev =>
+        prev.filter(v => v.id !== optimisticVisit.id)
+      );
+
       setSaveVisitError('Η αποθήκευση της επίσκεψης απέτυχε.');
       throw err;
     } finally {

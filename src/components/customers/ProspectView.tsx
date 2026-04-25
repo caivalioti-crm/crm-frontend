@@ -13,6 +13,7 @@ import { formatDate } from '../../utils/dateFormat';
 import CategoriesDiscussed from '../prospects/CategoriesDiscussed';
 import { useProspectView } from '../../hooks/useProspectView';
 import { NewProspectVisitDialog } from '../prospects/NewProspectVisitDialog';
+import { sortVisits } from '../../utils/sortVisits';
 
 import type {
   CommercialEntityBase,
@@ -193,13 +194,21 @@ export function ProspectView({
           {visits.length === 0 ? (
             <div className="text-sm text-gray-500">Καμία επίσκεψη ακόμα</div>
           ) : (
-            <ul className="text-sm space-y-1">
-              {visits.map(v => (
-                <li key={v.id}>
-                  {v.date} — {v.notes || '—'}
-                </li>
-              ))}
-            </ul>
+
+        <ul className="text-sm space-y-1">
+          {sortVisits(visits).map(v => (
+            <li
+              key={v.id}
+              className={v.__optimistic ? 'opacity-60 italic' : ''}
+            >
+              {v.date} — {v.notes || '—'}
+              {v.__optimistic && (
+                <span className="ml-2 text-xs text-gray-400">(αποθήκευση…)</span>
+              )}
+            </li>
+          ))}
+        </ul>
+
           )}
         </section>
 
