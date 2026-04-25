@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 
 import type { CommercialEntityBase, TransportDraft } from '../types/commercialEntity';
 import type { Visit } from '../types/visit';
@@ -8,6 +13,8 @@ import type { VisitApiDTO } from '../types/visitApi';
 import { fetchProspectVisits, createProspectVisit } from '../api/visits';
 import { mapVisitsFromApi } from '../mappers/visitMapper';
 import { visitKeys } from '../queryKeys/visits';
+
+/* ===================== TYPES ===================== */
 
 type ProspectStatus =
   | 'new_lead'
@@ -47,13 +54,20 @@ const STATUS_FLOW: { key: ProspectStatus; label: string }[] = [
   { key: 'lost', label: 'Χαμένο' },
 ];
 
+type VisitsPage = {
+  items: Visit[];
+  nextCursor?: string;
+};
+
+/* ===================== HOOK ===================== */
+
 export function useProspectView(initialProspect: ProspectEntity) {
   const queryClient = useQueryClient();
 
   const [prospect, setProspect] = useState<ProspectEntity>(initialProspect);
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
 
-  /* ---------------- STATUS ---------------- */
+  /* ---------- STATUS ---------- */
 
   const currentStatusIndex = useMemo(
     () => STATUS_FLOW.findIndex(s => s.key === prospect.status),
@@ -64,7 +78,7 @@ export function useProspectView(initialProspect: ProspectEntity) {
     setProspect(prev => ({ ...prev, status }));
   };
 
-  /* ---------------- TRANSPORT DRAFT ---------------- */
+  /* ---------- TRANSPORT DRAFT ---------- */
 
   const updateTransportDraft = (next: TransportDraft) => {
     setProspect(prev => ({
@@ -73,32 +87,58 @@ export function useProspectView(initialProspect: ProspectEntity) {
     }));
   };
 
-  /* ---------------- HOT LOGIC ---------------- */
+  /* ---------- HOT + ADAPTIVE POLLING ---------- */
 
-  /**
-   * Prospect is considered "hot" when actively engaged
-   */
   const isHotProspect =
     prospect.status !== 'new_lead' &&
     prospect.status !== 'lost';
 
-  /* ---------------- VISITS (QUERY + CONDITIONAL POLLING) ---------------- */
+  const visitPollingInterval =
+    showNewVisitDialog
+      ? 10_000
+      : isHotProspect
+      ? 30_000
+      : false;
+
+  /* ---------- VISITS (INFINITE QUERY) ---------- */
 
   const {
-    data: visits = [],
-  } = useQuery({
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery<
+    VisitsPage,
+    Error,
+    InfiniteData<VisitsPage>,
+    ReturnType<typeof visitKeys.prospect>,
+    string | undefined
+  >({
     queryKey: visitKeys.prospect(prospect.id),
-    queryFn: async () => {
-      const data: VisitApiDTO[] = await fetchProspectVisits(prospect.id);
-      return mapVisitsFromApi(data);
+
+    queryFn: async ({ pageParam }) => {
+      const res = await fetchProspectVisits(prospect.id, {
+        cursor: pageParam,
+        limit: 20,
+      });
+
+      return {
+        items: mapVisitsFromApi(res.items as VisitApiDTO[]),
+        nextCursor: res.nextCursor,
+      };
     },
 
-    // ✅ Poll ONLY when prospect is hot
-    refetchInterval: isHotProspect ? 30_000 : false,
+    initialPageParam: undefined,
+    getNextPageParam: lastPage => lastPage.nextCursor ?? undefined,
+
+    refetchInterval: visitPollingInterval,
     refetchIntervalInBackground: true,
   });
 
-  /* ---------------- VISITS (MUTATION + OPTIMISTIC) ---------------- */
+  // ✅ Correctly typed: data is InfiniteData<VisitsPage>
+  const visits = data?.pages.flatMap(p => p.items) ?? [];
+
+  /* ---------- VISITS (MUTATION + OPTIMISTIC) ---------- */
 
   const saveProspectVisitMutation = useMutation({
     mutationFn: (visitData: any) =>
@@ -112,11 +152,6 @@ export function useProspectView(initialProspect: ProspectEntity) {
         queryKey: visitKeys.prospect(prospect.id),
       });
 
-      const previousVisits =
-        queryClient.getQueryData<Visit[]>(
-          visitKeys.prospect(prospect.id)
-        ) ?? [];
-
       const optimisticVisit: Visit = {
         id: `optimistic-${Date.now()}`,
         date: visitData.date ?? new Date().toISOString().slice(0, 10),
@@ -124,21 +159,22 @@ export function useProspectView(initialProspect: ProspectEntity) {
         __optimistic: true,
       };
 
-      queryClient.setQueryData<Visit[]>(
-        visitKeys.prospect(prospect.id),
-        [optimisticVisit, ...previousVisits]
-      );
+      queryClient.setQueryData<
+        InfiniteData<VisitsPage>
+      >(visitKeys.prospect(prospect.id), oldData => {
+        if (!oldData) return oldData;
 
-      return { previousVisits };
-    },
-
-    onError: (_err, _vars, context) => {
-      if (context?.previousVisits) {
-        queryClient.setQueryData(
-          visitKeys.prospect(prospect.id),
-          context.previousVisits
-        );
-      }
+        return {
+          ...oldData,
+          pages: [
+            {
+              ...oldData.pages[0],
+              items: [optimisticVisit, ...oldData.pages[0].items],
+            },
+            ...oldData.pages.slice(1),
+          ],
+        };
+      });
     },
 
     onSettled: () => {
@@ -148,7 +184,7 @@ export function useProspectView(initialProspect: ProspectEntity) {
     },
   });
 
-  /* ---------------- PUBLIC API ---------------- */
+  /* ---------- PUBLIC API ---------- */
 
   return {
     prospect,
@@ -156,6 +192,10 @@ export function useProspectView(initialProspect: ProspectEntity) {
     currentStatusIndex,
 
     visits,
+
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
 
     showNewVisitDialog,
     setShowNewVisitDialog,

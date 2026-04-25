@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardFigma } from './components/dashboard/DashboardFigma';
+import { OfflineBanner } from './components/system/OfflineBanner';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: true,   // ✅ when user returns to tab
-      refetchOnReconnect: true,     // ✅ when internet reconnects
-      staleTime: 30_000,            // ✅ 30s freshness window
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      staleTime: 30_000,
       retry: 1,
     },
   },
@@ -15,6 +16,7 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <OfflineBanner />
       <DashboardFigma />
     </QueryClientProvider>
   );

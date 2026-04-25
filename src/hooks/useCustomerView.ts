@@ -43,27 +43,30 @@ export function useCustomerView(initialCustomer: CustomerEntity) {
   const [customer] = useState<CustomerEntity>(initialCustomer);
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
 
-  /* ---------------- HOT LOGIC ---------------- */
+  /* ---------------- HOT + ADAPTIVE POLLING ---------------- */
 
   /**
    * Customer is considered "hot" when there is visit history
-   * (i.e. active relationship)
    */
   const isHotCustomer = Boolean(customer.lastVisitDate);
 
-  /* ---------------- VISITS (QUERY + CONDITIONAL POLLING) ---------------- */
+  const visitPollingInterval =
+    showNewVisitDialog
+      ? 10_000
+      : isHotCustomer
+      ? 30_000
+      : false;
 
-  const {
-    data: visits = [],
-  } = useQuery({
+  /* ---------------- VISITS (QUERY) ---------------- */
+
+  const { data: visits = [] } = useQuery({
     queryKey: visitKeys.customer(customer.code),
     queryFn: async () => {
       const data: VisitApiDTO[] = await fetchCustomerVisits(customer.code);
       return mapVisitsFromApi(data);
     },
 
-    // ✅ Poll ONLY when customer is hot
-    refetchInterval: isHotCustomer ? 30_000 : false,
+    refetchInterval: visitPollingInterval,
     refetchIntervalInBackground: true,
   });
 

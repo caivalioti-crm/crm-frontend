@@ -189,7 +189,13 @@ export function useDashboardFigma() {
 
   const onSelectCustomer = (_customer: Customer) => {};
   const onSelectProspect = (_prospect: Prospect) => {};
-  const handleSaveVisit = (_visitData: any) => {};
+  const handleSaveVisit = async (visitData: any): Promise<void> => {
+  // existing logic stays the same
+  console.log('New visit created:', visitData);
+
+  // later this can become:
+  // await saveVisitMutation.mutateAsync(visitData);
+};
 
   /* =====================
      KPI / HELPERS

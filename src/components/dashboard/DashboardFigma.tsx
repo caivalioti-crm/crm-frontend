@@ -45,12 +45,6 @@ import { formatDate } from '../../utils/dateFormat.ts';
 //     onFiltersChange({ ...filters, [key]: value });
 //   };
 
-//   const handleSaveVisit = (visitData: any) => {
-//     console.log('New visit created:', visitData);
-//     // TODO: Save to backend/state
-//     alert('Visit saved successfully!');
-//   };
-
 //   const setSelectedArea = (value: string) => updateFilter('selectedArea', value);
 //   const setSelectedCity = (value: string) => updateFilter('selectedCity', value);
 //   const setSearchQuery = (value: string) => updateFilter('searchQuery', value);
