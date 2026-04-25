@@ -8,8 +8,12 @@ type NewVisitDialogProps = {
   isOpen: boolean;
   onClose: () => void;
   customers: Customer[];
-  onSave: (visitData: any) => void;
+  onSave: (visitData: any) => Promise<void>;
+
+  isSaving?: boolean;
+  error?: string | null;
 };
+
 
 export function NewVisitDialog({
   isOpen,

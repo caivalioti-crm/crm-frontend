@@ -56,10 +56,11 @@ export function ProspectView({
     prospect,
     STATUS_FLOW,
     currentStatusIndex,
+    visits,
+    saveProspectVisit,
     updateTransportDraft,
     showNewVisitDialog,
     setShowNewVisitDialog,
-    saveProspectVisit,
 
     isSavingVisit,
     saveVisitError,
@@ -182,16 +183,26 @@ export function ProspectView({
         </section>
 
         {/* Visits */}
+
         <section className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-2">
             <Calendar className="w-5 h-5 text-purple-600" />
             <h2 className="text-lg font-semibold">Επισκέψεις</h2>
           </div>
 
-          <div className="text-sm text-gray-500">
-            Prospect visit history (placeholder)
-          </div>
+          {visits.length === 0 ? (
+            <div className="text-sm text-gray-500">Καμία επίσκεψη ακόμα</div>
+          ) : (
+            <ul className="text-sm space-y-1">
+              {visits.map(v => (
+                <li key={v.id}>
+                  {v.date} — {v.notes || '—'}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
+
 
         {/* Actions */}
         <section className="flex gap-3">

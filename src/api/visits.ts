@@ -39,3 +39,15 @@ export async function createCustomerVisit(payload: CustomerVisitPayload) {
 
   return res.json();
 }
+
+export async function fetchProspectVisits(prospectId: string) {
+  const res = await fetch(`/api/prospects/${prospectId}/visits`);
+  if (!res.ok) throw new Error('Failed to fetch prospect visits');
+  return res.json();
+}
+
+export async function fetchCustomerVisits(customerCode: string) {
+  const res = await fetch(`/api/customers/${customerCode}/visits`);
+  if (!res.ok) throw new Error('Failed to fetch customer visits');
+  return res.json();
+}

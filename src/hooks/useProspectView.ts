@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { CommercialEntityBase, TransportDraft } from '../types/commercialEntity';
 import { createProspectVisit } from '../api/visits';
+import { fetchProspectVisits } from '../api/visits';
 
 type ProspectStatus =
   | 'new_lead'
@@ -47,6 +48,7 @@ export function useProspectView(initialProspect: ProspectEntity) {
   const [saveVisitError, setSaveVisitError] = useState<string | null>(null);
 
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
+  const [visits, setVisits] = useState<any[]>([]);
 
   const currentStatusIndex = useMemo(
     () => STATUS_FLOW.findIndex(s => s.key === prospect.status),
@@ -67,7 +69,7 @@ export function useProspectView(initialProspect: ProspectEntity) {
     }));
   };
 
-    const saveProspectVisit = async (visitData: any) => {
+  const saveProspectVisit = async (visitData: any) => {
     try {
       setIsSavingVisit(true);
       setSaveVisitError(null);
@@ -76,6 +78,8 @@ export function useProspectView(initialProspect: ProspectEntity) {
         prospectId: prospect.id,
         ...visitData,
       });
+
+      await refetchVisits(); // ✅ refetch after save
     } catch (err) {
       setSaveVisitError('Η αποθήκευση της επίσκεψης απέτυχε.');
       throw err;
@@ -83,10 +87,19 @@ export function useProspectView(initialProspect: ProspectEntity) {
       setIsSavingVisit(false);
     }
   };
+  
+  const refetchVisits = async () => {
+    const data = await fetchProspectVisits(prospect.id);
+    setVisits(data);
+  };
+
   return {
     prospect,
     STATUS_FLOW,
     currentStatusIndex,
+    
+    visits,
+    refetchVisits,
 
     showNewVisitDialog,
     setShowNewVisitDialog,

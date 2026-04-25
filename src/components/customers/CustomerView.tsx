@@ -59,11 +59,17 @@ export function CustomerView({
   onBack,
 }: CustomerViewProps) {
     
+  
   const {
     customer,
+    visits,
+    saveCustomerVisit,
+    isSavingVisit,
+    saveVisitError,
     showNewVisitDialog,
     setShowNewVisitDialog,
   } = useCustomerView(initialCustomer);
+
 
   return (
     <div className="h-full flex flex-col">
@@ -235,13 +241,22 @@ export function CustomerView({
 
         {/* Visits & Tasks */}
         <section className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-2">
             <ClipboardList className="w-5 h-5 text-green-600" />
-            <h2 className="text-lg font-semibold">Visits & Tasks</h2>
+            <h2 className="text-lg font-semibold">Επισκέψεις</h2>
           </div>
-          <div className="text-sm text-gray-500">
-            CRM visit history and tasks (placeholder)
-          </div>
+
+          {visits.length === 0 ? (
+            <div className="text-sm text-gray-500">Καμία επίσκεψη ακόμα</div>
+          ) : (
+            <ul className="text-sm space-y-1">
+              {visits.map(v => (
+                <li key={v.id}>
+                  {v.date} — {v.notes || '—'}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Actions */}
@@ -254,20 +269,25 @@ export function CustomerView({
           </button>
         </section>
       </main>
-        <NewVisitDialog
+
+      <NewVisitDialog
         isOpen={showNewVisitDialog}
         onClose={() => setShowNewVisitDialog(false)}
         customers={[
-            {
-            code: customer.code,
-            name: customer.name,
-            },
+          { code: customer.code, name: customer.name },
         ]}
-        onSave={(visitData) => {
-            console.log('New customer visit:', visitData);
+        isSaving={isSavingVisit}
+        error={saveVisitError}
+        onSave={async (visitData) => {
+          try {
+            await saveCustomerVisit(visitData);
             setShowNewVisitDialog(false);
+          } catch {
+            // error already handled in hook
+          }
         }}
-        />
+      />
+
 
     </div>
   );

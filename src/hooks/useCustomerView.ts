@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { fetchCustomerVisits, createCustomerVisit } from '../api/visits';
 import type { CommercialEntityBase } from '../types/commercialEntity';
 
 export interface CustomerEntity extends CommercialEntityBase {
@@ -33,13 +34,48 @@ export function useCustomerView(initialCustomer: CustomerEntity) {
   const [customer, setCustomer] = useState<CustomerEntity>(initialCustomer);
 
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
+  
+  const [visits, setVisits] = useState<any[]>([]);
+  const [isSavingVisit, setIsSavingVisit] = useState(false);
+  const [saveVisitError, setSaveVisitError] = useState<string | null>(null);
 
-  return {
-    customer,
-    setCustomer,
-
-    showNewVisitDialog,
-    setShowNewVisitDialog,
+  
+  const refetchVisits = async () => {
+    const data = await fetchCustomerVisits(customer.code);
+    setVisits(data);
   };
+
+  const saveCustomerVisit = async (visitData: any) => {
+    try {
+      setIsSavingVisit(true);
+      setSaveVisitError(null);
+
+      await createCustomerVisit({
+        customerCode: customer.code,
+        ...visitData,
+      });
+
+      await refetchVisits(); // ✅ THIS is the whole point of Step 4
+    } catch (err) {
+      setSaveVisitError('Η αποθήκευση της επίσκεψης απέτυχε.');
+      throw err;
+    } finally {
+      setIsSavingVisit(false);
+    }
+  };
+
+return {
+  customer,
+  setCustomer,
+
+  showNewVisitDialog,
+  setShowNewVisitDialog,
+
+  visits,
+  refetchVisits,
+
+  saveCustomerVisit,
+  isSavingVisit,
+  saveVisitError,
+};
 }
-``
