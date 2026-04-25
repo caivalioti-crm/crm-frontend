@@ -3,8 +3,12 @@ interface NewProspectVisitDialogProps {
   onClose: () => void;
   prospectId: string;
   prospectName: string;
-  onSave: (visitData: any) => void;
+  onSave: (visitData: any) => Promise<void>;
+
+  isSaving?: boolean;
+  error?: string | null;
 }
+
 
 export function NewProspectVisitDialog({
   isOpen,

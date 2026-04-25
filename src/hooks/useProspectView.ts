@@ -43,6 +43,9 @@ const STATUS_FLOW: { key: ProspectStatus; label: string }[] = [
 export function useProspectView(initialProspect: ProspectEntity) {
   const [prospect, setProspect] = useState<ProspectEntity>(initialProspect);
 
+  const [isSavingVisit, setIsSavingVisit] = useState(false);
+  const [saveVisitError, setSaveVisitError] = useState<string | null>(null);
+
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
 
   const currentStatusIndex = useMemo(
@@ -64,11 +67,21 @@ export function useProspectView(initialProspect: ProspectEntity) {
     }));
   };
 
-  const saveProspectVisit = async (visitData: any) => {
-  await createProspectVisit({
-    prospectId: prospect.id,
-    ...visitData,
-  });
+    const saveProspectVisit = async (visitData: any) => {
+    try {
+      setIsSavingVisit(true);
+      setSaveVisitError(null);
+
+      await createProspectVisit({
+        prospectId: prospect.id,
+        ...visitData,
+      });
+    } catch (err) {
+      setSaveVisitError('Η αποθήκευση της επίσκεψης απέτυχε.');
+      throw err;
+    } finally {
+      setIsSavingVisit(false);
+    }
   };
   return {
     prospect,
@@ -82,5 +95,9 @@ export function useProspectView(initialProspect: ProspectEntity) {
     setStatus,
 
     saveProspectVisit,
+    
+    isSavingVisit,
+    saveVisitError,
+
   };
 }

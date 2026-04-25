@@ -61,6 +61,9 @@ export function ProspectView({
     setShowNewVisitDialog,
     saveProspectVisit,
 
+    isSavingVisit,
+    saveVisitError,
+
   } = useProspectView(initialProspect);
 
   return (
@@ -207,9 +210,15 @@ export function ProspectView({
       onClose={() => setShowNewVisitDialog(false)}
       prospectId={prospect.id}
       prospectName={prospect.businessName}
+      isSaving={isSavingVisit}
+      error={saveVisitError}
       onSave={async (visitData) => {
-        await saveProspectVisit(visitData);
-        setShowNewVisitDialog(false);
+        try {
+          await saveProspectVisit(visitData);
+          setShowNewVisitDialog(false);
+        } catch {
+          // error already set in hook
+        }
       }}
     />
 
