@@ -58,7 +58,8 @@ export function ProspectView({
     currentStatusIndex,
     updateTransportDraft,
     showNewVisitDialog,
-    setShowNewVisitDialog
+    setShowNewVisitDialog,
+    saveProspectVisit,
 
   } = useProspectView(initialProspect);
 
@@ -200,16 +201,18 @@ export function ProspectView({
         </section>
       </main>
    
-   <NewProspectVisitDialog
-    isOpen={showNewVisitDialog}
-    onClose={() => setShowNewVisitDialog(false)}
-    prospectId={prospect.id}
-    prospectName={prospect.businessName}
-    onSave={(visitData) => {
-        console.log('New prospect visit:', visitData);
+   
+    <NewProspectVisitDialog
+      isOpen={showNewVisitDialog}
+      onClose={() => setShowNewVisitDialog(false)}
+      prospectId={prospect.id}
+      prospectName={prospect.businessName}
+      onSave={async (visitData) => {
+        await saveProspectVisit(visitData);
         setShowNewVisitDialog(false);
-    }}
+      }}
     />
+
     </div>
   
 );

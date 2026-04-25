@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { CommercialEntityBase, TransportDraft } from '../types/commercialEntity';
+import { createProspectVisit } from '../api/visits';
 
 type ProspectStatus =
   | 'new_lead'
@@ -63,10 +64,14 @@ export function useProspectView(initialProspect: ProspectEntity) {
     }));
   };
 
+  const saveProspectVisit = async (visitData: any) => {
+  await createProspectVisit({
+    prospectId: prospect.id,
+    ...visitData,
+  });
+  };
   return {
     prospect,
-    setProspect,
-
     STATUS_FLOW,
     currentStatusIndex,
 
@@ -75,5 +80,7 @@ export function useProspectView(initialProspect: ProspectEntity) {
 
     updateTransportDraft,
     setStatus,
+
+    saveProspectVisit,
   };
 }
