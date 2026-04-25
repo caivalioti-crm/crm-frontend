@@ -1,12 +1,5 @@
 import { CommercialIntelligenceSection } from '../shared/CommercialIntelligenceSection';
 import { TransportERPSection } from '../shared/TransportERPSection';
-import { useCustomerView } from '../../hooks/useCustomerView';
-import { NewVisitDialog } from '../visits/NewVisitDialog';
-
-import type {
-  CommercialEntityBase,
-} from '../../types/commercialEntity';
-
 import {
   ArrowLeft,
   Info,
@@ -14,16 +7,22 @@ import {
   Building2,
   Truck,
   ShoppingCart,
-  ClipboardList,
   Lightbulb,
   Plus,
+  Calendar,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
+import { useCustomerView } from '../../hooks/useCustomerView';
+import { NewVisitDialog } from '../visits/NewVisitDialog';
+import { sortVisits } from '../../utils/sortVisits';
+
+import type {
+  CommercialEntityBase,
+} from '../../types/commercialEntity';
 
 export interface CustomerViewProps {
   customer: CommercialEntityBase & {
-    // ✅ ERP identity
     code: string;
     name: string;
     nameGreek?: string;
@@ -42,24 +41,19 @@ export interface CustomerViewProps {
     createdDate?: string;
     lastVisitDate?: string;
 
-    // ✅ ERP transport (source of truth)
     transportCompany?: string;
     transportMeans?: string;
 
-    // ✅ ERP pricing
     overallDiscount?: number;
   };
 
   onBack: () => void;
-  onNewVisit: () => void;
 }
 
 export function CustomerView({
   customer: initialCustomer,
   onBack,
 }: CustomerViewProps) {
-    
-  
   const {
     customer,
     visits,
@@ -70,7 +64,6 @@ export function CustomerView({
     setShowNewVisitDialog,
   } = useCustomerView(initialCustomer);
 
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -78,52 +71,50 @@ export function CustomerView({
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-blue-100 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-blue-100 hover:text-white"
           >
             <ArrowLeft className="w-5 h-5" />
-            <span>Back to Dashboard</span>
+            Back to Dashboard
           </button>
 
           <button
             onClick={() => setShowNewVisitDialog(true)}
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg flex items-center gap-2"
-            >
+            className="px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg flex items-center gap-2"
+          >
             <Plus className="w-4 h-4" />
             New Visit
-            </button>
+          </button>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="px-3 py-1 bg-white/20 rounded font-mono">
-              {customer.code}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="px-3 py-1 bg-white/20 rounded font-mono">
+            {customer.code}
+          </span>
+          <h1 className="text-2xl font-bold">{customer.name}</h1>
+        </div>
+
+        {customer.nameGreek && (
+          <div className="text-blue-100 mt-1">{customer.nameGreek}</div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 text-sm text-blue-100 mt-2">
+          {customer.type && (
+            <span className="px-3 py-1 bg-white/10 rounded-full">
+              {customer.type}
             </span>
-            <h1 className="text-2xl font-bold">{customer.name}</h1>
-          </div>
-
-          {customer.nameGreek && (
-            <div className="text-blue-100">{customer.nameGreek}</div>
           )}
-
-          <div className="flex flex-wrap items-center gap-3 text-sm text-blue-100">
-            {customer.type && (
-              <span className="px-3 py-1 bg-white/10 rounded-full">
-                {customer.type}
-              </span>
-            )}
-            {customer.group && (
-              <span className="px-3 py-1 bg-white/10 rounded-full">
-                {customer.group}
-              </span>
-            )}
-            {(customer.city || customer.area) && (
-              <span>
-                {customer.city}
-                {customer.city && customer.area ? ', ' : ''}
-                {customer.area}
-              </span>
-            )}
-          </div>
+          {customer.group && (
+            <span className="px-3 py-1 bg-white/10 rounded-full">
+              {customer.group}
+            </span>
+          )}
+          {(customer.city || customer.area) && (
+            <span>
+              {customer.city}
+              {customer.city && customer.area ? ', ' : ''}
+              {customer.area}
+            </span>
+          )}
         </div>
       </header>
 
@@ -142,7 +133,7 @@ export function CustomerView({
               {customer.address && (
                 <div className="flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-gray-400" />
-                  <span>{customer.address}</span>
+                  {customer.address}
                 </div>
               )}
               {customer.phone && <div>📞 {customer.phone}</div>}
@@ -207,15 +198,43 @@ export function CustomerView({
         </section>
 
         <CommercialIntelligenceSection
-            competition={customer.competitionInfo}
-            shopProfile={customer.shopProfile}
-            editable={true}
-            />
+          competition={customer.competitionInfo}
+          shopProfile={customer.shopProfile}
+          editable
+        />
 
-            <TransportERPSection
-            transportCompany={customer.transportCompany}
-            transportMeans={customer.transportMeans}
-/> 
+        <TransportERPSection
+          transportCompany={customer.transportCompany}
+          transportMeans={customer.transportMeans}
+        />
+
+        {/* Visits */}
+        <section className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="w-5 h-5 text-purple-600" />
+            <h2 className="text-lg font-semibold">Επισκέψεις</h2>
+          </div>
+
+          {visits.length === 0 ? (
+            <div className="text-sm text-gray-500">Καμία επίσκεψη ακόμα</div>
+          ) : (
+            <ul className="text-sm space-y-1">
+              {sortVisits(visits).map(v => (
+                <li
+                  key={v.id}
+                  className={v.__optimistic ? 'opacity-60 italic' : ''}
+                >
+                  {v.date} — {v.notes || '—'}
+                  {v.__optimistic && (
+                    <span className="ml-2 text-xs text-gray-400">
+                      (αποθήκευση…)
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         {/* Sales Overview */}
         <section className="bg-white rounded-xl shadow-md p-6">
@@ -238,36 +257,6 @@ export function CustomerView({
             Purchased, neglected, and cross-sell categories (placeholder)
           </div>
         </section>
-
-        {/* Visits & Tasks */}
-        <section className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <ClipboardList className="w-5 h-5 text-green-600" />
-            <h2 className="text-lg font-semibold">Επισκέψεις</h2>
-          </div>
-
-          {visits.length === 0 ? (
-            <div className="text-sm text-gray-500">Καμία επίσκεψη ακόμα</div>
-          ) : (
-            <ul className="text-sm space-y-1">
-              {visits.map(v => (
-                <li key={v.id}>
-                  {v.date} — {v.notes || '—'}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Actions */}
-        <section className="flex gap-3">
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg">
-            Log Visit
-          </button>
-          <button className="px-4 py-2 bg-gray-100 rounded-lg">
-            Add Task
-          </button>
-        </section>
       </main>
 
       <NewVisitDialog
@@ -278,17 +267,13 @@ export function CustomerView({
         ]}
         isSaving={isSavingVisit}
         error={saveVisitError}
-        onSave={async (visitData) => {
+        onSave={async visitData => {
           try {
             await saveCustomerVisit(visitData);
             setShowNewVisitDialog(false);
-          } catch {
-            // error already handled in hook
-          }
+          } catch {}
         }}
       />
-
-
     </div>
   );
 }

@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
 import type { CommercialEntityBase, TransportDraft } from '../types/commercialEntity';
-import { createProspectVisit } from '../api/visits';
-import { fetchProspectVisits } from '../api/visits';
+import type { Visit } from '../types/visit';
+import type { VisitApiDTO } from '../types/visitApi';
+
+import { fetchProspectVisits, createProspectVisit } from '../api/visits';
+import { mapVisitsFromApi } from '../mappers/visitMapper';
+import { visitKeys } from '../queryKeys/visits';
 
 type ProspectStatus =
   | 'new_lead'
@@ -42,18 +48,23 @@ const STATUS_FLOW: { key: ProspectStatus; label: string }[] = [
 ];
 
 export function useProspectView(initialProspect: ProspectEntity) {
+  const queryClient = useQueryClient();
+
   const [prospect, setProspect] = useState<ProspectEntity>(initialProspect);
-
-  const [isSavingVisit, setIsSavingVisit] = useState(false);
-  const [saveVisitError, setSaveVisitError] = useState<string | null>(null);
-
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
-  const [visits, setVisits] = useState<any[]>([]);
+
+  /* ---------------- STATUS ---------------- */
 
   const currentStatusIndex = useMemo(
     () => STATUS_FLOW.findIndex(s => s.key === prospect.status),
     [prospect.status]
   );
+
+  const setStatus = (status: ProspectStatus) => {
+    setProspect(prev => ({ ...prev, status }));
+  };
+
+  /* ---------------- TRANSPORT DRAFT ---------------- */
 
   const updateTransportDraft = (next: TransportDraft) => {
     setProspect(prev => ({
@@ -62,55 +73,89 @@ export function useProspectView(initialProspect: ProspectEntity) {
     }));
   };
 
-  const setStatus = (status: ProspectStatus) => {
-    setProspect(prev => ({
-      ...prev,
-      status,
-    }));
-  };
+  /* ---------------- HOT LOGIC ---------------- */
 
-  const saveProspectVisit = async (visitData: any) => {
-    const optimisticVisit = makeOptimisticVisit(visitData);
+  /**
+   * Prospect is considered "hot" when actively engaged
+   */
+  const isHotProspect =
+    prospect.status !== 'new_lead' &&
+    prospect.status !== 'lost';
 
-    try {
-      setIsSavingVisit(true);
-      setSaveVisitError(null);
+  /* ---------------- VISITS (QUERY + CONDITIONAL POLLING) ---------------- */
 
-      // ✅ Optimistic insert
-      setVisits(prev => [optimisticVisit, ...prev]);
+  const {
+    data: visits = [],
+  } = useQuery({
+    queryKey: visitKeys.prospect(prospect.id),
+    queryFn: async () => {
+      const data: VisitApiDTO[] = await fetchProspectVisits(prospect.id);
+      return mapVisitsFromApi(data);
+    },
 
-      await createProspectVisit({
+    // ✅ Poll ONLY when prospect is hot
+    refetchInterval: isHotProspect ? 30_000 : false,
+    refetchIntervalInBackground: true,
+  });
+
+  /* ---------------- VISITS (MUTATION + OPTIMISTIC) ---------------- */
+
+  const saveProspectVisitMutation = useMutation({
+    mutationFn: (visitData: any) =>
+      createProspectVisit({
         prospectId: prospect.id,
         ...visitData,
+      }),
+
+    onMutate: async (visitData) => {
+      await queryClient.cancelQueries({
+        queryKey: visitKeys.prospect(prospect.id),
       });
 
-      // ✅ Reconcile with server
-      await refetchVisits();
-    } catch (err) {
-      // ❌ Rollback optimistic insert
-      setVisits(prev =>
-        prev.filter(v => v.id !== optimisticVisit.id)
+      const previousVisits =
+        queryClient.getQueryData<Visit[]>(
+          visitKeys.prospect(prospect.id)
+        ) ?? [];
+
+      const optimisticVisit: Visit = {
+        id: `optimistic-${Date.now()}`,
+        date: visitData.date ?? new Date().toISOString().slice(0, 10),
+        notes: visitData.notes ?? '',
+        __optimistic: true,
+      };
+
+      queryClient.setQueryData<Visit[]>(
+        visitKeys.prospect(prospect.id),
+        [optimisticVisit, ...previousVisits]
       );
 
-      setSaveVisitError('Η αποθήκευση της επίσκεψης απέτυχε.');
-      throw err;
-    } finally {
-      setIsSavingVisit(false);
-    }
-  };
-  
-  const refetchVisits = async () => {
-    const data = await fetchProspectVisits(prospect.id);
-    setVisits(data);
-  };
+      return { previousVisits };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previousVisits) {
+        queryClient.setQueryData(
+          visitKeys.prospect(prospect.id),
+          context.previousVisits
+        );
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: visitKeys.prospect(prospect.id),
+      });
+    },
+  });
+
+  /* ---------------- PUBLIC API ---------------- */
 
   return {
     prospect,
     STATUS_FLOW,
     currentStatusIndex,
-    
+
     visits,
-    refetchVisits,
 
     showNewVisitDialog,
     setShowNewVisitDialog,
@@ -118,10 +163,11 @@ export function useProspectView(initialProspect: ProspectEntity) {
     updateTransportDraft,
     setStatus,
 
-    saveProspectVisit,
-    
-    isSavingVisit,
-    saveVisitError,
+    saveProspectVisit: saveProspectVisitMutation.mutateAsync,
 
+    isSavingVisit: saveProspectVisitMutation.isPending,
+    saveVisitError: saveProspectVisitMutation.isError
+      ? 'Η αποθήκευση της επίσκεψης απέτυχε.'
+      : null,
   };
 }

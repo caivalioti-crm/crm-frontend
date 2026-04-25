@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { fetchCustomerVisits, createCustomerVisit } from '../api/visits';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
 import type { CommercialEntityBase } from '../types/commercialEntity';
+import type { Visit } from '../types/visit';
+import type { VisitApiDTO } from '../types/visitApi';
+
+import { fetchCustomerVisits, createCustomerVisit } from '../api/visits';
+import { mapVisitsFromApi } from '../mappers/visitMapper';
+import { visitKeys } from '../queryKeys/visits';
 
 export interface CustomerEntity extends CommercialEntityBase {
   // ✅ ERP identity
@@ -22,7 +29,7 @@ export interface CustomerEntity extends CommercialEntityBase {
   createdDate?: string;
   lastVisitDate?: string;
 
-  // ✅ ERP transport (read‑only)
+  // ✅ ERP transport (read-only)
   transportCompany?: string;
   transportMeans?: string;
 
@@ -31,51 +38,100 @@ export interface CustomerEntity extends CommercialEntityBase {
 }
 
 export function useCustomerView(initialCustomer: CustomerEntity) {
-  const [customer, setCustomer] = useState<CustomerEntity>(initialCustomer);
+  const queryClient = useQueryClient();
 
+  const [customer] = useState<CustomerEntity>(initialCustomer);
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
-  
-  const [visits, setVisits] = useState<any[]>([]);
-  const [isSavingVisit, setIsSavingVisit] = useState(false);
-  const [saveVisitError, setSaveVisitError] = useState<string | null>(null);
 
-  
-  const refetchVisits = async () => {
-    const data = await fetchCustomerVisits(customer.code);
-    setVisits(data);
-  };
+  /* ---------------- HOT LOGIC ---------------- */
 
-  const saveCustomerVisit = async (visitData: any) => {
-    try {
-      setIsSavingVisit(true);
-      setSaveVisitError(null);
+  /**
+   * Customer is considered "hot" when there is visit history
+   * (i.e. active relationship)
+   */
+  const isHotCustomer = Boolean(customer.lastVisitDate);
 
-      await createCustomerVisit({
+  /* ---------------- VISITS (QUERY + CONDITIONAL POLLING) ---------------- */
+
+  const {
+    data: visits = [],
+  } = useQuery({
+    queryKey: visitKeys.customer(customer.code),
+    queryFn: async () => {
+      const data: VisitApiDTO[] = await fetchCustomerVisits(customer.code);
+      return mapVisitsFromApi(data);
+    },
+
+    // ✅ Poll ONLY when customer is hot
+    refetchInterval: isHotCustomer ? 30_000 : false,
+    refetchIntervalInBackground: true,
+  });
+
+  /* ---------------- VISITS (MUTATION + OPTIMISTIC) ---------------- */
+
+  const saveCustomerVisitMutation = useMutation({
+    mutationFn: (visitData: any) =>
+      createCustomerVisit({
         customerCode: customer.code,
         ...visitData,
+      }),
+
+    onMutate: async (visitData) => {
+      await queryClient.cancelQueries({
+        queryKey: visitKeys.customer(customer.code),
       });
 
-      await refetchVisits(); // ✅ THIS is the whole point of Step 4
-    } catch (err) {
-      setSaveVisitError('Η αποθήκευση της επίσκεψης απέτυχε.');
-      throw err;
-    } finally {
-      setIsSavingVisit(false);
-    }
+      const previousVisits =
+        queryClient.getQueryData<Visit[]>(
+          visitKeys.customer(customer.code)
+        ) ?? [];
+
+      const optimisticVisit: Visit = {
+        id: `optimistic-${Date.now()}`,
+        date: visitData.date ?? new Date().toISOString().slice(0, 10),
+        notes: visitData.notes ?? '',
+        __optimistic: true,
+      };
+
+      queryClient.setQueryData<Visit[]>(
+        visitKeys.customer(customer.code),
+        [optimisticVisit, ...previousVisits]
+      );
+
+      return { previousVisits };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previousVisits) {
+        queryClient.setQueryData(
+          visitKeys.customer(customer.code),
+          context.previousVisits
+        );
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: visitKeys.customer(customer.code),
+      });
+    },
+  });
+
+  /* ---------------- PUBLIC API ---------------- */
+
+  return {
+    customer,
+
+    visits,
+
+    showNewVisitDialog,
+    setShowNewVisitDialog,
+
+    saveCustomerVisit: saveCustomerVisitMutation.mutateAsync,
+
+    isSavingVisit: saveCustomerVisitMutation.isPending,
+    saveVisitError: saveCustomerVisitMutation.isError
+      ? 'Η αποθήκευση της επίσκεψης απέτυχε.'
+      : null,
   };
-
-return {
-  customer,
-  setCustomer,
-
-  showNewVisitDialog,
-  setShowNewVisitDialog,
-
-  visits,
-  refetchVisits,
-
-  saveCustomerVisit,
-  isSavingVisit,
-  saveVisitError,
-};
 }
