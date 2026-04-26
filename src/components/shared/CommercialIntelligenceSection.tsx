@@ -12,12 +12,12 @@ export function CommercialIntelligenceSection({
   shopProfile,
 }: Props) {
   return (
-    <section className="bg-white rounded-xl shadow-md p-6 space-y-6">
+    <section className="bg-card text-card-foreground rounded-xl shadow-md p-6 space-y-6">
       {/* Competition */}
       <div>
         <h2 className="text-lg font-semibold mb-2">⚔️ Ανταγωνισμός</h2>
         {competition ? (
-          <div className="text-sm text-gray-700 space-y-1">
+          <div className="text-sm text-muted-foreground space-y-1">
             {competition.mainCompetitor && (
               <div>Κύριος Ανταγωνιστής: {competition.mainCompetitor}</div>
             )}
@@ -38,7 +38,7 @@ export function CommercialIntelligenceSection({
             )}
           </div>
         ) : (
-          <div className="text-sm text-gray-400 italic">
+          <div className="text-sm text-muted-foreground/70 italic">
             Δεν υπάρχουν στοιχεία
           </div>
         )}
@@ -51,21 +51,21 @@ export function CommercialIntelligenceSection({
           Προφίλ Καταστήματος
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-muted-foreground">
           {shopProfile?.numberOfEmployees !== undefined && (
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-gray-400" />
+              <Users className="w-4 h-4 text-muted-foreground/70" />
               {shopProfile.numberOfEmployees} εργαζόμενοι
             </div>
           )}
           {shopProfile?.shopSizeM2 !== undefined && (
             <div className="flex items-center gap-2">
-              <Maximize2 className="w-4 h-4 text-gray-400" />
+              <Maximize2 className="w-4 h-4 text-muted-foreground/70" />
               {shopProfile.shopSizeM2} m²
             </div>
           )}
           {shopProfile?.stockBehavior && (
-            <div className="col-span-full text-xs bg-gray-100 px-3 py-1 rounded">
+            <div className="col-span-full text-xs bg-muted px-3 py-1 rounded">
               {shopProfile.stockBehavior}
             </div>
           )}

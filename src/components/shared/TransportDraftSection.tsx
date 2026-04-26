@@ -15,13 +15,13 @@ export function TransportDraftSection({
   onChange,
 }: TransportDraftSectionProps) {
   return (
-    <section className="bg-white rounded-xl shadow-md p-6 border-l-4 border-yellow-400">
+    <section className="bg-card text-card-foreground rounded-xl shadow-md p-6 border-l-4 border-yellow-400">
       <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
         <Truck className="w-5 h-5 text-yellow-600" />
         Μεταφορικά (Πρόχειρο)
       </h2>
 
-      <div className="text-sm text-gray-500 mb-4 flex items-start gap-2">
+      <div className="text-sm text-muted-foreground mb-4 flex items-start gap-2">
         <AlertTriangle className="w-4 h-4 mt-0.5 text-yellow-500 shrink-0" />
         <span>
           Συλλέγονται για επιβεβαίωση πριν καταχώρηση στο ERP.
@@ -32,7 +32,7 @@ export function TransportDraftSection({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         {/* Transport Company */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
             Μεταφορική
           </label>
           <input
@@ -45,7 +45,7 @@ export function TransportDraftSection({
               })
             }
             placeholder="π.χ. ACS, Γενική Ταχυδρομική"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+            className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
           />
         </div>
 
@@ -64,7 +64,7 @@ export function TransportDraftSection({
               })
             }
             placeholder="π.χ. Courier, Ιδιόκτητο όχημα"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+            className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
           />
         </div>
       </div>
