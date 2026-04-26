@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 
 import type { CommercialEntityBase } from '../types/commercialEntity';
 import type { Visit } from '../types/visit';
@@ -10,7 +15,6 @@ import { mapVisitsFromApi } from '../mappers/visitMapper';
 import { visitKeys } from '../queryKeys/visits';
 
 export interface CustomerEntity extends CommercialEntityBase {
-  // ✅ ERP identity
   code: string;
   name: string;
   nameGreek?: string;
@@ -29,13 +33,15 @@ export interface CustomerEntity extends CommercialEntityBase {
   createdDate?: string;
   lastVisitDate?: string;
 
-  // ✅ ERP transport (read-only)
   transportCompany?: string;
   transportMeans?: string;
-
-  // ✅ ERP pricing
   overallDiscount?: number;
 }
+
+type VisitsPage = {
+  items: Visit[];
+  nextCursor?: string;
+};
 
 export function useCustomerView(initialCustomer: CustomerEntity) {
   const queryClient = useQueryClient();
@@ -45,9 +51,6 @@ export function useCustomerView(initialCustomer: CustomerEntity) {
 
   /* ---------------- HOT + ADAPTIVE POLLING ---------------- */
 
-  /**
-   * Customer is considered "hot" when there is visit history
-   */
   const isHotCustomer = Boolean(customer.lastVisitDate);
 
   const visitPollingInterval =
@@ -57,18 +60,47 @@ export function useCustomerView(initialCustomer: CustomerEntity) {
       ? 30_000
       : false;
 
-  /* ---------------- VISITS (QUERY) ---------------- */
+  /* ---------------- VISITS (INFINITE QUERY) ---------------- */
 
-  const { data: visits = [] } = useQuery({
+ 
+    const {
+      data,
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+      isError,
+      error,
+      refetch,
+
+  } = useInfiniteQuery<
+    VisitsPage,
+    Error,
+    InfiniteData<VisitsPage>,
+    ReturnType<typeof visitKeys.customer>,
+    string | undefined
+  >({
     queryKey: visitKeys.customer(customer.code),
-    queryFn: async () => {
-      const data: VisitApiDTO[] = await fetchCustomerVisits(customer.code);
-      return mapVisitsFromApi(data);
+
+    queryFn: async ({ pageParam }) => {
+      const res = await fetchCustomerVisits(customer.code, {
+        cursor: pageParam as string | undefined, // ✅ REQUIRED
+        limit: 20,
+      });
+
+      return {
+        items: mapVisitsFromApi(res.items as VisitApiDTO[]),
+        nextCursor: res.nextCursor,
+      };
     },
+
+    initialPageParam: undefined,
+    getNextPageParam: lastPage => lastPage.nextCursor ?? undefined,
 
     refetchInterval: visitPollingInterval,
     refetchIntervalInBackground: true,
   });
+
+  const visits = data?.pages.flatMap(p => p.items) ?? [];
 
   /* ---------------- VISITS (MUTATION + OPTIMISTIC) ---------------- */
 
@@ -84,11 +116,6 @@ export function useCustomerView(initialCustomer: CustomerEntity) {
         queryKey: visitKeys.customer(customer.code),
       });
 
-      const previousVisits =
-        queryClient.getQueryData<Visit[]>(
-          visitKeys.customer(customer.code)
-        ) ?? [];
-
       const optimisticVisit: Visit = {
         id: `optimistic-${Date.now()}`,
         date: visitData.date ?? new Date().toISOString().slice(0, 10),
@@ -96,21 +123,23 @@ export function useCustomerView(initialCustomer: CustomerEntity) {
         __optimistic: true,
       };
 
-      queryClient.setQueryData<Visit[]>(
+      queryClient.setQueryData<InfiniteData<VisitsPage>>(
         visitKeys.customer(customer.code),
-        [optimisticVisit, ...previousVisits]
+        oldData => {
+          if (!oldData) return oldData;
+
+          return {
+            ...oldData,
+            pages: [
+              {
+                ...oldData.pages[0],
+                items: [optimisticVisit, ...oldData.pages[0].items],
+              },
+              ...oldData.pages.slice(1),
+            ],
+          };
+        }
       );
-
-      return { previousVisits };
-    },
-
-    onError: (_err, _vars, context) => {
-      if (context?.previousVisits) {
-        queryClient.setQueryData(
-          visitKeys.customer(customer.code),
-          context.previousVisits
-        );
-      }
     },
 
     onSettled: () => {
@@ -126,6 +155,14 @@ export function useCustomerView(initialCustomer: CustomerEntity) {
     customer,
 
     visits,
+
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+
+    isVisitsError: isError,
+    visitsError: error,
+    refetchVisits: refetch,
 
     showNewVisitDialog,
     setShowNewVisitDialog,
