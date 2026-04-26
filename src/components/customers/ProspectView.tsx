@@ -14,6 +14,7 @@ import CategoriesDiscussed from '../prospects/CategoriesDiscussed';
 import { useProspectView } from '../../hooks/useProspectView';
 import { NewProspectVisitDialog } from '../prospects/NewProspectVisitDialog';
 import { sortVisits } from '../../utils/sortVisits';
+import { InlineError } from '../shared/InlineError'
 
 import type {
   CommercialEntityBase,
@@ -59,6 +60,10 @@ export function ProspectView({
     STATUS_FLOW,
     currentStatusIndex,
     visits,
+    
+    isVisitsError,
+    refetchVisits,
+
     saveProspectVisit,
     updateTransportDraft,
     showNewVisitDialog,
@@ -172,7 +177,13 @@ export function ProspectView({
             <h2 className="text-lg font-semibold">Επισκέψεις</h2>
           </div>
 
-          {visits.length === 0 ? (
+          {isVisitsError ? (
+            <InlineError
+              title="Αδυναμία φόρτωσης επισκέψεων"
+              message="Δεν ήταν δυνατή η φόρτωση του ιστορικού επισκέψεων."
+              onRetry={refetchVisits}
+            />
+          ) : visits.length === 0 ? (
             <div className="text-sm text-gray-500">Καμία επίσκεψη ακόμα</div>
           ) : (
             <ul className="text-sm space-y-1">
@@ -192,6 +203,7 @@ export function ProspectView({
             </ul>
           )}
         </section>
+
       </main>
 
       <NewProspectVisitDialog

@@ -107,6 +107,11 @@ export function useProspectView(initialProspect: ProspectEntity) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    
+    isError,
+    error,
+    refetch,
+
   } = useInfiniteQuery<
     VisitsPage,
     Error,
@@ -196,6 +201,11 @@ export function useProspectView(initialProspect: ProspectEntity) {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
+
+    
+    isVisitsError: isError,
+    visitsError: error,
+    refetchVisits: refetch,
 
     showNewVisitDialog,
     setShowNewVisitDialog,
