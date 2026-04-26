@@ -109,3 +109,18 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+/* Tailwind semantic compatibility layer */
+:root {
+  --background: var(--bg);
+  --foreground: var(--text-h);
+
+  --card: var(--bg);
+  --card-foreground: var(--text-h);
+
+  --border: var(--border);
+
+  --muted: var(--code-bg);
+  --muted-foreground: var(--text);
+
+  --destructive: var(--accent);
+}
