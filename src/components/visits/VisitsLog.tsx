@@ -1,5 +1,3 @@
-import React from 'react';
-
 type VisitsLogProps = {
   currentUser: {
     id: string;
@@ -7,13 +5,11 @@ type VisitsLogProps = {
     role: 'rep' | 'manager';
   };
   onNewVisit: () => void;
-  onSelectCustomer: (customerCode: string) => void;
 };
 
 export function VisitsLog({
   currentUser,
   onNewVisit,
-  onSelectCustomer,
 }: VisitsLogProps) {
   return (
     <div className="bg-white rounded-xl shadow-md p-4">

@@ -128,14 +128,12 @@ export function DashboardFigma() {
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* Visits */}
-          <VisitsLog
-            currentUser={currentUser}
-            onNewVisit={() => setShowNewVisitDialog(true)}
-            onSelectCustomer={(code) => {
-              const customer = userCustomers.find(c => c.code === code);
-              if (customer) setSelectedCustomer(customer);
-            }}
-          />
+          
+        <VisitsLog
+          currentUser={currentUser}
+          onNewVisit={() => setShowNewVisitDialog(true)}
+        />
+
 
           {/* Customers */}
           <div className="bg-card text-card-foreground rounded-xl shadow-md overflow-hidden">
