@@ -33,6 +33,7 @@ export function DashboardFigma() {
    */
   const {
     filteredCustomers,
+    customersTotal,
     currentUser,
     mockSalesReps,
     onUserChange,
@@ -141,7 +142,7 @@ export function DashboardFigma() {
               <h2 className="text-lg font-semibold text-gray-900">
                 {currentUser.role === 'manager'
                   ? 'All Customers'
-                  : 'Your Customers'} ({filteredCustomers.length})
+                  : 'Your Customers'} ({customersTotal})
               </h2>
             </div>
 

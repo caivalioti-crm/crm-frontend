@@ -1,5 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 
+/* =====================
+   TYPES
+   ===================== */
+
 type GeoPerformanceItem =
   | {
       name: string;
@@ -55,14 +59,19 @@ type Prospect = {
   name: string;
 };
 
-export function useDashboardFigma() {
-  const visitsSummary = null;
+/* =====================
+   HOOK
+   ===================== */
 
+export function useDashboardFigma() {
   /* =====================
      ERP DATA STATE
      ===================== */
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersTotal, setCustomersTotal] = useState<number>(0); // ✅ ADD THIS
   const [sales, setSales] = useState<Sale[]>([]);
+
+  
 
   /* =====================
      UI STATE
@@ -79,7 +88,7 @@ export function useDashboardFigma() {
   const [showNewProspectDialog, setShowNewProspectDialog] = useState(false);
 
   /* =====================
-     CURRENT USER (STATEFUL)
+     CURRENT USER
      ===================== */
   const [currentUser, setCurrentUser] = useState<SalesRep>({
     id: 'demo',
@@ -90,24 +99,18 @@ export function useDashboardFigma() {
   /* =====================
      FETCH ERP CUSTOMERS
      ===================== */
-  useEffect(() => {
-    fetch('http://localhost:3001/api/erp/customers')
-      .then(res => res.json())
-      .then((res: any) => {
-        const list: Customer[] =
-          Array.isArray(res)
-            ? res
-            : res.data
-            ? res.data
-            : res.customers
-            ? res.customers
-            : [];
-        setCustomers(list);
-      })
-      .catch(err => {
-        console.error('Failed to load ERP customers', err);
-      });
-  }, []);
+    useEffect(() => {
+      fetch('http://localhost:3001/api/erp/customers')
+        .then(res => res.json())          // ✅ parse JSON
+        .then((res: any) => {
+          const list: Customer[] = res?.items ?? [];
+          setCustomers(list);
+          setCustomersTotal(res?.total ?? 0);
+        })
+        .catch(err => {
+          console.error('Failed to load ERP customers', err);
+        });
+    }, []);
 
   /* =====================
      FETCH ERP SALES
@@ -124,23 +127,48 @@ export function useDashboardFigma() {
   }, []);
 
   /* =====================
-     USER OPTIONS
+     FETCH SALES REPS
      ===================== */
-  const mockSalesReps: SalesRep[] = [
-    { id: 'demo', name: 'Demo User', role: 'rep' },
-    { id: 'manager', name: 'Manager', role: 'manager' },
-  ];
+  
 
-  const mockSalesRepStats: SalesRepStat[] = [
-    {
-      repId: 'demo',
-      repName: 'Demo User',
-      totalSales: 0,
-      customersVisited: 0,
-      tasksCompleted: 0,
-      tasksPending: 0,
-    },
-  ];
+  /* =====================
+     AVAILABLE USERS
+     ===================== */
+
+    const availableSalesReps: SalesRep[] = [
+      { id: 'demo', name: 'Demo User', role: 'rep' },
+      { id: 'manager', name: 'Manager', role: 'manager' },
+    ];
+
+
+  /* =====================
+     KPI CALCULATION
+     ===================== */
+  const salesRepStats: SalesRepStat[] = useMemo(() => {
+    return availableSalesReps.map((rep) => {
+      const repSales = sales.filter(
+        (s) => s.salesRepId === rep.id
+      );
+
+      const totalSales = repSales.reduce(
+        (sum, s) => sum + s.netAmount,
+        0
+      );
+
+      const uniqueCustomers = new Set(
+        repSales.map((s) => s.customerCode)
+      );
+
+      return {
+        repId: rep.id,
+        repName: rep.name,
+        totalSales,
+        customersVisited: uniqueCustomers.size,
+        tasksCompleted: 0,
+        tasksPending: 0,
+      };
+    });
+  }, [sales, availableSalesReps]);
 
   /* =====================
      DERIVED DATA
@@ -148,12 +176,12 @@ export function useDashboardFigma() {
   const userCustomers = useMemo(() => {
     if (currentUser.role === 'manager') return customers;
     return customers.filter(
-      (c: Customer) => c.assignedRepId === currentUser.id
+      (c) => c.assignedRepId === currentUser.id
     );
   }, [customers, currentUser]);
 
   const filteredCustomers = useMemo(() => {
-    return userCustomers.filter((customer: Customer) => {
+    return userCustomers.filter((customer) => {
       const matchesArea =
         !selectedArea || customer.area === selectedArea;
 
@@ -174,8 +202,8 @@ export function useDashboardFigma() {
     if (!selectedArea) return [];
     const citySet = new Set(
       customers
-        .filter((c: Customer) => c.area === selectedArea)
-        .map((c: Customer) => c.city)
+        .filter((c) => c.area === selectedArea)
+        .map((c) => c.city)
     );
     return Array.from(citySet).sort();
   }, [selectedArea, customers]);
@@ -189,43 +217,52 @@ export function useDashboardFigma() {
 
   const onSelectCustomer = (_customer: Customer) => {};
   const onSelectProspect = (_prospect: Prospect) => {};
-  const handleSaveVisit = async (visitData: any): Promise<void> => {
-  // existing logic stays the same
-  console.log('New visit created:', visitData);
 
-  // later this can become:
-  // await saveVisitMutation.mutateAsync(visitData);
-};
+  const handleSaveVisit = async (visitData: any): Promise<void> => {
+    console.log('New visit created:', visitData);
+  };
 
   /* =====================
-     KPI / HELPERS
+     HELPERS (STUBBED)
      ===================== */
   const getPeriodLabel = (_period: string) => '';
   const getComparisonLabel = () => '';
   const getLastYearGrowth = (_repId: string): number => 0;
+  const getGeoPerformance = (): GeoPerformanceItem[] => {
+  const areaMap = new Map<
+    string,
+    { sales: number; customers: Set<string> }
+  >();
 
-  const getSalesForPeriod = (stat: SalesRepStat): number => {
-    const repSales = sales.filter(
-      (s: Sale) => s.salesRepId === stat.repId
+  sales.forEach((s) => {
+    const customer = customers.find(
+      (c) => c.code === s.customerCode
     );
+    if (!customer) return;
 
-    let filteredSales = repSales;
+    const area = customer.area || 'Unknown';
 
-    if (selectedPeriod.endsWith('YTD')) {
-      const year = parseInt(selectedPeriod.slice(0, 4), 10);
-      filteredSales = repSales.filter((s: Sale) => {
-        const d = new Date(s.trnDate);
-        return d.getFullYear() === year;
+    if (!areaMap.has(area)) {
+      areaMap.set(area, {
+        sales: 0,
+        customers: new Set(),
       });
     }
 
-    return filteredSales.reduce(
-      (sum: number, s: Sale) => sum + s.netAmount,
-      0
-    );
-  };
+    const entry = areaMap.get(area)!;
+    entry.sales += s.netAmount;
+    entry.customers.add(customer.code);
+  });
 
-  const getGeoPerformance = (): GeoPerformanceItem[] => [];
+  return Array.from(areaMap.entries()).map(
+    ([name, data]) => ({
+      name,
+      sales: data.sales,
+      growth: 0, // growth comes later
+      customers: data.customers.size,
+    })
+  );
+};
 
   const handleAreaDoubleClick = (areaName: string) => {
     setGeoView('city');
@@ -252,9 +289,10 @@ export function useDashboardFigma() {
      EXPORT
      ===================== */
   return {
-    visitsSummary,
+    visitsSummary: null,
 
     customers,
+    customersTotal,
     userCustomers,
     filteredCustomers,
     cities,
@@ -289,7 +327,6 @@ export function useDashboardFigma() {
     setShowNewProspectDialog,
 
     getLastYearGrowth,
-    getSalesForPeriod,
     getGeoPerformance,
     handleAreaDoubleClick,
     getLastVisitStats,
@@ -298,8 +335,8 @@ export function useDashboardFigma() {
     handleSaveVisit,
 
     currentUser,
-    mockSalesReps,
-    mockSalesRepStats,
+    mockSalesReps: availableSalesReps,
+    mockSalesRepStats: salesRepStats,
     onUserChange,
     onSelectCustomer,
     onSelectProspect,
