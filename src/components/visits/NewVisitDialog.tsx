@@ -1,3 +1,4 @@
+import { useState } from 'react';
 
 type Customer = {
   code: string;
@@ -14,13 +15,14 @@ type NewVisitDialogProps = {
   error?: string | null;
 };
 
-
 export function NewVisitDialog({
   isOpen,
   onClose,
   customers,
   onSave,
 }: NewVisitDialogProps) {
+  const [selectedCustomerCode, setSelectedCustomerCode] = useState<string>('');
+
   if (!isOpen) return null;
 
   return (
@@ -34,14 +36,36 @@ export function NewVisitDialog({
           Select customer ({customers.length})
         </div>
 
-        {/* Stub UI */}
+        {/* ✅ EMPTY STATE MESSAGE */}
+        {customers.length === 0 && (
+          <div className="mb-4 text-sm text-red-600">
+            No customers match the current filters.
+          </div>
+        )}
+
+        {/* ✅ CUSTOMER SELECTION */}
+        
         <div className="space-y-3">
+          <select
+            value={selectedCustomerCode}
+            onChange={(e) => setSelectedCustomerCode(e.target.value)}
+            className="w-full border rounded-md px-3 py-2"
+          >
+            <option value="">Select customer</option>
+            {customers.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
           <button
-            onClick={() => {
-              onSave({});
+            disabled={!selectedCustomerCode}
+            onClick={async () => {
+              await onSave({ customerCode: selectedCustomerCode });
               onClose();
             }}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg"
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
           >
             Save Visit
           </button>
