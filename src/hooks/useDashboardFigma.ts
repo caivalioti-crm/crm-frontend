@@ -21,12 +21,15 @@ type Sale = {
 type Customer = {
   code: string;
   name: string;
-  nameGreek: string;
+  nameGreek?: string;
   city: string;
-  area: string;
-  type: string;
-  group: string;
-  lastVisitDate: string;
+
+  areaCode: string; // ✅ canonical identifier
+  area: string;     // ✅ display label
+
+  type?: string;
+  group?: string;
+  lastVisitDate?: string;
   assignedRepId?: string;
 };
 
@@ -43,7 +46,7 @@ export function useDashboardFigma() {
   const [sales, setSales] = useState<Sale[]>([]);
 
   /* =====================
-     FILTER / UI STATE
+     UI STATE
      ===================== */
   const [selectedArea, setSelectedArea] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
@@ -60,59 +63,86 @@ export function useDashboardFigma() {
   });
 
   /* =====================
+     DEMO ACCESS SCOPE (TEMP)
+     ===================== */
+
+  const demoAccessAreaCodes = useMemo(() => {
+    return ['26', '90']; // TEMP demo access
+  }, []);
+
+  /* =====================
      FETCH DATA
      ===================== */
 
-useEffect(() => {
-  fetch('http://localhost:3001/api/erp/customers')
-    .then(res => res.json())
-    .then(res => {
-      console.log('ERP customers payload:', res); // ✅ keep temporarily
+  useEffect(() => {
+    fetch('http://localhost:3001/api/erp/customers')
+      .then(res => res.json())
+      .then(res => {
+  const items = Array.isArray(res.items) ? res.items : [];
 
-      setCustomers(Array.isArray(res.items) ? res.items : []);
-      setCustomersTotal(typeof res.total === 'number' ? res.total : 0);
-    })
-    .catch(err => {
-      console.error('Failed to load ERP customers', err);
-    });
-}, []);
+  const mapped = items.map((c: any) => ({
+    ...c,
+    areaCode: c.areaCode ?? c.area_code, // ✅ normalize once
+  }));
 
+  setCustomers(mapped);
+  setCustomersTotal(typeof res.total === 'number' ? res.total : 0);
+});
+  }, []);
 
   useEffect(() => {
     fetch('http://localhost:3001/api/erp/sales')
       .then(res => res.json())
-      .then(data => setSales(data));
+      .then(data => setSales(Array.isArray(data) ? data : []));
   }, []);
 
   /* =====================
-     DERIVED LOOKUPS
+     ACCESS-SCOPED CUSTOMERS
      ===================== */
+
+  const scopedCustomers = useMemo(() => {
+    return customers.filter(c =>
+      demoAccessAreaCodes.includes(c.areaCode)
+    );
+  }, [customers, demoAccessAreaCodes]);
+
+  /* =====================
+     CUSTOMER LOOKUP
+     ===================== */
+
   const customerByCode = useMemo(() => {
     const map = new Map<string, Customer>();
-    customers.forEach(c => map.set(c.code, c));
+    scopedCustomers.forEach(c => map.set(c.code, c));
     return map;
-  }, [customers]);
+  }, [scopedCustomers]);
 
   /* =====================
-     GEO FILTERED SALES (SOURCE OF TRUTH)
+     SCOPED SALES
      ===================== */
-  const geoFilteredSales = useMemo(() => {
-    if (!selectedArea && !selectedCity) return sales;
 
-    return sales.filter(s => {
+  const scopedSales = useMemo(() => {
+    const allowedCodes = new Set(scopedCustomers.map(c => c.code));
+    return sales.filter(s => allowedCodes.has(s.customerCode));
+  }, [sales, scopedCustomers]);
+
+  /* =====================
+     GEO-FILTERED SALES
+     ===================== */
+
+  const geoFilteredSales = useMemo(() => {
+    return scopedSales.filter(s => {
       const c = customerByCode.get(s.customerCode);
       if (!c) return false;
-
       if (selectedArea && c.area !== selectedArea) return false;
       if (selectedCity && c.city !== selectedCity) return false;
-
       return true;
     });
-  }, [sales, customerByCode, selectedArea, selectedCity]);
+  }, [scopedSales, customerByCode, selectedArea, selectedCity]);
 
   /* =====================
-     KPIs (BASED ON GEO FILTERED SALES)
+     KPIs
      ===================== */
+
   const totalRevenue = useMemo(
     () => geoFilteredSales.reduce((sum, s) => sum + s.netAmount, 0),
     [geoFilteredSales]
@@ -124,10 +154,31 @@ useEffect(() => {
   );
 
   /* =====================
-     CUSTOMER FILTERING (LIST)
+     GEO OPTIONS
      ===================== */
+
+  const areas = useMemo(
+    () => Array.from(new Set(scopedCustomers.map(c => c.area))).sort(),
+    [scopedCustomers]
+  );
+
+  const cities = useMemo(() => {
+    if (!selectedArea) return [];
+    return Array.from(
+      new Set(
+        scopedCustomers
+          .filter(c => c.area === selectedArea)
+          .map(c => c.city)
+      )
+    ).sort();
+  }, [scopedCustomers, selectedArea]);
+
+  /* =====================
+     FILTERED CUSTOMERS
+     ===================== */
+
   const filteredCustomers = useMemo(() => {
-    return customers.filter(c => {
+    return scopedCustomers.filter(c => {
       if (selectedArea && c.area !== selectedArea) return false;
       if (selectedCity && c.city !== selectedCity) return false;
       if (
@@ -139,74 +190,21 @@ useEffect(() => {
       }
       return true;
     });
-  }, [customers, selectedArea, selectedCity, searchQuery]);
-
-  /* =====================
-     GEO OPTIONS
-     ===================== */
-  const areas = useMemo(
-    () => Array.from(new Set(customers.map(c => c.area))).sort(),
-    [customers]
-  );
-
-  const cities = useMemo(() => {
-    if (!selectedArea) return [];
-    return Array.from(
-      new Set(customers.filter(c => c.area === selectedArea).map(c => c.city))
-    ).sort();
-  }, [customers, selectedArea]);
-
-  /* =====================
-     GEO PERFORMANCE
-     ===================== */
-  const revenueByArea = useMemo(() => {
-    const map = new Map<string, number>();
-
-    geoFilteredSales.forEach(s => {
-      const c = customerByCode.get(s.customerCode);
-      if (!c) return;
-      map.set(c.area, (map.get(c.area) ?? 0) + s.netAmount);
-    });
-
-    return Array.from(map.entries()).map(([area, revenue]) => ({
-      area,
-      revenue,
-    }));
-  }, [geoFilteredSales, customerByCode]);
-
-  const revenueByCity = useMemo(() => {
-    if (!selectedGeoArea) return [];
-
-    const map = new Map<string, number>();
-
-    geoFilteredSales.forEach(s => {
-      const c = customerByCode.get(s.customerCode);
-      if (!c || c.area !== selectedGeoArea) return;
-      map.set(c.city, (map.get(c.city) ?? 0) + s.netAmount);
-    });
-
-    return Array.from(map.entries()).map(([city, revenue]) => ({
-      city,
-      revenue,
-    }));
-  }, [geoFilteredSales, customerByCode, selectedGeoArea]);
+  }, [scopedCustomers, selectedArea, selectedCity, searchQuery]);
 
   /* =====================
      EXPORT
      ===================== */
+
   return {
-    customers,
-    customersTotal,
-    filteredCustomers,
+    customers: scopedCustomers,
+    customersTotal: scopedCustomers.length,
 
     totalRevenue,
     customersWithSales,
 
     areas,
     cities,
-
-    revenueByArea,
-    revenueByCity,
 
     selectedArea,
     setSelectedArea,
@@ -217,8 +215,8 @@ useEffect(() => {
     searchQuery,
     setSearchQuery,
 
-    selectedGeoArea,
-    setSelectedGeoArea,
+    filteredCustomers,
+    customersInScope: filteredCustomers.length,
 
     showNewVisitDialog,
     setShowNewVisitDialog,
