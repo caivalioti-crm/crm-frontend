@@ -13,6 +13,7 @@ import { CustomerListSection } from '../customers/CustomerListSection';
 
 export function DashboardFigma() {
   const {
+    customers,
     customersTotal,
     totalRevenue,
     compareRevenue,
@@ -337,6 +338,7 @@ export function DashboardFigma() {
             <VisitsLog
               currentUser={currentUser}
               onNewVisit={() => setShowNewVisitDialog(true)}
+              customers={customers}
             />
 
             <ProspectsList
@@ -368,11 +370,8 @@ export function DashboardFigma() {
       <NewVisitDialog
         isOpen={showNewVisitDialog}
         onClose={() => setShowNewVisitDialog(false)}
-        customers={filteredCustomers.map(c => ({
-          code: c.code,
-          name: c.name,
-        }))}
-        onSave={async () => {}}
+        customers={filteredCustomers}
+        onSave={() => setShowNewVisitDialog(false)}
       />
 
       <NewProspectDialog
