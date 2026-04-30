@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { User } from 'lucide-react';
+import { User, TrendingUp, TrendingDown } from 'lucide-react';
 
-import { useDashboardFigma } from '../../hooks/useDashboardFigma';
+import { useDashboardFigma, PERIODS } from '../../hooks/useDashboardFigma';
 
 import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { VisitsLog } from '../visits/VisitsLog';
@@ -15,7 +15,13 @@ export function DashboardFigma() {
   const {
     customersTotal,
     totalRevenue,
+    compareRevenue,
+    revenueGrowth,
     customersWithSales,
+    salesLoading,
+
+    selectedPeriod,
+    setSelectedPeriod,
 
     areas,
     cities,
@@ -74,15 +80,83 @@ export function DashboardFigma() {
           <>
             <div className="text-sm text-slate-600">
               You have access to{' '}
-              <span className="font-semibold text-slate-900">
-                {customersTotal}
-              </span>{' '}
+              <span className="font-semibold text-slate-900">{customersTotal}</span>{' '}
               customers across{' '}
-              <span className="font-semibold text-slate-900">
-                {areas.length}
-              </span>{' '}
+              <span className="font-semibold text-slate-900">{areas.length}</span>{' '}
               areas
             </div>
+
+            {/* ===== PERFORMANCE SECTION ===== */}
+            <section className="bg-white rounded-xl shadow p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-base font-semibold text-slate-900">
+                      {currentUser.role === 'rep' ? 'Your Performance' : 'Team Performance'}
+                    </h2>
+                    <select
+                      value={selectedPeriod.key}
+                      onChange={e => setSelectedPeriod(e.target.value)}
+                      className="text-sm font-medium text-blue-600 bg-transparent border-none outline-none cursor-pointer"
+                    >
+                      {PERIODS.map(p => (
+                        <option key={p.key} value={p.key}>{p.shortLabel}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">{selectedPeriod.label}</p>
+                </div>
+              </div>
+
+              {/* KPIs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {/* Revenue KPI */}
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <div className="text-sm text-slate-500 mb-1">Total Revenue</div>
+                  {salesLoading ? (
+                    <div className="text-slate-400 text-sm">Loading...</div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-slate-900">
+                        €{totalRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      {revenueGrowth !== null && (
+                        <div className={`flex items-center gap-1 mt-1 text-sm font-medium ${
+                          revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {revenueGrowth >= 0
+                            ? <TrendingUp className="w-4 h-4" />
+                            : <TrendingDown className="w-4 h-4" />
+                          }
+                          {revenueGrowth >= 0 ? '+' : ''}{revenueGrowth.toFixed(1)}%
+                          <span className="text-slate-400 font-normal text-xs ml-1">
+                            {selectedPeriod.compareLabel}
+                          </span>
+                        </div>
+                      )}
+                      {compareRevenue > 0 && (
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          vs €{compareRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Customers with Sales KPI */}
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <div className="text-sm text-slate-500 mb-1">Customers with Sales</div>
+                  {salesLoading ? (
+                    <div className="text-slate-400 text-sm">Loading...</div>
+                  ) : (
+                    <div className="text-2xl font-bold text-slate-900">
+                      {customersWithSales}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
 
             {/* FILTERS */}
             <section className="bg-white rounded-xl shadow p-4">
@@ -97,9 +171,7 @@ export function DashboardFigma() {
                 >
                   <option value="">All Areas</option>
                   {areas.map(a => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
+                    <option key={a} value={a}>{a}</option>
                   ))}
                 </select>
 
@@ -111,9 +183,7 @@ export function DashboardFigma() {
                 >
                   <option value="">All Cities</option>
                   {cities.map(c => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
 
@@ -123,27 +193,6 @@ export function DashboardFigma() {
                   placeholder="Search customer"
                   className="rounded-md border px-3 py-2"
                 />
-              </div>
-            </section>
-
-            {/* KPIs */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl shadow p-4">
-                <div className="text-sm text-slate-500">
-                  Total Revenue
-                </div>
-                <div className="text-2xl font-bold">
-                  €{totalRevenue.toLocaleString()}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-4">
-                <div className="text-sm text-slate-500">
-                  Customers with Sales
-                </div>
-                <div className="text-2xl font-bold">
-                  {customersWithSales}
-                </div>
               </div>
             </section>
 
