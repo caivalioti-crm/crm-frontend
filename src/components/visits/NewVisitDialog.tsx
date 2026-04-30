@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { X, Plus, Phone, UserCheck, Video, MessageSquare, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Plus, Phone, UserCheck, Video, MessageSquare, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { SmartDateInput, dateToISO } from '../ui/SmartDateInput';
+import { CategorySelector } from '../ui/CategorySelector';
+import type { SelectedCategory, CategoryItem } from '../ui/CategorySelector';
 
 const BASE_URL = 'http://localhost:3001';
 
@@ -15,19 +17,6 @@ type Customer = {
 type Task = {
   description: string;
   reminderDate?: string;
-};
-
-type CategoryItem = {
-  category_code: string;
-  parent_code: string | null;
-  level: number;
-  full_name: string;
-  short_name: string;
-};
-
-type SelectedCategory = {
-  categoryCode: string;
-  subcategoryCode?: string;
 };
 
 type NewVisitDialogProps = {
@@ -68,23 +57,6 @@ async function authedPost(url: string, body: any) {
   return res.json();
 }
 
-function Checkbox({ checked, partial }: { checked: boolean; partial?: boolean }) {
-  return (
-    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
-      checked ? 'bg-blue-600 border-blue-600'
-      : partial ? 'bg-blue-100 border-blue-400 border-dashed'
-      : 'border-gray-300'
-    }`}>
-      {checked && (
-        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-        </svg>
-      )}
-      {partial && !checked && <div className="w-2 h-0.5 bg-blue-400 rounded" />}
-    </div>
-  );
-}
-
 const todayDisplay = () => {
   const now = new Date();
   return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -92,8 +64,6 @@ const todayDisplay = () => {
 
 export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const categoryRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const subcategoryRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,8 +84,6 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
   const [error, setError] = useState<string | null>(null);
 
   const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
-  const [expandedSubcategory, setExpandedSubcategory] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<SelectedCategory[]>([]);
 
   useEffect(() => {
@@ -123,32 +91,6 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
       authedFetch('/api/categories').then(setAllCategories).catch(console.error);
     }
   }, [isOpen]);
-
-  const level1Categories = useMemo(() =>
-    allCategories.filter(c => c.level === 1).sort((a, b) => a.full_name.localeCompare(b.full_name)),
-    [allCategories]
-  );
-
-  const childrenOf = (parentCode: string) => allCategories.filter(c => c.parent_code === parentCode);
-
-  const isSelected = (categoryCode: string, subcategoryCode?: string) =>
-    selectedCategories.some(s => s.categoryCode === categoryCode && s.subcategoryCode === subcategoryCode);
-
-  const countSpecific = (categoryCode: string) =>
-    selectedCategories.filter(s => s.categoryCode === categoryCode && s.subcategoryCode !== undefined).length;
-
-  const isGeneralSelected = (categoryCode: string) =>
-    selectedCategories.some(s => s.categoryCode === categoryCode && s.subcategoryCode === undefined);
-
-  const toggle = (categoryCode: string, subcategoryCode?: string) => {
-    if (isSelected(categoryCode, subcategoryCode)) {
-      setSelectedCategories(prev => prev.filter(s =>
-        !(s.categoryCode === categoryCode && s.subcategoryCode === subcategoryCode)
-      ));
-    } else {
-      setSelectedCategories(prev => [...prev, { categoryCode, subcategoryCode }]);
-    }
-  };
 
   const areas = useMemo(() =>
     [...new Set(customers.map(c => c.area).filter(Boolean))].sort() as string[], [customers]);
@@ -190,10 +132,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
         setError(`Reminder date cannot be before the visit date (${visitDate})`);
         return;
       }
-      if (!reminderISO) {
-        setError('Invalid reminder date');
-        return;
-      }
+      if (!reminderISO) { setError('Invalid reminder date'); return; }
       task.reminderDate = reminderISO;
     } else if (newTaskReminderType) {
       task.reminderDate = getReminderDate(newTaskReminderType);
@@ -208,11 +147,9 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
 
   const handleSave = async () => {
     if (!selectedCustomerCode) { setError('Please select a customer'); return; }
-
     const isoDate = dateToISO(visitDate);
     if (!isoDate) { setError('Invalid date — use dd/mm/yyyy or dd/mm/yy'); return; }
 
-    // Validate all task reminder dates
     const invalidTask = tasks.find(t => t.reminderDate && t.reminderDate < isoDate);
     if (invalidTask) {
       setError(`Task reminder "${invalidTask.description}" is before the visit date (${visitDate})`);
@@ -248,8 +185,6 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     setNotes('');
     setTasks([]);
     setSelectedCategories([]);
-    setExpandedCategory(null);
-    setExpandedSubcategory(null);
     setNewTaskDescription('');
     setNewTaskReminderType('');
     setNewTaskCustomDate('');
@@ -336,11 +271,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
 
           {/* Date and Time */}
           <div className="grid grid-cols-2 gap-4">
-            <SmartDateInput
-              label="Date *"
-              value={visitDate}
-              onChange={setVisitDate}
-            />
+            <SmartDateInput label="Date *" value={visitDate} onChange={setVisitDate} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Time (optional, 24h)</label>
               <input type="text" value={visitTime} onChange={e => setVisitTime(e.target.value)}
@@ -365,150 +296,12 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
             </div>
           </div>
 
-          {/* Categories Discussed */}
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <label className="block text-sm font-medium text-gray-700">Categories Discussed</label>
-              {selectedCategories.length > 0 && (
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                  {selectedCategories.length} selected
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-4 mb-3 text-xs text-gray-500">
-              <span className="flex items-center gap-1.5"><Checkbox checked={true} /> Specific</span>
-              <span className="flex items-center gap-1.5"><Checkbox checked={false} partial={true} /> General</span>
-            </div>
-            <div className="border border-gray-300 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
-              {level1Categories.map(cat => {
-                const level2 = childrenOf(cat.category_code);
-                const isExpanded = expandedCategory === cat.category_code;
-                const specificCount = countSpecific(cat.category_code);
-                const generalSelected = isGeneralSelected(cat.category_code);
-                const anySelected = specificCount > 0 || generalSelected;
-
-                return (
-                  <div
-                    key={cat.category_code}
-                    className="border-b border-gray-200 last:border-b-0"
-                    ref={el => { if (el) categoryRefs.current.set(cat.category_code, el); }}
-                  >
-                    <button
-                      onClick={() => {
-                        if (level2.length > 0) {
-                          const next = isExpanded ? null : cat.category_code;
-                          setExpandedCategory(next);
-                          setExpandedSubcategory(null);
-                          if (next) setTimeout(() => {
-                            categoryRefs.current.get(cat.category_code)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                          }, 50);
-                        } else {
-                          toggle(cat.category_code);
-                        }
-                      }}
-                      className={`w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors ${anySelected ? 'bg-blue-50' : ''}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {level2.length === 0 && <Checkbox checked={isSelected(cat.category_code)} />}
-                        <span className="text-sm font-medium text-gray-900">{cat.full_name}</span>
-                        {generalSelected && specificCount === 0 && (
-                          <span className="px-2 py-0.5 border border-dashed border-blue-400 text-blue-500 rounded text-xs">general</span>
-                        )}
-                        {specificCount > 0 && (
-                          <span className="px-2 py-0.5 bg-blue-600 text-white rounded-full text-xs">
-                            {specificCount}{generalSelected && '+gen'}
-                          </span>
-                        )}
-                      </div>
-                      {level2.length > 0 && (
-                        isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />
-                      )}
-                    </button>
-
-                    {level2.length > 0 && isExpanded && (
-                      <div className="bg-gray-50 border-t border-gray-200">
-                        <button
-                          onClick={() => toggle(cat.category_code)}
-                          className={`w-full px-6 py-2.5 flex items-center gap-3 hover:bg-gray-100 transition-colors text-left border-b border-gray-200 ${generalSelected ? 'bg-blue-50' : ''}`}
-                        >
-                          <Checkbox checked={false} partial={generalSelected} />
-                          <span className="text-sm text-gray-500 italic">General — {cat.short_name}</span>
-                        </button>
-
-                        {level2.map(sub => {
-                          const level3 = childrenOf(sub.category_code);
-                          const isSubExpanded = expandedSubcategory === sub.category_code;
-                          const subSpecificCount = countSpecific(sub.category_code);
-                          const subGeneralSelected = isGeneralSelected(sub.category_code);
-                          const subAnySelected = isSelected(cat.category_code, sub.category_code) || subSpecificCount > 0 || subGeneralSelected;
-
-                          return (
-                            <div
-                              key={sub.category_code}
-                              ref={el => { if (el) subcategoryRefs.current.set(sub.category_code, el); }}
-                            >
-                              <button
-                                onClick={() => {
-                                  if (level3.length > 0) {
-                                    const next = isSubExpanded ? null : sub.category_code;
-                                    setExpandedSubcategory(next);
-                                    if (next) setTimeout(() => {
-                                      subcategoryRefs.current.get(sub.category_code)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                                    }, 50);
-                                  } else {
-                                    toggle(cat.category_code, sub.category_code);
-                                  }
-                                }}
-                                className={`w-full px-6 py-2.5 flex items-center justify-between hover:bg-gray-100 transition-colors text-left ${subAnySelected ? 'bg-blue-50' : ''}`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  {level3.length === 0 && <Checkbox checked={isSelected(cat.category_code, sub.category_code)} />}
-                                  <span className="text-sm text-gray-700">{sub.full_name}</span>
-                                  {subGeneralSelected && subSpecificCount === 0 && (
-                                    <span className="px-2 py-0.5 border border-dashed border-blue-400 text-blue-500 rounded text-xs">general</span>
-                                  )}
-                                  {subSpecificCount > 0 && (
-                                    <span className="px-2 py-0.5 bg-blue-600 text-white rounded-full text-xs">
-                                      {subSpecificCount}{subGeneralSelected && '+gen'}
-                                    </span>
-                                  )}
-                                </div>
-                                {level3.length > 0 && (
-                                  isSubExpanded ? <ChevronDown className="w-3 h-3 text-gray-400" /> : <ChevronRight className="w-3 h-3 text-gray-400" />
-                                )}
-                              </button>
-
-                              {level3.length > 0 && isSubExpanded && (
-                                <div className="bg-white border-t border-gray-100">
-                                  <button
-                                    onClick={() => toggle(sub.category_code)}
-                                    className={`w-full px-10 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-100 ${subGeneralSelected ? 'bg-blue-50' : ''}`}
-                                  >
-                                    <Checkbox checked={false} partial={subGeneralSelected} />
-                                    <span className="text-sm text-gray-400 italic">General — {sub.short_name}</span>
-                                  </button>
-                                  {level3.map(sub3 => (
-                                    <button
-                                      key={sub3.category_code}
-                                      onClick={() => toggle(sub.category_code, sub3.category_code)}
-                                      className={`w-full px-10 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left ${isSelected(sub.category_code, sub3.category_code) ? 'bg-blue-50' : ''}`}
-                                    >
-                                      <Checkbox checked={isSelected(sub.category_code, sub3.category_code)} />
-                                      <span className="text-sm text-gray-600">{sub3.full_name}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Categories */}
+          <CategorySelector
+            allCategories={allCategories}
+            selected={selectedCategories}
+            onChange={setSelectedCategories}
+          />
 
           {/* Notes */}
           <div>
@@ -527,9 +320,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
                   <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex items-start gap-2">
                     <div className="flex-1">
                       <div className="font-medium text-sm text-gray-900">{task.description}</div>
-                      {task.reminderDate && (
-                        <div className="text-xs text-gray-500 mt-0.5">Reminder: {task.reminderDate}</div>
-                      )}
+                      {task.reminderDate && <div className="text-xs text-gray-500 mt-0.5">Reminder: {task.reminderDate}</div>}
                     </div>
                     <button onClick={() => setTasks(tasks.filter((_, i) => i !== index))}
                       className="p-1 hover:bg-red-100 rounded text-red-500">
@@ -558,12 +349,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
                 </div>
                 {newTaskReminderType === 'custom' && (
                   <div className="mt-2">
-                    <SmartDateInput
-                      value={newTaskCustomDate}
-                      onChange={setNewTaskCustomDate}
-                      hint={true}
-                      minDate={visitDate}
-                    />
+                    <SmartDateInput value={newTaskCustomDate} onChange={setNewTaskCustomDate} hint={true} minDate={visitDate} />
                   </div>
                 )}
               </div>
@@ -575,11 +361,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
             </div>
           </div>
 
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              {error}
-            </div>
-          )}
+          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
         </div>
 
         {/* Footer */}

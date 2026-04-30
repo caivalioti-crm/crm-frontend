@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag } from 'lucide-react';
+import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag, MessageSquare, Bell, Trash2, Pencil, X } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
+import { CategorySelector } from '../ui/CategorySelector';
+import type { SelectedCategory, CategoryItem } from '../ui/CategorySelector';
 
 const BASE_URL = 'http://localhost:3001';
 
@@ -17,10 +20,19 @@ type VisitCategory = {
   subcategory_code: string | null;
 };
 
+type VisitComment = {
+  id: string;
+  commenter_name: string;
+  comment: string;
+  is_read: boolean;
+  created_at: string;
+};
+
 type Visit = {
   id: string;
   customer_code: string;
   salesman_code: string;
+  user_id: string;
   visit_date: string;
   visit_time: string | null;
   visit_type: string;
@@ -28,14 +40,7 @@ type Visit = {
   created_at: string;
   crm_visit_tasks: Task[];
   crm_visit_categories: VisitCategory[];
-};
-
-type CategoryItem = {
-  category_code: string;
-  parent_code: string | null;
-  level: number;
-  full_name: string;
-  short_name: string;
+  crm_visit_comments: VisitComment[];
 };
 
 type VisitsLogProps = {
@@ -62,6 +67,21 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
+async function authedRequest(method: string, url: string, body?: any) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const res = await fetch(`${BASE_URL}${url}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
 export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLogProps) {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
@@ -73,6 +93,21 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
   const [selectedCity, setSelectedCity] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  // Edit state
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [editNotes, setEditNotes] = useState('');
+  const [editType, setEditType] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editCategories, setEditCategories] = useState<SelectedCategory[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Comment state
+  const [commentingVisitId, setCommentingVisitId] = useState<string | null>(null);
+  const [newComment, setNewComment] = useState('');
+  const [commentSaving, setCommentSaving] = useState(false);
+
+  const isFullAccess = ['admin', 'manager', 'exec'].includes(currentUser.role);
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
@@ -106,10 +141,9 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
     const customer = customerMap.get(v.customer_code);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const matchesCode = v.customer_code.includes(q);
-      const matchesName = customer?.name.toLowerCase().includes(q) ?? false;
-      const matchesNotes = v.notes?.toLowerCase().includes(q) ?? false;
-      if (!matchesCode && !matchesName && !matchesNotes) return false;
+      if (!v.customer_code.includes(q) &&
+          !(customer?.name.toLowerCase().includes(q)) &&
+          !(v.notes?.toLowerCase().includes(q))) return false;
     }
     if (selectedArea && customer?.area !== selectedArea) return false;
     if (selectedCity && customer?.city !== selectedCity) return false;
@@ -123,8 +157,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
   const getTaskSummary = (tasks: Task[]) => {
     const total = tasks.length;
     const completed = tasks.filter(t => t.status === 'completed').length;
-    const pending = total - completed;
-    return { total, completed, pending };
+    return { total, completed, pending: total - completed };
   };
 
   const formatVisitDate = (dateStr: string) => {
@@ -132,17 +165,20 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
     return d.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   };
 
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: '2-digit' }) +
+      ' ' + d.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' });
+  };
+
   const groupVisitCategories = (visitCategories: VisitCategory[]) => {
     const groups = new Map<string, { general: boolean; subcats: string[] }>();
-
     for (const vc of visitCategories) {
       if (!vc.subcategory_code) {
-        // Parent selected as general
         const name = categoryMap.get(vc.category_code)?.full_name ?? vc.category_code;
         if (!groups.has(name)) groups.set(name, { general: false, subcats: [] });
         groups.get(name)!.general = true;
       } else {
-        // Subcategory selected — find its root parent for grouping
         const subCat = categoryMap.get(vc.subcategory_code);
         const parentCat = subCat?.parent_code ? categoryMap.get(subCat.parent_code) : null;
         const groupName = parentCat?.full_name ?? categoryMap.get(vc.category_code)?.full_name ?? vc.category_code;
@@ -153,6 +189,105 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
     }
     return groups;
   };
+
+  const canEditDelete = (visit: Visit) =>
+    isFullAccess || visit.user_id === currentUser.id;
+
+  const handleDelete = async (visitId: string) => {
+    if (!confirm('Delete this visit? This cannot be undone.')) return;
+    try {
+      await authedRequest('DELETE', `/api/visits/${visitId}`);
+      setVisits(prev => prev.filter(v => v.id !== visitId));
+      if (expandedVisit === visitId) setExpandedVisit(null);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete visit');
+    }
+  };
+
+
+  const startEdit = (visit: Visit) => {
+    console.log('visit categories:', visit.crm_visit_categories); // ← add this
+    setEditingVisitId(visit.id);
+    setEditNotes(visit.notes ?? '');
+    setEditType(visit.visit_type);
+    setEditDate(isoToDisplay(visit.visit_date));
+    setEditCategories(
+      (visit.crm_visit_categories ?? []).map(vc => ({
+        categoryCode: vc.category_code,
+        subcategoryCode: vc.subcategory_code ?? undefined,
+      }))
+    );
+  };
+
+  const handleSaveEdit = async (visitId: string) => {
+    setEditSaving(true);
+    try {
+      const updated = await authedRequest('PATCH', `/api/visits/${visitId}`, {
+        notes: editNotes,
+        visit_type: editType,
+        visit_date: dateToISO(editDate),
+        categories: editCategories,
+      });
+      setVisits(prev => prev.map(v =>
+        v.id === visitId
+          ? {
+              ...v,
+              ...updated,
+              crm_visit_categories: editCategories.map(ec => ({
+                id: crypto.randomUUID(),
+                category_code: ec.categoryCode,
+                subcategory_code: ec.subcategoryCode ?? null,
+              })),
+            }
+          : v
+      ));
+      setEditingVisitId(null);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save visit');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleAddComment = async (visitId: string) => {
+    if (!newComment.trim()) return;
+    setCommentSaving(true);
+    try {
+      const comment = await authedRequest('POST', `/api/visits/${visitId}/comments`, { comment: newComment });
+      setVisits(prev => prev.map(v =>
+        v.id === visitId
+          ? { ...v, crm_visit_comments: [...(v.crm_visit_comments ?? []), comment] }
+          : v
+      ));
+      setNewComment('');
+      setCommentingVisitId(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCommentSaving(false);
+    }
+  };
+
+  const handleMarkRead = async (visitId: string, commentId: string) => {
+    try {
+      await authedRequest('PATCH', `/api/visits/comments/${commentId}/read`);
+      setVisits(prev => prev.map(v =>
+        v.id === visitId
+          ? { ...v, crm_visit_comments: v.crm_visit_comments.map(c => c.id === commentId ? { ...c, is_read: true } : c) }
+          : v
+      ));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const totalUnread = visits.reduce((sum, v) =>
+    sum + (v.crm_visit_comments ?? []).filter(c => !c.is_read).length, 0
+  );
+
+  const visitTypeOptions = ['in-person', 'phone', 'video', 'other'];
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -165,6 +300,12 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-600" />
             Visit Log
+            {totalUnread > 0 && (
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">
+                <Bell className="w-3 h-3" />
+                {totalUnread}
+              </span>
+            )}
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
             {filteredVisits.length} visit{filteredVisits.length !== 1 ? 's' : ''}
@@ -246,6 +387,10 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                 const isExpanded = expandedVisit === visit.id;
                 const visitCategories = visit.crm_visit_categories ?? [];
                 const categoryGroups = groupVisitCategories(visitCategories);
+                const comments = visit.crm_visit_comments ?? [];
+                const unreadComments = comments.filter(c => !c.is_read);
+                const isEditing = editingVisitId === visit.id;
+                const isCommenting = commentingVisitId === visit.id;
 
                 return (
                   <div key={visit.id}>
@@ -264,7 +409,13 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                             {visitCategories.length > 0 && (
                               <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs flex items-center gap-1">
                                 <Tag className="w-3 h-3" />
-                                {visitCategories.length} categories
+                                {visitCategories.length}
+                              </span>
+                            )}
+                            {unreadComments.length > 0 && (
+                              <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs flex items-center gap-1 font-bold">
+                                <Bell className="w-3 h-3" />
+                                {unreadComments.length} new
                               </span>
                             )}
                           </div>
@@ -275,7 +426,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                                 {customer.city}, {customer.area}
                               </span>
                             )}
-                            {(currentUser.role === 'manager' || currentUser.role === 'admin') && (
+                            {isFullAccess && (
                               <span className="flex items-center gap-1">
                                 <User className="w-3 h-3" />
                                 {visit.salesman_code}
@@ -286,17 +437,16 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                             <p className="text-sm text-gray-600 line-clamp-2">{visit.notes}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
                           {taskSummary.total > 0 && (
                             taskSummary.pending > 0 ? (
                               <span className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
                                 <AlertCircle className="w-3 h-3" />
-                                {taskSummary.pending} pending
+                                {taskSummary.pending}
                               </span>
                             ) : (
                               <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
                                 <CheckCircle className="w-3 h-3" />
-                                All done
                               </span>
                             )
                           )}
@@ -308,14 +458,76 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                     {isExpanded && (
                       <div className="px-4 sm:px-6 pb-5 pt-3 bg-blue-50 border-t border-blue-100 space-y-4">
 
-                        {/* Visit Notes */}
-                        <div>
-                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visit Notes</div>
-                          <p className="text-sm text-gray-700 leading-relaxed">{visit.notes || '—'}</p>
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {canEditDelete(visit) && !isEditing && (
+                            <>
+                              <button onClick={() => startEdit(visit)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs hover:bg-gray-50 transition-colors">
+                                <Pencil className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                              <button onClick={() => handleDelete(visit.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                              </button>
+                            </>
+                          )}
+                          {isFullAccess && !isCommenting && (
+                            <button onClick={() => { setCommentingVisitId(visit.id); setNewComment(''); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-300 text-blue-600 rounded-lg text-xs hover:bg-blue-50 transition-colors">
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              Add Comment
+                            </button>
+                          )}
                         </div>
 
+                        {/* Edit form */}
+                        {isEditing && (
+                          <div className="bg-white rounded-lg p-4 border border-gray-200 space-y-4">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Edit Visit</div>
+                            <SmartDateInput label="Date" value={editDate} onChange={setEditDate} hint={false} />
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Visit Type</label>
+                              <select value={editType} onChange={e => setEditType(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                {visitTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                              <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[80px]" />
+                            </div>
+                            <CategorySelector
+                              allCategories={allCategories}
+                              selected={editCategories}
+                              onChange={setEditCategories}
+                            />
+                            <div className="flex gap-2">
+                              <button onClick={() => handleSaveEdit(visit.id)} disabled={editSaving}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+                                {editSaving ? 'Saving...' : 'Save'}
+                              </button>
+                              <button onClick={() => setEditingVisitId(null)}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Visit Notes */}
+                        {!isEditing && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visit Notes</div>
+                            <p className="text-sm text-gray-700 leading-relaxed">{visit.notes || '—'}</p>
+                          </div>
+                        )}
+
                         {/* Categories Discussed */}
-                        {categoryGroups.size > 0 && (
+                        {!isEditing && categoryGroups.size > 0 && (
                           <div>
                             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                               Categories Discussed ({visitCategories.length})
@@ -326,17 +538,13 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                                   <div className="flex items-center gap-2 mb-1">
                                     <span className="text-sm font-medium text-gray-800">{parentName}</span>
                                     {general && (
-                                      <span className="px-2 py-0.5 border border-dashed border-blue-400 text-blue-500 rounded text-xs">
-                                        general
-                                      </span>
+                                      <span className="px-2 py-0.5 border border-dashed border-blue-400 text-blue-500 rounded text-xs">general</span>
                                     )}
                                   </div>
                                   {subcats.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5">
                                       {subcats.map(sub => (
-                                        <span key={sub} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
-                                          {sub}
-                                        </span>
+                                        <span key={sub} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">{sub}</span>
                                       ))}
                                     </div>
                                   )}
@@ -356,12 +564,9 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                               {visit.crm_visit_tasks.map(task => (
                                 <div key={task.id} className="flex items-start gap-3 bg-white rounded-lg px-3 py-2.5 border border-gray-200">
                                   <div className="mt-0.5">
-                                    {task.status === 'completed'
-                                      ? <CheckCircle className="w-4 h-4 text-green-500" />
-                                      : task.status === 'in-progress'
-                                      ? <Clock className="w-4 h-4 text-orange-500" />
-                                      : <AlertCircle className="w-4 h-4 text-gray-400" />
-                                    }
+                                    {task.status === 'completed' ? <CheckCircle className="w-4 h-4 text-green-500" />
+                                      : task.status === 'in-progress' ? <Clock className="w-4 h-4 text-orange-500" />
+                                      : <AlertCircle className="w-4 h-4 text-gray-400" />}
                                   </div>
                                   <div className="flex-1">
                                     <p className={`text-sm ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
@@ -381,6 +586,63 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                                   </span>
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Comments */}
+                        {(comments.length > 0 || isCommenting) && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                              Manager Comments
+                              {unreadComments.length > 0 && (
+                                <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs">{unreadComments.length} unread</span>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              {comments.map(comment => (
+                                <div key={comment.id} className={`rounded-lg px-3 py-2.5 border ${!comment.is_read ? 'border-red-300 bg-red-50' : 'bg-white border-gray-200'}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-xs font-semibold text-gray-700">{comment.commenter_name}</span>
+                                        <span className="text-xs text-gray-400">{formatDateTime(comment.created_at)}</span>
+                                        {!comment.is_read && (
+                                          <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">New</span>
+                                        )}
+                                      </div>
+                                      <p className="text-sm text-gray-700">{comment.comment}</p>
+                                    </div>
+                                    {!comment.is_read && !isFullAccess && (
+                                      <button onClick={() => handleMarkRead(visit.id, comment.id)}
+                                        className="shrink-0 flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 text-gray-600 rounded text-xs hover:bg-gray-50">
+                                        <X className="w-3 h-3" />
+                                        Mark read
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Add comment form */}
+                        {isCommenting && (
+                          <div className="bg-white rounded-lg p-3 border border-blue-200 space-y-2">
+                            <div className="text-xs font-semibold text-gray-600">New Comment</div>
+                            <textarea value={newComment} onChange={e => setNewComment(e.target.value)}
+                              placeholder="Write a comment for the rep..."
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[80px]" />
+                            <div className="flex gap-2">
+                              <button onClick={() => handleAddComment(visit.id)} disabled={commentSaving || !newComment.trim()}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+                                {commentSaving ? 'Sending...' : 'Send'}
+                              </button>
+                              <button onClick={() => { setCommentingVisitId(null); setNewComment(''); }}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
+                                Cancel
+                              </button>
                             </div>
                           </div>
                         )}
