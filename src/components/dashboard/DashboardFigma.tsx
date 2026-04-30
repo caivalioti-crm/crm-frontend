@@ -19,6 +19,7 @@ export function DashboardFigma() {
     revenueGrowth,
     customersWithSales,
     salesLoading,
+    areaStats,
 
     selectedPeriod,
     setSelectedPeriod,
@@ -75,7 +76,6 @@ export function DashboardFigma() {
       {/* ================= BODY ================= */}
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-        {/* ===== DASHBOARD VIEW ===== */}
         {!selectedCustomer && !selectedProspect && (
           <>
             <div className="text-sm text-slate-600">
@@ -108,9 +108,7 @@ export function DashboardFigma() {
                 </div>
               </div>
 
-              {/* KPIs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
                 {/* Revenue KPI */}
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                   <div className="text-sm text-slate-500 mb-1">Total Revenue</div>
@@ -158,7 +156,47 @@ export function DashboardFigma() {
               </div>
             </section>
 
-            {/* FILTERS */}
+            {/* ===== GEO PERFORMANCE ===== */}
+            {areaStats.length > 0 && (
+              <section className="bg-white rounded-xl shadow p-4">
+                <h2 className="text-base font-semibold text-slate-900 mb-1">
+                  Performance by Area
+                </h2>
+                <p className="text-xs text-slate-400 mb-4">{selectedPeriod.label} · {selectedPeriod.compareLabel}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {areaStats.map(area => (
+                    <div
+                      key={area.area}
+                      className="bg-slate-50 rounded-xl p-4 border border-slate-100 border-l-4 border-l-indigo-500"
+                    >
+                      <div className="text-sm font-semibold text-slate-900 mb-2">{area.area}</div>
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <div className="text-xl font-bold text-slate-900">
+                          €{area.netAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </div>
+                        {area.growth !== null && (
+                          <div className={`text-xs font-medium flex items-center gap-0.5 ${
+                            area.growth >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {area.growth >= 0 ? '↑' : '↓'}{Math.abs(area.growth).toFixed(1)}%
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {area.customerCount} customers with sales
+                      </div>
+                      {area.compareAmount > 0 && (
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          vs €{area.compareAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ===== FILTERS ===== */}
             <section className="bg-white rounded-xl shadow p-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <select
@@ -196,7 +234,7 @@ export function DashboardFigma() {
               </div>
             </section>
 
-            {/* CUSTOMERS */}
+            {/* ===== CUSTOMERS ===== */}
             <CustomerListSection
               title={
                 currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec'

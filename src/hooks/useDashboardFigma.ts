@@ -130,6 +130,7 @@ export function useDashboardFigma() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [compareSales, setCompareSales] = useState<Sale[]>([]);
+  const [areaStats, setAreaStats] = useState<any[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
 
   /* =====================
@@ -179,17 +180,19 @@ export function useDashboardFigma() {
   }, []);
 
   /* =====================
-     FETCH SALES (period + comparison)
+     FETCH SALES (period + comparison + area stats)
      ===================== */
   const fetchSales = useCallback(async (period: Period) => {
     setSalesLoading(true);
     try {
-      const [current, compare] = await Promise.all([
+      const [current, compare, areas] = await Promise.all([
         authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}`),
         authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}`),
+        authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}`),
       ]);
       setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
       setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
+      setAreaStats(Array.isArray(areas) ? areas : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -343,6 +346,7 @@ export function useDashboardFigma() {
     revenueGrowth,
     customersWithSales,
     salesLoading,
+    areaStats,
 
     selectedPeriod,
     setSelectedPeriod,
