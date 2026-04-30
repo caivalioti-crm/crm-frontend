@@ -43,7 +43,6 @@ export function useDashboardFigma() {
   const [selectedArea, setSelectedArea] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGeoArea, setSelectedGeoArea] = useState('');
 
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [showNewProspectDialog, setShowNewProspectDialog] = useState(false);
@@ -58,18 +57,18 @@ export function useDashboardFigma() {
   /* =====================
      LOAD CURRENT USER
      ===================== */
-useEffect(() => {
-  authedFetch('/api/me')
-    .then(profile => {
-      setCurrentUser({
-        id: profile.id,
-        name: profile.full_name,
-        role: profile.role,
-        salesman_code: profile.salesman_code,
-      });
-    })
-    .catch(console.error);
-}, []);
+  useEffect(() => {
+    authedFetch('/api/me')
+      .then(profile => {
+        setCurrentUser({
+          id: profile.id,
+          name: profile.full_name,
+          role: profile.role,
+          salesman_code: profile.salesman_code,
+        });
+      })
+      .catch(console.error);
+  }, []);
 
   /* =====================
      FETCH DATA
@@ -95,12 +94,11 @@ useEffect(() => {
 
   /* =====================
      ACCESS-SCOPED CUSTOMERS
-     (backend already filters for reps — no frontend scoping needed)
      ===================== */
   const scopedCustomers = useMemo(() => customers, [customers]);
 
   /* =====================
-     CUSTOMER LOOKUP
+     CUSTOMER LOOKUP BY CODE
      ===================== */
   const customerByCode = useMemo(() => {
     const map = new Map<string, Customer>();
@@ -109,11 +107,22 @@ useEffect(() => {
   }, [scopedCustomers]);
 
   /* =====================
+     CUSTOMER LOOKUP BY TRDR_ID
+     ===================== */
+  const customerByTrdrId = useMemo(() => {
+    const map = new Map<string, Customer>();
+    scopedCustomers.forEach(c => {
+      if (c.trdr_id) map.set(String(c.trdr_id), c);
+    });
+    return map;
+  }, [scopedCustomers]);
+
+  /* =====================
      SCOPED SALES
      ===================== */
   const scopedSales = useMemo(() => {
-    const allowedCodes = new Set(scopedCustomers.map(c => c.code));
-    return sales.filter(s => allowedCodes.has(s.customerCode));
+    const allowedTrdrIds = new Set(scopedCustomers.map(c => String(c.trdr_id)));
+    return sales.filter(s => allowedTrdrIds.has(String(s.customerCode)));
   }, [sales, scopedCustomers]);
 
   /* =====================
@@ -121,13 +130,13 @@ useEffect(() => {
      ===================== */
   const geoFilteredSales = useMemo(() => {
     return scopedSales.filter(s => {
-      const c = customerByCode.get(s.customerCode);
+      const c = customerByTrdrId.get(String(s.customerCode));
       if (!c) return false;
       if (selectedArea && c.area !== selectedArea) return false;
       if (selectedCity && c.city !== selectedCity) return false;
       return true;
     });
-  }, [scopedSales, customerByCode, selectedArea, selectedCity]);
+  }, [scopedSales, customerByTrdrId, selectedArea, selectedCity]);
 
   /* =====================
      KPIs

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, User } from 'lucide-react';
+import { User } from 'lucide-react';
 
 import { useDashboardFigma } from '../../hooks/useDashboardFigma';
 
@@ -39,10 +39,8 @@ export function DashboardFigma() {
     setShowNewProspectDialog,
 
     currentUser,
-    setCurrentUser,
   } = useDashboardFigma();
 
-  // ✅ LOCAL NAVIGATION STATE
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
 
@@ -63,18 +61,7 @@ export function DashboardFigma() {
 
           <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
             <User className="w-5 h-5" />
-            <select
-              value={currentUser.id}
-              onChange={e =>
-                setCurrentUser({ ...currentUser, id: e.target.value })
-              }
-              className="bg-transparent text-white font-medium outline-none"
-            >
-              <option value="demo" className="text-slate-900">
-                Demo User
-              </option>
-            </select>
-            <ChevronDown className="w-4 h-4" />
+            <span className="font-medium">{currentUser.name}</span>
           </div>
         </div>
       </header>
@@ -163,7 +150,7 @@ export function DashboardFigma() {
             {/* CUSTOMERS */}
             <CustomerListSection
               title={
-                currentUser.role === 'manager'
+                currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec'
                   ? 'All Customers'
                   : 'Your Customers'
               }

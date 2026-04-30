@@ -11,4 +11,5 @@ export type Customer = {
   group?: string;
   lastVisitDate?: string;
   assignedRepId?: string;
+  trdr_id?: number;
 };

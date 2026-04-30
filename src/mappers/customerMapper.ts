@@ -7,9 +7,10 @@ export function mapErpCustomer(raw: any): Customer {
     nameGreek: raw.nameGreek,
     city: raw.city,
 
-    // ✅ normalize snake_case → camelCase ONCE
     areaCode: String(raw.area_code),
     area: raw.area,
+
+    trdr_id: raw.trdr_id,
 
     type: undefined,
     group: undefined,
