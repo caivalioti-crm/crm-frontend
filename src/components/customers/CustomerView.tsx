@@ -1,5 +1,3 @@
-import { CommercialIntelligenceSection } from '../shared/CommercialIntelligenceSection';
-import { TransportERPSection } from '../shared/TransportERPSection';
 import {
   ArrowLeft,
   Info,
@@ -18,9 +16,10 @@ import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { sortVisits } from '../../utils/sortVisits';
 import { InlineError } from '../shared/InlineError';
 
-import type {
-  CommercialEntityBase,
-} from '../../types/commercialEntity';
+import { CommercialIntelligenceSection } from '../shared/CommercialIntelligenceSection';
+import { TransportERPSection } from '../shared/TransportERPSection';
+
+import type { CommercialEntityBase } from '../../types/commercialEntity';
 
 export interface CustomerViewProps {
   customer: CommercialEntityBase & {
@@ -58,7 +57,7 @@ export function CustomerView({
   const {
     customer,
     visits,
-    
+
     isVisitsError,
     refetchVisits,
 
@@ -70,110 +69,136 @@ export function CustomerView({
   } = useCustomerView(initialCustomer);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-indigo-700 to-purple-800 text-white px-6 py-4 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-blue-100 hover:text-white"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
-          </button>
+    <div className="min-h-screen bg-slate-100 flex flex-col">
 
-          <button
-            onClick={() => setShowNewVisitDialog(true)}
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            New Visit
-          </button>
-        </div>
+      {/* ================= HEADER ================= */}
+      <header className="bg-gradient-to-r from-indigo-700 to-purple-800 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 py-5 space-y-3">
 
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="px-3 py-1 bg-white/20 rounded font-mono">
-            {customer.code}
-          </span>
-          <h1 className="text-2xl font-bold">{customer.name}</h1>
-        </div>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 text-white/90 hover:text-white"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span className="font-medium">Back to Dashboard</span>
+            </button>
 
-        {customer.nameGreek && (
-          <div className="text-blue-100 mt-1">{customer.nameGreek}</div>
-        )}
+            <button
+              onClick={() => setShowNewVisitDialog(true)}
+              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              New Visit
+            </button>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-sm text-blue-100 mt-2">
-          {customer.type && (
-            <span className="px-3 py-1 bg-white/10 rounded-full">
-              {customer.type}
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="px-3 py-1 bg-white/20 rounded-md font-mono text-sm">
+              {customer.code}
             </span>
+            <h1 className="text-2xl font-bold">
+              {customer.name}
+            </h1>
+          </div>
+
+          {customer.nameGreek && (
+            <div className="text-white/80">
+              {customer.nameGreek}
+            </div>
           )}
-          {customer.group && (
-            <span className="px-3 py-1 bg-white/10 rounded-full">
-              {customer.group}
-            </span>
-          )}
-          {(customer.city || customer.area) && (
-            <span>
-              {customer.city}
-              {customer.city && customer.area ? ', ' : ''}
-              {customer.area}
-            </span>
-          )}
+
+          <div className="flex flex-wrap gap-2 text-sm text-white/80">
+            {customer.type && (
+              <span className="px-3 py-1 bg-white/10 rounded-full">
+                {customer.type}
+              </span>
+            )}
+            {customer.group && (
+              <span className="px-3 py-1 bg-white/10 rounded-full">
+                {customer.group}
+              </span>
+            )}
+            {(customer.city || customer.area) && (
+              <span>
+                {customer.city}
+                {customer.city && customer.area ? ', ' : ''}
+                {customer.area}
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 overflow-auto p-6 space-y-6 max-w-7xl mx-auto w-full">
-        {/* Customer Details */}
-        <section className="bg-white rounded-xl shadow-md p-6 border-l-4 border-indigo-500">
+      {/* ================= CONTENT ================= */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-6 space-y-6">
+
+        {/* ================= CUSTOMER DETAILS ================= */}
+        <section className="bg-white rounded-xl shadow p-6 border-l-4 border-indigo-500">
           <div className="flex items-center gap-2 mb-4">
             <Info className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-lg font-semibold">Customer Details</h2>
+            <h2 className="text-lg font-semibold">
+              Customer Details
+            </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm text-slate-700">
+
+            {/* Contact */}
             <div className="space-y-2">
-              <div className="font-medium text-gray-600">Contact</div>
+              <div className="font-medium text-slate-500">Contact</div>
+
               {customer.address && (
                 <div className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-gray-400" />
+                  <Building2 className="w-4 h-4 text-slate-400" />
                   {customer.address}
                 </div>
               )}
+
               {customer.phone && <div>📞 {customer.phone}</div>}
               {customer.mobile && <div>📱 {customer.mobile}</div>}
               {customer.email && <div>✉️ {customer.email}</div>}
+
               {customer.contactName && (
                 <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-400" />
+                  <User className="w-4 h-4 text-slate-400" />
                   {customer.contactName}
                 </div>
               )}
+
               {customer.vatNumber && (
-                <div className="font-mono text-xs bg-gray-100 inline-block px-2 py-1 rounded">
+                <div className="inline-block font-mono text-xs bg-slate-100 px-2 py-1 rounded">
                   ΑΦΜ: {customer.vatNumber}
                 </div>
               )}
             </div>
 
+            {/* Transport */}
             <div className="space-y-2">
-              <div className="font-medium text-gray-600">
+              <div className="font-medium text-slate-500">
                 Transport Preferences
               </div>
+
               {customer.transportCompany && (
                 <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-gray-400" />
+                  <Truck className="w-4 h-4 text-slate-400" />
                   {customer.transportCompany}
                 </div>
               )}
+
               {customer.transportMeans && (
-                <div>Preferred: {customer.transportMeans}</div>
+                <div>
+                  Preferred: {customer.transportMeans}
+                </div>
               )}
             </div>
 
+            {/* Info */}
             <div className="space-y-2">
-              <div className="font-medium text-gray-600">Customer Info</div>
+              <div className="font-medium text-slate-500">
+                Customer Info
+              </div>
+
               {customer.overallDiscount !== undefined && (
                 <div>
                   Discount:{' '}
@@ -182,6 +207,7 @@ export function CustomerView({
                   </span>
                 </div>
               )}
+
               {customer.createdDate && (
                 <div>
                   Customer since:{' '}
@@ -190,6 +216,7 @@ export function CustomerView({
                   </span>
                 </div>
               )}
+
               {customer.lastVisitDate && (
                 <div>
                   Last visit:{' '}
@@ -213,9 +240,9 @@ export function CustomerView({
           transportMeans={customer.transportMeans}
         />
 
-        {/* Visits */}
-        <section className="bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center gap-2 mb-2">
+        {/* ================= VISITS ================= */}
+        <section className="bg-white rounded-xl shadow p-6">
+          <div className="flex items-center gap-2 mb-3">
             <Calendar className="w-5 h-5 text-purple-600" />
             <h2 className="text-lg font-semibold">Επισκέψεις</h2>
           </div>
@@ -227,7 +254,9 @@ export function CustomerView({
               onRetry={refetchVisits}
             />
           ) : visits.length === 0 ? (
-            <div className="text-sm text-gray-500">Καμία επίσκεψη ακόμα</div>
+            <div className="text-sm text-slate-500">
+              Καμία επίσκεψη ακόμα
+            </div>
           ) : (
             <ul className="text-sm space-y-1">
               {sortVisits(visits).map(v => (
@@ -237,7 +266,7 @@ export function CustomerView({
                 >
                   {v.date} — {v.notes || '—'}
                   {v.__optimistic && (
-                    <span className="ml-2 text-xs text-gray-400">
+                    <span className="ml-2 text-xs text-slate-400">
                       (αποθήκευση…)
                     </span>
                   )}
@@ -247,24 +276,26 @@ export function CustomerView({
           )}
         </section>
 
-        {/* Sales Overview */}
-        <section className="bg-white rounded-xl shadow-md p-6">
+        {/* ================= SALES ================= */}
+        <section className="bg-white rounded-xl shadow p-6">
           <div className="flex items-center gap-2 mb-3">
             <ShoppingCart className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold">Sales Overview</h2>
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-slate-500">
             ERP-derived sales summary (placeholder)
           </div>
         </section>
 
-        {/* Category Intelligence */}
-        <section className="bg-white rounded-xl shadow-md p-6">
+        {/* ================= CATEGORY ================= */}
+        <section className="bg-white rounded-xl shadow p-6">
           <div className="flex items-center gap-2 mb-3">
             <Lightbulb className="w-5 h-5 text-purple-600" />
-            <h2 className="text-lg font-semibold">Category Intelligence</h2>
+            <h2 className="text-lg font-semibold">
+              Category Intelligence
+            </h2>
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-slate-500">
             Purchased, neglected, and cross-sell categories (placeholder)
           </div>
         </section>
@@ -273,9 +304,7 @@ export function CustomerView({
       <NewVisitDialog
         isOpen={showNewVisitDialog}
         onClose={() => setShowNewVisitDialog(false)}
-        customers={[
-          { code: customer.code, name: customer.name },
-        ]}
+        customers={[{ code: customer.code, name: customer.name }]}
         isSaving={isSavingVisit}
         error={saveVisitError}
         onSave={async visitData => {

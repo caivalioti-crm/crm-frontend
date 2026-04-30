@@ -9,12 +9,11 @@ import { ProspectsList } from '../prospects/ProspectsList';
 import { NewProspectDialog } from '../prospects/NewProspectDialog';
 import { CustomerView } from '../customers/CustomerView';
 import { ProspectView } from '../customers/ProspectView';
+import { CustomerListSection } from '../customers/CustomerListSection';
 
 export function DashboardFigma() {
   const {
-    customers,
     customersTotal,
-
     totalRevenue,
     customersWithSales,
 
@@ -31,7 +30,7 @@ export function DashboardFigma() {
     setSearchQuery,
 
     filteredCustomers,
-    customersInScope,
+    getDaysSinceVisit,
 
     showNewVisitDialog,
     setShowNewVisitDialog,
@@ -43,130 +42,172 @@ export function DashboardFigma() {
     setCurrentUser,
   } = useDashboardFigma();
 
+  // ✅ LOCAL NAVIGATION STATE
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
 
-  if (selectedCustomer) {
-    return (
-      <CustomerView
-        customer={selectedCustomer}
-        onBack={() => setSelectedCustomer(null)}
-      />
-    );
-  }
-
-  if (selectedProspect) {
-    return (
-      <ProspectView
-        prospect={selectedProspect}
-        onBack={() => setSelectedProspect(null)}
-      />
-    );
-  }
-
   return (
-    <div className="h-full flex flex-col bg-background">
-      {/* HEADER */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6">
-        <div className="flex justify-between items-center">
+    <div className="min-h-screen bg-slate-100">
+
+      {/* ================= HEADER ================= */}
+      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
+        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Soft1 Auto Parts CRM</h1>
-            <p className="text-blue-100">Sales Representative Dashboard</p>
+            <h1 className="text-3xl font-extrabold">
+              Soft1 Auto Parts CRM
+            </h1>
+            <p className="text-blue-100">
+              Sales Representative Dashboard
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <User />
+          <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
+            <User className="w-5 h-5" />
             <select
               value={currentUser.id}
               onChange={e =>
                 setCurrentUser({ ...currentUser, id: e.target.value })
               }
+              className="bg-transparent text-white font-medium outline-none"
             >
-              <option value="demo">Demo User</option>
+              <option value="demo" className="text-slate-900">
+                Demo User
+              </option>
             </select>
-            <ChevronDown />
+            <ChevronDown className="w-4 h-4" />
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* BODY */}
-      <div className="p-6 space-y-6">
+      {/* ================= BODY ================= */}
+      <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-        <div className="text-sm text-gray-600">
-          You have access to <b>{customersTotal}</b> customers across{' '}
-          <b>{areas.length}</b> areas
-        </div>
+        {/* ===== DASHBOARD VIEW ===== */}
+        {!selectedCustomer && !selectedProspect && (
+          <>
+            <div className="text-sm text-slate-600">
+              You have access to{' '}
+              <span className="font-semibold text-slate-900">
+                {customersTotal}
+              </span>{' '}
+              customers across{' '}
+              <span className="font-semibold text-slate-900">
+                {areas.length}
+              </span>{' '}
+              areas
+            </div>
 
-        {/* FILTERS */}
-        <div className="grid grid-cols-3 gap-4">
-          <select
-            value={selectedArea}
-            onChange={e => {
-              setSelectedArea(e.target.value);
-              setSelectedCity('');
-            }}
-          >
-            <option value="">All Areas</option>
-            {areas.map(a => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
+            {/* FILTERS */}
+            <section className="bg-white rounded-xl shadow p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <select
+                  value={selectedArea}
+                  onChange={e => {
+                    setSelectedArea(e.target.value);
+                    setSelectedCity('');
+                  }}
+                  className="rounded-md border px-3 py-2"
+                >
+                  <option value="">All Areas</option>
+                  {areas.map(a => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
 
-          <select
-            value={selectedCity}
-            onChange={e => setSelectedCity(e.target.value)}
-            disabled={!selectedArea}
-          >
-            <option value="">All Cities</option>
-            {cities.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+                <select
+                  value={selectedCity}
+                  onChange={e => setSelectedCity(e.target.value)}
+                  disabled={!selectedArea}
+                  className="rounded-md border px-3 py-2"
+                >
+                  <option value="">All Cities</option>
+                  {cities.map(c => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
 
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search customer"
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search customer"
+                  className="rounded-md border px-3 py-2"
+                />
+              </div>
+            </section>
+
+            {/* KPIs */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl shadow p-4">
+                <div className="text-sm text-slate-500">
+                  Total Revenue
+                </div>
+                <div className="text-2xl font-bold">
+                  €{totalRevenue.toLocaleString()}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow p-4">
+                <div className="text-sm text-slate-500">
+                  Customers with Sales
+                </div>
+                <div className="text-2xl font-bold">
+                  {customersWithSales}
+                </div>
+              </div>
+            </section>
+
+            {/* CUSTOMERS */}
+            <CustomerListSection
+              title={
+                currentUser.role === 'manager'
+                  ? 'All Customers'
+                  : 'Your Customers'
+              }
+              customers={filteredCustomers}
+              currentUserRole={currentUser.role}
+              onSelectCustomer={setSelectedCustomer}
+              getDaysSinceVisit={getDaysSinceVisit}
+            />
+
+            <VisitsLog
+              currentUser={currentUser}
+              onNewVisit={() => setShowNewVisitDialog(true)}
+            />
+
+            <ProspectsList
+              currentUser={currentUser}
+              onNewProspect={() => setShowNewProspectDialog(true)}
+              onSelectProspect={setSelectedProspect}
+            />
+          </>
+        )}
+
+        {/* ===== CUSTOMER VIEW ===== */}
+        {selectedCustomer && (
+          <CustomerView
+            customer={selectedCustomer}
+            onBack={() => setSelectedCustomer(null)}
           />
-        </div>
+        )}
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>Total Revenue: €{totalRevenue.toLocaleString()}</div>
-          <div>Customers with Sales: {customersWithSales}</div>
-        </div>
+        {/* ===== PROSPECT VIEW ===== */}
+        {selectedProspect && (
+          <ProspectView
+            prospect={selectedProspect}
+            onBack={() => setSelectedProspect(null)}
+          />
+        )}
+      </main>
 
-        {/* CUSTOMERS */}
-        <div>
-          <h3>Customers ({customersInScope})</h3>
-          {filteredCustomers.map(c => (
-            <button
-              key={c.code}
-              onClick={() => setSelectedCustomer(c)}
-              className="block w-full text-left"
-            >
-              {c.name} – {c.city}, {c.area}
-            </button>
-          ))}
-        </div>
-
-        <VisitsLog
-          currentUser={currentUser}
-          onNewVisit={() => setShowNewVisitDialog(true)}
-        />
-
-        <ProspectsList
-          currentUser={currentUser}
-          onNewProspect={() => setShowNewProspectDialog(true)}
-          onSelectProspect={setSelectedProspect}
-        />
-      </div>
-
-      {/* DIALOGS */}
+      {/* ================= DIALOGS ================= */}
       <NewVisitDialog
         isOpen={showNewVisitDialog}
         onClose={() => setShowNewVisitDialog(false)}
-        customers={customers.map(c => ({
+        customers={filteredCustomers.map(c => ({
           code: c.code,
           name: c.name,
         }))}
@@ -177,7 +218,7 @@ export function DashboardFigma() {
         isOpen={showNewProspectDialog}
         onClose={() => setShowNewProspectDialog(false)}
         currentUser={currentUser}
-        onSave={() => {}}
+        onSave={async () => {}}
       />
     </div>
   );

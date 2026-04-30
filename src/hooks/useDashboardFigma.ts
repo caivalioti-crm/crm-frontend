@@ -1,41 +1,33 @@
 import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import type { Customer } from '../types/customer';
+import type { Sale } from '../types/sale';
+import { mapErpCustomer } from '../mappers/customerMapper';
+import { mapErpSale } from '../mappers/saleMapper';
 
-/* =====================
-   TYPES
-   ===================== */
+const BASE_URL = 'http://localhost:3001';
 
 type SalesRep = {
   id: string;
   name: string;
-  role: 'rep' | 'manager';
+  role: 'rep' | 'manager' | 'admin' | 'exec';
+  salesman_code: string | null;
 };
 
-type Sale = {
-  customerCode: string;
-  trnDate: string;
-  netAmount: number;
-  series: number;
-  salesRepId: string;
-};
+async function authedFetch(url: string) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
 
-type Customer = {
-  code: string;
-  name: string;
-  nameGreek?: string;
-  city: string;
+  const res = await fetch(`${BASE_URL}${url}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 
-  areaCode: string; // ✅ canonical identifier
-  area: string;     // ✅ display label
-
-  type?: string;
-  group?: string;
-  lastVisitDate?: string;
-  assignedRepId?: string;
-};
-
-/* =====================
-   HOOK
-   ===================== */
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
 
 export function useDashboardFigma() {
   /* =====================
@@ -57,59 +49,59 @@ export function useDashboardFigma() {
   const [showNewProspectDialog, setShowNewProspectDialog] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<SalesRep>({
-    id: 'demo',
-    role: 'manager',
-    name: 'Demo User',
+    id: '',
+    role: 'rep',
+    name: 'Loading...',
+    salesman_code: null,
   });
 
   /* =====================
-     DEMO ACCESS SCOPE (TEMP)
+     LOAD CURRENT USER
      ===================== */
-
-  const demoAccessAreaCodes = useMemo(() => {
-    return ['26', '90']; // TEMP demo access
-  }, []);
+useEffect(() => {
+  authedFetch('/api/me')
+    .then(profile => {
+      setCurrentUser({
+        id: profile.id,
+        name: profile.full_name,
+        role: profile.role,
+        salesman_code: profile.salesman_code,
+      });
+    })
+    .catch(console.error);
+}, []);
 
   /* =====================
      FETCH DATA
      ===================== */
-
   useEffect(() => {
-    fetch('http://localhost:3001/api/erp/customers')
-      .then(res => res.json())
+    authedFetch('/api/erp/customers')
       .then(res => {
-  const items = Array.isArray(res.items) ? res.items : [];
-
-  const mapped = items.map((c: any) => ({
-    ...c,
-    areaCode: c.areaCode ?? c.area_code, // ✅ normalize once
-  }));
-
-  setCustomers(mapped);
-  setCustomersTotal(typeof res.total === 'number' ? res.total : 0);
-});
+        const items = Array.isArray(res.items) ? res.items : [];
+        setCustomers(items.map(mapErpCustomer));
+        setCustomersTotal(typeof res.total === 'number' ? res.total : 0);
+      })
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/erp/sales')
-      .then(res => res.json())
-      .then(data => setSales(Array.isArray(data) ? data : []));
+    authedFetch('/api/erp/sales')
+      .then(data => {
+        const items = Array.isArray(data) ? data : [];
+        setSales(items.map(mapErpSale));
+      })
+      .catch(console.error);
   }, []);
 
   /* =====================
      ACCESS-SCOPED CUSTOMERS
+     (backend already filters for reps — no frontend scoping needed)
      ===================== */
-
-  const scopedCustomers = useMemo(() => {
-    return customers.filter(c =>
-      demoAccessAreaCodes.includes(c.areaCode)
-    );
-  }, [customers, demoAccessAreaCodes]);
+  const scopedCustomers = useMemo(() => customers, [customers]);
 
   /* =====================
      CUSTOMER LOOKUP
      ===================== */
-
   const customerByCode = useMemo(() => {
     const map = new Map<string, Customer>();
     scopedCustomers.forEach(c => map.set(c.code, c));
@@ -119,7 +111,6 @@ export function useDashboardFigma() {
   /* =====================
      SCOPED SALES
      ===================== */
-
   const scopedSales = useMemo(() => {
     const allowedCodes = new Set(scopedCustomers.map(c => c.code));
     return sales.filter(s => allowedCodes.has(s.customerCode));
@@ -128,7 +119,6 @@ export function useDashboardFigma() {
   /* =====================
      GEO-FILTERED SALES
      ===================== */
-
   const geoFilteredSales = useMemo(() => {
     return scopedSales.filter(s => {
       const c = customerByCode.get(s.customerCode);
@@ -142,7 +132,6 @@ export function useDashboardFigma() {
   /* =====================
      KPIs
      ===================== */
-
   const totalRevenue = useMemo(
     () => geoFilteredSales.reduce((sum, s) => sum + s.netAmount, 0),
     [geoFilteredSales]
@@ -156,7 +145,6 @@ export function useDashboardFigma() {
   /* =====================
      GEO OPTIONS
      ===================== */
-
   const areas = useMemo(
     () => Array.from(new Set(scopedCustomers.map(c => c.area))).sort(),
     [scopedCustomers]
@@ -176,7 +164,6 @@ export function useDashboardFigma() {
   /* =====================
      FILTERED CUSTOMERS
      ===================== */
-
   const filteredCustomers = useMemo(() => {
     return scopedCustomers.filter(c => {
       if (selectedArea && c.area !== selectedArea) return false;
@@ -193,9 +180,18 @@ export function useDashboardFigma() {
   }, [scopedCustomers, selectedArea, selectedCity, searchQuery]);
 
   /* =====================
+     VISIT INTELLIGENCE
+     ===================== */
+  const getDaysSinceVisit = (lastVisitDate: string): number => {
+    const now = new Date();
+    const lastVisit = new Date(lastVisitDate);
+    const diffTime = Math.abs(now.getTime() - lastVisit.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  /* =====================
      EXPORT
      ===================== */
-
   return {
     customers: scopedCustomers,
     customersTotal: scopedCustomers.length,
@@ -217,6 +213,8 @@ export function useDashboardFigma() {
 
     filteredCustomers,
     customersInScope: filteredCustomers.length,
+
+    getDaysSinceVisit,
 
     showNewVisitDialog,
     setShowNewVisitDialog,

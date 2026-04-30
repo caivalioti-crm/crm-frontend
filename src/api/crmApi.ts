@@ -1,12 +1,19 @@
+import { supabase } from '../lib/supabaseClient';
+
 const BASE_URL = 'http://localhost:3001';
 
 async function request<T>(
   url: string,
   options?: RequestInit
 ): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+
   const res = await fetch(`${BASE_URL}${url}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...options,
   });
@@ -40,9 +47,6 @@ export function recordVisit(payload: {
 /* ---------- READ ---------- */
 
 export async function getCustomerDashboard(customerCode: string) {
-  // We already verified ERP customers exist,
-  // so this only needs to return a compatible shape.
-
   const customers = await request<any[]>('/api/erp/customers');
 
   const customer = customers.find(
@@ -55,8 +59,6 @@ export async function getCustomerDashboard(customerCode: string) {
     throw new Error('Customer not found');
   }
 
-  // 🔒 PHASE 1 STUB
-  // KPIs based on visits/discussions will be wired in Phase 2
   return {
     categories_discussed_count: 0,
     subcategories_discussed_count: 0,
