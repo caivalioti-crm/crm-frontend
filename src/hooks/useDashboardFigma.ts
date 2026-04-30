@@ -131,12 +131,15 @@ export function useDashboardFigma() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [compareSales, setCompareSales] = useState<Sale[]>([]);
   const [areaStats, setAreaStats] = useState<any[]>([]);
+  const [cityStats, setCityStats] = useState<any[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
+  const [cityLoading, setCityLoading] = useState(false);
 
   /* =====================
      UI STATE
      ===================== */
   const [selectedPeriod, setSelectedPeriodState] = useState<Period>(PERIODS[0]);
+  const [selectedGeoArea, setSelectedGeoArea] = useState<string | null>(null);
   const [selectedArea, setSelectedArea] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -193,6 +196,8 @@ export function useDashboardFigma() {
       setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
       setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
       setAreaStats(Array.isArray(areas) ? areas : []);
+      setCityStats([]);
+      setSelectedGeoArea(null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -207,6 +212,29 @@ export function useDashboardFigma() {
   const setSelectedPeriod = useCallback((periodKey: string) => {
     const period = PERIODS.find(p => p.key === periodKey) ?? PERIODS[0];
     setSelectedPeriodState(period);
+  }, []);
+
+  /* =====================
+     FETCH CITY STATS (drill-down)
+     ===================== */
+  const drillDownToArea = useCallback(async (area: string) => {
+    setSelectedGeoArea(area);
+    setCityLoading(true);
+    try {
+      const data = await authedFetch(
+        `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}`
+      );
+      setCityStats(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCityLoading(false);
+    }
+  }, [selectedPeriod]);
+
+  const backToAreas = useCallback(() => {
+    setSelectedGeoArea(null);
+    setCityStats([]);
   }, []);
 
   /* =====================
@@ -347,6 +375,11 @@ export function useDashboardFigma() {
     customersWithSales,
     salesLoading,
     areaStats,
+    cityStats,
+    cityLoading,
+    selectedGeoArea,
+    drillDownToArea,
+    backToAreas,
 
     selectedPeriod,
     setSelectedPeriod,
