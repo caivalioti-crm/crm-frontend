@@ -284,6 +284,13 @@ export function DashboardFigma() {
               </section>
             )}
 
+            {/* ===== VISITS LOG ===== */}
+            <VisitsLog
+              currentUser={currentUser}
+              onNewVisit={() => setShowNewVisitDialog(true)}
+              customers={customers}
+            />
+
             {/* ===== FILTERS ===== */}
             <section className="bg-white rounded-xl shadow p-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -333,12 +340,6 @@ export function DashboardFigma() {
               currentUserRole={currentUser.role}
               onSelectCustomer={setSelectedCustomer}
               getDaysSinceVisit={getDaysSinceVisit}
-            />
-
-            <VisitsLog
-              currentUser={currentUser}
-              onNewVisit={() => setShowNewVisitDialog(true)}
-              customers={customers}
             />
 
             <ProspectsList
