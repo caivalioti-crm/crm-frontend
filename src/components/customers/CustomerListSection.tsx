@@ -4,9 +4,9 @@ import { formatDate } from '../../utils/dateFormat';
 type CustomerListSectionProps = {
   title: string;
   customers: any[];
-  currentUserRole: 'rep' | 'manager';
+  currentUserRole: 'rep' | 'manager' | 'admin' | 'exec';
   onSelectCustomer: (customer: any) => void;
-  getDaysSinceVisit: (date: string) => number;
+  getDaysSinceVisit: (date: string | undefined | null) => number;
   getRepName?: (repId: string) => string | undefined;
 };
 
@@ -36,11 +36,7 @@ export function CustomerListSection({
             <button
               key={customer.code}
               onClick={() => onSelectCustomer(customer)}
-              className="
-                w-full px-4 sm:px-6 py-4 sm:py-5
-                hover:bg-blue-50 active:bg-blue-100
-                transition-colors text-left group
-              "
+              className="w-full px-4 sm:px-6 py-4 sm:py-5 hover:bg-blue-50 active:bg-blue-100 transition-colors text-left group"
             >
               <div className="flex items-start justify-between gap-3">
                 {/* Left */}
@@ -57,9 +53,7 @@ export function CustomerListSection({
 
                   {/* Legal name */}
                   {customer.nameGreek && (
-                    <div className="text-sm text-gray-600 mb-2">
-                      {customer.nameGreek}
-                    </div>
+                    <div className="text-sm text-gray-600 mb-2">{customer.nameGreek}</div>
                   )}
 
                   {/* Meta */}
@@ -68,20 +62,17 @@ export function CustomerListSection({
                       <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       {customer.city}, {customer.area}
                     </span>
-
                     {customer.type && (
                       <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
                         {customer.type}
                       </span>
                     )}
-
                     {customer.group && (
                       <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
                         {customer.group}
                       </span>
                     )}
-
-                    {currentUserRole === 'manager' &&
+                    {(currentUserRole === 'manager' || currentUserRole === 'admin') &&
                       customer.assignedRepId &&
                       getRepName && (
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center gap-1">
@@ -94,20 +85,18 @@ export function CustomerListSection({
                   {/* Last visit */}
                   <div className="text-xs sm:text-sm mt-1">
                     <span className="text-gray-500">Last visit: </span>
-                    <span
-                      className={
-                        days > 90
-                          ? 'text-orange-600 font-medium'
-                          : 'text-gray-500'
-                      }
-                    >
-                      {formatDate(customer.lastVisitDate)}
-                      {days > 90 && (
-                        <span className="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs">
-                          {days} days ago
-                        </span>
-                      )}
-                    </span>
+                    {!customer.lastVisitDate ? (
+                      <span className="text-gray-400">No visits yet</span>
+                    ) : (
+                      <span className={days > 90 ? 'text-orange-600 font-medium' : 'text-gray-500'}>
+                        {formatDate(customer.lastVisitDate)}
+                        {days > 90 && (
+                          <span className="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs">
+                            {days} days ago
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </div>
                 </div>
 

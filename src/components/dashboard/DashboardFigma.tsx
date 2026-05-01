@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { User, TrendingUp, TrendingDown } from 'lucide-react';
-
+import { User, TrendingUp, TrendingDown, LogOut } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma, PERIODS } from '../../hooks/useDashboardFigma';
 
 import { NewVisitDialog } from '../visits/NewVisitDialog';
@@ -99,10 +99,22 @@ export function DashboardFigma() {
             <h1 className="text-3xl font-extrabold">Soft1 Auto Parts CRM</h1>
             <p className="text-blue-100">Sales Representative Dashboard</p>
           </div>
-          <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
-            <User className="w-5 h-5" />
-            <span className="font-medium">{currentUser.name}</span>
-          </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
+                <User className="w-5 h-5" />
+                <span className="font-medium">{currentUser.name}</span>
+              </div>  
+  <button
+    onClick={async () => {
+      await supabase.auth.signOut();
+      window.location.reload();
+    }}
+    className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
+  >
+    <LogOut className="w-4 h-4" />
+    Logout
+  </button>
+</div>
         </div>
       </header>
 

@@ -11,10 +11,10 @@ export function mapErpCustomer(raw: any): Customer {
     area: raw.area,
 
     trdr_id: raw.trdr_id,
+    lastVisitDate: raw.last_visit_date ?? undefined,
 
     type: undefined,
     group: undefined,
-    lastVisitDate: undefined,
     assignedRepId: undefined,
   };
 }

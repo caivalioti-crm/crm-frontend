@@ -355,12 +355,14 @@ export function useDashboardFigma() {
   /* =====================
      VISIT INTELLIGENCE
      ===================== */
-  const getDaysSinceVisit = (lastVisitDate: string): number => {
-    const now = new Date();
-    const lastVisit = new Date(lastVisitDate);
-    const diffTime = Math.abs(now.getTime() - lastVisit.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
+    const getDaysSinceVisit = (lastVisitDate: string | undefined | null): number => {
+      if (!lastVisitDate) return 0;
+      const now = new Date();
+      const lastVisit = new Date(lastVisitDate);
+      if (isNaN(lastVisit.getTime())) return 0;
+      const diffTime = Math.abs(now.getTime() - lastVisit.getTime());
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    };
 
   /* =====================
      EXPORT

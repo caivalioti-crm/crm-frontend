@@ -22,9 +22,14 @@ type VisitCategory = {
 
 type VisitComment = {
   id: string;
+  user_id: string;
   commenter_name: string;
   comment: string;
   is_read: boolean;
+  read_at: string | null;
+  read_by_name: string | null;
+  reply_text: string | null;
+  reply_at: string | null;
   created_at: string;
 };
 
@@ -106,6 +111,11 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
   const [commentingVisitId, setCommentingVisitId] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
+
+  // Reply state
+  const [replyingCommentId, setReplyingCommentId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replySaving, setReplySaving] = useState(false);
 
   const isFullAccess = ['admin', 'manager', 'exec'].includes(currentUser.role);
 
@@ -205,9 +215,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
     }
   };
 
-
   const startEdit = (visit: Visit) => {
-    console.log('visit categories:', visit.crm_visit_categories); // ← add this
     setEditingVisitId(visit.id);
     setEditNotes(visit.notes ?? '');
     setEditType(visit.visit_type);
@@ -229,19 +237,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
         visit_date: dateToISO(editDate),
         categories: editCategories,
       });
-      setVisits(prev => prev.map(v =>
-        v.id === visitId
-          ? {
-              ...v,
-              ...updated,
-              crm_visit_categories: editCategories.map(ec => ({
-                id: crypto.randomUUID(),
-                category_code: ec.categoryCode,
-                subcategory_code: ec.subcategoryCode ?? null,
-              })),
-            }
-          : v
-      ));
+      setVisits(prev => prev.map(v => v.id === visitId ? updated : v));
       setEditingVisitId(null);
     } catch (err) {
       console.error(err);
@@ -275,11 +271,58 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
       await authedRequest('PATCH', `/api/visits/comments/${commentId}/read`);
       setVisits(prev => prev.map(v =>
         v.id === visitId
-          ? { ...v, crm_visit_comments: v.crm_visit_comments.map(c => c.id === commentId ? { ...c, is_read: true } : c) }
+          ? {
+              ...v,
+              crm_visit_comments: v.crm_visit_comments.map(c =>
+                c.id === commentId
+                  ? { ...c, is_read: true, read_at: new Date().toISOString(), read_by_name: currentUser.name }
+                  : c
+              )
+            }
           : v
       ));
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteComment = async (visitId: string, commentId: string) => {
+    if (!confirm('Delete this comment?')) return;
+    try {
+      await authedRequest('DELETE', `/api/visits/comments/${commentId}`);
+      setVisits(prev => prev.map(v =>
+        v.id === visitId
+          ? { ...v, crm_visit_comments: v.crm_visit_comments.filter(c => c.id !== commentId) }
+          : v
+      ));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleReply = async (visitId: string, commentId: string) => {
+    if (!replyText.trim()) return;
+    setReplySaving(true);
+    try {
+      await authedRequest('PATCH', `/api/visits/comments/${commentId}/reply`, { reply_text: replyText });
+      setVisits(prev => prev.map(v =>
+        v.id === visitId
+          ? {
+              ...v,
+              crm_visit_comments: v.crm_visit_comments.map(c =>
+                c.id === commentId
+                  ? { ...c, reply_text: replyText, reply_at: new Date().toISOString() }
+                  : c
+              )
+            }
+          : v
+      ));
+      setReplyText('');
+      setReplyingCommentId(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReplySaving(false);
     }
   };
 
@@ -599,30 +642,108 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                                 <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs">{unreadComments.length} unread</span>
                               )}
                             </div>
-                            <div className="space-y-2">
-                              {comments.map(comment => (
-                                <div key={comment.id} className={`rounded-lg px-3 py-2.5 border ${!comment.is_read ? 'border-red-300 bg-red-50' : 'bg-white border-gray-200'}`}>
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-xs font-semibold text-gray-700">{comment.commenter_name}</span>
-                                        <span className="text-xs text-gray-400">{formatDateTime(comment.created_at)}</span>
-                                        {!comment.is_read && (
-                                          <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">New</span>
-                                        )}
+                            <div className="space-y-3">
+                              {comments.map(comment => {
+                                const isReplying = replyingCommentId === comment.id;
+                                const isOwnComment = comment.user_id === currentUser.id;
+
+                                return (
+                                  <div key={comment.id} className={`rounded-lg border overflow-hidden ${!comment.is_read ? 'border-red-300' : 'border-gray-200'}`}>
+
+                                    {/* Comment */}
+                                    <div className={`px-3 py-2.5 ${!comment.is_read ? 'bg-red-50' : 'bg-white'}`}>
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                            <span className="text-xs font-semibold text-gray-700">{comment.commenter_name}</span>
+                                            <span className="text-xs text-gray-400">{formatDateTime(comment.created_at)}</span>
+                                            {!comment.is_read && (
+                                              <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">New</span>
+                                            )}
+                                            {comment.is_read && comment.read_by_name && (
+                                              <span className="text-xs text-green-600 flex items-center gap-1">
+                                                ✅ Read by {comment.read_by_name}
+                                                {comment.read_at && ` · ${formatDateTime(comment.read_at)}`}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-sm text-gray-700">{comment.comment}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {!comment.is_read && visit.user_id === currentUser.id && comment.user_id !== currentUser.id && (
+                                            <button
+                                              onClick={() => handleMarkRead(visit.id, comment.id)}
+                                              className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 text-gray-600 rounded text-xs hover:bg-gray-50"
+                                            >
+                                              ✅ Mark read
+                                            </button>
+                                          )}
+                                          {isFullAccess && isOwnComment && (
+                                            <button
+                                              onClick={() => handleDeleteComment(visit.id, comment.id)}
+                                              className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
                                       </div>
-                                      <p className="text-sm text-gray-700">{comment.comment}</p>
                                     </div>
-                                    {!comment.is_read && !isFullAccess && (
-                                      <button onClick={() => handleMarkRead(visit.id, comment.id)}
-                                        className="shrink-0 flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 text-gray-600 rounded text-xs hover:bg-gray-50">
-                                        <X className="w-3 h-3" />
-                                        Mark read
-                                      </button>
+
+                                    {/* Existing reply */}
+                                    {comment.reply_text && (
+                                      <div className="px-3 py-2.5 bg-blue-50 border-t border-blue-100">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="text-xs font-semibold text-blue-700">↩ Reply</span>
+                                          {comment.reply_at && (
+                                            <span className="text-xs text-gray-400">{formatDateTime(comment.reply_at)}</span>
+                                          )}
+                                        </div>
+                                        <p className="text-sm text-blue-800">{comment.reply_text}</p>
+                                      </div>
+                                    )}
+
+                                    {/* Reply button — only for rep, after reading, no existing reply */}
+                                    {!comment.reply_text && !isFullAccess && comment.is_read && !isReplying && (
+                                      <div className="px-3 py-2 bg-gray-50 border-t border-gray-100">
+                                        <button
+                                          onClick={() => { setReplyingCommentId(comment.id); setReplyText(''); }}
+                                          className="text-xs text-blue-600 hover:text-blue-800"
+                                        >
+                                          ↩ Reply
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    {/* Reply input */}
+                                    {isReplying && (
+                                      <div className="px-3 py-2.5 bg-gray-50 border-t border-gray-100 space-y-2">
+                                        <textarea
+                                          value={replyText}
+                                          onChange={e => setReplyText(e.target.value)}
+                                          placeholder="Write your reply..."
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[60px]"
+                                        />
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleReply(visit.id, comment.id)}
+                                            disabled={replySaving || !replyText.trim()}
+                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-medium"
+                                          >
+                                            {replySaving ? 'Sending...' : 'Send Reply'}
+                                          </button>
+                                          <button
+                                            onClick={() => { setReplyingCommentId(null); setReplyText(''); }}
+                                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -646,6 +767,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                             </div>
                           </div>
                         )}
+
                       </div>
                     )}
                   </div>
