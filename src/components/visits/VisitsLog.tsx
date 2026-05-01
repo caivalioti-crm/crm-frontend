@@ -35,6 +35,7 @@ type VisitComment = {
 
 type Visit = {
   id: string;
+  owner_name: string;
   customer_code: string;
   salesman_code: string;
   user_id: string;
@@ -472,7 +473,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                             {isFullAccess && (
                               <span className="flex items-center gap-1">
                                 <User className="w-3 h-3" />
-                                {visit.salesman_code}
+                                {visit.owner_name}
                               </span>
                             )}
                           </div>
