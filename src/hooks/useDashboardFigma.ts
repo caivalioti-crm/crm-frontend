@@ -356,10 +356,10 @@ export function useDashboardFigma() {
      VISIT INTELLIGENCE
      ===================== */
     const getDaysSinceVisit = (lastVisitDate: string | undefined | null): number => {
-      if (!lastVisitDate) return 0;
+      if (!lastVisitDate) return 99999; // never visited = very large number
       const now = new Date();
       const lastVisit = new Date(lastVisitDate);
-      if (isNaN(lastVisit.getTime())) return 0;
+      if (isNaN(lastVisit.getTime())) return 99999;
       const diffTime = Math.abs(now.getTime() - lastVisit.getTime());
       return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     };

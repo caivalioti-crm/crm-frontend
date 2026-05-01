@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, TrendingUp, TrendingDown, LogOut } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { User, TrendingUp, TrendingDown, LogOut, MapPin, Search, Clock } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma, PERIODS } from '../../hooks/useDashboardFigma';
 
@@ -10,6 +10,14 @@ import { NewProspectDialog } from '../prospects/NewProspectDialog';
 import { CustomerView } from '../customers/CustomerView';
 import { ProspectView } from '../customers/ProspectView';
 import { CustomerListSection } from '../customers/CustomerListSection';
+
+const NOT_VISITED_OPTIONS = [
+  { label: 'All', value: null },
+  { label: '1 month', value: 30 },
+  { label: '3 months', value: 90 },
+  { label: '6 months', value: 180 },
+  { label: '1 year', value: 365 },
+];
 
 export function DashboardFigma() {
   const {
@@ -26,68 +34,48 @@ export function DashboardFigma() {
     selectedGeoArea,
     drillDownToArea,
     backToAreas,
-
     selectedPeriod,
     setSelectedPeriod,
-
     areas,
     cities,
-
     selectedArea,
     setSelectedArea,
-
     selectedCity,
     setSelectedCity,
-
     searchQuery,
     setSearchQuery,
-
     filteredCustomers,
     getDaysSinceVisit,
-
     showNewVisitDialog,
     setShowNewVisitDialog,
-
     showNewProspectDialog,
     setShowNewProspectDialog,
-
     currentUser,
   } = useDashboardFigma();
 
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
+  const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
+  const [notVisitedDays, setNotVisitedDays] = useState<number | null>(null);
 
-  const geoCard = (item: any, key: string, subtitle?: string) => (
-    <div
-      key={key}
-      className="bg-slate-50 rounded-xl p-4 border border-slate-100 border-l-4 border-l-indigo-500"
-    >
-      <div className="flex items-start justify-between mb-2">
-        <div className="text-sm font-semibold text-slate-900">{item.city ?? item.area}</div>
-        {subtitle && <div className="text-xs text-slate-400">{subtitle}</div>}
-      </div>
-      <div className="flex items-baseline gap-2 mb-1">
-        <div className="text-xl font-bold text-slate-900">
-          €{item.netAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-        </div>
-        {item.growth !== null && item.growth !== undefined && (
-          <div className={`text-xs font-medium flex items-center gap-0.5 ${
-            item.growth >= 0 ? 'text-green-600' : 'text-red-600'
-          }`}>
-            {item.growth >= 0 ? '↑' : '↓'}{Math.abs(item.growth).toFixed(1)}%
-          </div>
-        )}
-      </div>
-      <div className="text-xs text-slate-400">
-        {item.customerCount} customer{item.customerCount !== 1 ? 's' : ''} with sales
-      </div>
-      {item.compareAmount > 0 && (
-        <div className="text-xs text-slate-400 mt-0.5">
-          vs €{item.compareAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-        </div>
-      )}
-    </div>
-  );
+  // Compute "not visited since" counts
+    const notVisitedCounts = useMemo(() => {
+      const counts: Record<number, number> = { 30: 0, 90: 0, 180: 0, 365: 0 };
+      for (const c of filteredCustomers) {
+        const days = getDaysSinceVisit(c.lastVisitDate);
+        if (days > 30) counts[30]++;
+        if (days > 90) counts[90]++;
+        if (days > 180) counts[180]++;
+        if (days > 365) counts[365]++;
+      }
+      return counts;
+    }, [filteredCustomers, getDaysSinceVisit]);
+
+  // Apply not visited filter on top of filteredCustomers
+  const displayedCustomers = useMemo(() => {
+    if (!notVisitedDays) return filteredCustomers;
+    return filteredCustomers.filter(c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays);
+  }, [filteredCustomers, notVisitedDays, getDaysSinceVisit]);
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -99,22 +87,22 @@ export function DashboardFigma() {
             <h1 className="text-3xl font-extrabold">Soft1 Auto Parts CRM</h1>
             <p className="text-blue-100">Sales Representative Dashboard</p>
           </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
-                <User className="w-5 h-5" />
-                <span className="font-medium">{currentUser.name}</span>
-              </div>  
-  <button
-    onClick={async () => {
-      await supabase.auth.signOut();
-      window.location.reload();
-    }}
-    className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
-  >
-    <LogOut className="w-4 h-4" />
-    Logout
-  </button>
-</div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
+              <User className="w-5 h-5" />
+              <span className="font-medium">{currentUser.name}</span>
+            </div>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                window.location.reload();
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 
@@ -217,7 +205,6 @@ export function DashboardFigma() {
                   {selectedPeriod.label} · {selectedPeriod.compareLabel}
                 </p>
 
-                {/* AREA VIEW */}
                 {!selectedGeoArea && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {areaStats.map(area => (
@@ -239,9 +226,7 @@ export function DashboardFigma() {
                             </div>
                           )}
                         </div>
-                        <div className="text-xs text-slate-400">
-                          {area.customerCount} customers with sales
-                        </div>
+                        <div className="text-xs text-slate-400">{area.customerCount} customers with sales</div>
                         {area.compareAmount > 0 && (
                           <div className="text-xs text-slate-400 mt-0.5">
                             vs €{area.compareAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
@@ -253,7 +238,6 @@ export function DashboardFigma() {
                   </div>
                 )}
 
-                {/* CITY VIEW */}
                 {selectedGeoArea && (
                   cityLoading ? (
                     <div className="text-slate-400 text-sm">Loading cities...</div>
@@ -298,46 +282,130 @@ export function DashboardFigma() {
 
             {/* ===== VISITS LOG ===== */}
             <VisitsLog
+              key={visitsRefreshKey}
               currentUser={currentUser}
               onNewVisit={() => setShowNewVisitDialog(true)}
               customers={customers}
             />
 
             {/* ===== FILTERS ===== */}
-            <section className="bg-white rounded-xl shadow p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <select
-                  value={selectedArea}
-                  onChange={e => {
-                    setSelectedArea(e.target.value);
-                    setSelectedCity('');
-                  }}
-                  className="rounded-md border px-3 py-2"
-                >
-                  <option value="">All Areas</option>
+            <section className="bg-white rounded-xl shadow p-4 space-y-4">
+              <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                <MapPin className="w-4 h-4 text-indigo-500" />
+                Filter Customers
+              </div>
+
+              {/* Geographic Area */}
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-2">
+                  Geographic Area: <span className="text-slate-900">{selectedArea || 'All'}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => { setSelectedArea(''); setSelectedCity(''); }}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                      !selectedArea
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                    }`}
+                  >
+                    All
+                  </button>
                   {areas.map(a => (
-                    <option key={a} value={a}>{a}</option>
+                    <button
+                      key={a}
+                      onClick={() => { setSelectedArea(a); setSelectedCity(''); }}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        selectedArea === a
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                      }`}
+                    >
+                      {a}
+                    </button>
                   ))}
-                </select>
+                </div>
+              </div>
 
-                <select
-                  value={selectedCity}
-                  onChange={e => setSelectedCity(e.target.value)}
-                  disabled={!selectedArea}
-                  className="rounded-md border px-3 py-2"
-                >
-                  <option value="">All Cities</option>
-                  {cities.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+              {/* City */}
+              {selectedArea && cities.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-slate-500 mb-2">
+                    City: <span className="text-slate-900">{selectedCity || 'All'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setSelectedCity('')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        !selectedCity
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {cities.map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setSelectedCity(c)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                          selectedCity === c
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search customer"
-                  className="rounded-md border px-3 py-2"
-                />
+              {/* Search */}
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-2">Search Customer</div>
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Name, Code (e.g. 10234)"
+                    className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Not Visited Since */}
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  Not Visited Since
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {NOT_VISITED_OPTIONS.map(opt => {
+                    const count = opt.value ? notVisitedCounts[opt.value] : filteredCustomers.length;
+                    return (
+                      <button
+                        key={opt.label}
+                        onClick={() => setNotVisitedDays(opt.value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                          notVisitedDays === opt.value
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                        }`}
+                      >
+                        {opt.label}
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                          notVisitedDays === opt.value
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </section>
 
@@ -348,7 +416,7 @@ export function DashboardFigma() {
                   ? 'All Customers'
                   : 'Your Customers'
               }
-              customers={filteredCustomers}
+              customers={displayedCustomers}
               currentUserRole={currentUser.role}
               onSelectCustomer={setSelectedCustomer}
               getDaysSinceVisit={getDaysSinceVisit}
@@ -362,7 +430,6 @@ export function DashboardFigma() {
           </>
         )}
 
-        {/* ===== CUSTOMER VIEW ===== */}
         {selectedCustomer && (
           <CustomerView
             customer={selectedCustomer}
@@ -370,7 +437,6 @@ export function DashboardFigma() {
           />
         )}
 
-        {/* ===== PROSPECT VIEW ===== */}
         {selectedProspect && (
           <ProspectView
             prospect={selectedProspect}
@@ -384,7 +450,10 @@ export function DashboardFigma() {
         isOpen={showNewVisitDialog}
         onClose={() => setShowNewVisitDialog(false)}
         customers={filteredCustomers}
-        onSave={() => setShowNewVisitDialog(false)}
+        onSave={() => {
+          setShowNewVisitDialog(false);
+          setVisitsRefreshKey(k => k + 1);
+        }}
       />
 
       <NewProspectDialog
