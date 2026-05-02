@@ -13,6 +13,10 @@ import {
   FileText,
   Tag,
   ChevronDown,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  BarChart2,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
@@ -93,39 +97,111 @@ const DOC_PERIODS = [
   { label: 'Όλα',      from: '2022-01-01', to: '2026-12-31' },
 ];
 
+// ─── Sales period config ──────────────────────────────────────────────────────
+const _now = new Date();
+const _curYearMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
+const _curMonthLabel = _now.toLocaleString('el-GR', { month: 'short' });
+
+const SALES_PERIODS = [
+  { label: 'Q1 2026',   from: '2026-01', to: '2026-03', prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025',             dateFrom: '2026-01-01', dateTo: '2026-03-31' },
+  { label: 'Q2 2026',   from: '2026-04', to: '2026-06', prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025',             dateFrom: '2026-04-01', dateTo: '2026-06-30' },
+  { label: `2026 YTD (έως ${_curMonthLabel})`, from: '2026-01', to: _curYearMonth, prevFrom: '2025-01', prevTo: `2025-${String(_now.getMonth() + 1).padStart(2, '0')}`, prevLabel: `Ιαν–${_curMonthLabel} 2025`, dateFrom: '2026-01-01', dateTo: `${_curYearMonth}-31` },
+  { label: '2025 Full', from: '2025-01', to: '2025-12', prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024',                dateFrom: '2025-01-01', dateTo: '2025-12-31' },
+  { label: 'Q4 2025',   from: '2025-10', to: '2025-12', prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024',             dateFrom: '2025-10-01', dateTo: '2025-12-31' },
+  { label: 'Q3 2025',   from: '2025-07', to: '2025-09', prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024',             dateFrom: '2025-07-01', dateTo: '2025-09-30' },
+  { label: 'Q2 2025',   from: '2025-04', to: '2025-06', prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024',             dateFrom: '2025-04-01', dateTo: '2025-06-30' },
+  { label: 'Q1 2025',   from: '2025-01', to: '2025-03', prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024',             dateFrom: '2025-01-01', dateTo: '2025-03-31' },
+];
+
+function sumPeriod(sales: any[], fromMonth: string, toMonth: string): number {
+  return sales
+    .filter(s => s.month >= fromMonth && s.month <= toMonth)
+    .reduce((sum, s) => sum + (s.netamnt ?? 0), 0);
+}
+
+function fmtEur(n: number): string {
+  return '€' + Math.round(n).toLocaleString('el-GR');
+}
+
+// ─── Category Intelligence helpers ───────────────────────────────────────────
+type CatFilterType = 'all' | '0' | '1' | '2' | '3+';
+
+const CAT_FILTER_LABELS: { key: CatFilterType; label: string }[] = [
+  { key: 'all', label: 'Όλες' },
+  { key: '0',   label: 'Δεν συζητήθηκε' },
+  { key: '1',   label: '1 φορά' },
+  { key: '2',   label: '2×' },
+  { key: '3+',  label: '3+ φορές' },
+];
+
+function getDiscussionBadgeStyle(n: number): string {
+  if (n === 0) return 'bg-slate-100 text-slate-400';
+  if (n === 1) return 'bg-indigo-100 text-indigo-600';
+  if (n === 2) return 'bg-purple-100 text-purple-700';
+  return 'bg-purple-600 text-white';
+}
+
+function getL1Code(cat: any): string {
+  return cat.category_code.split('.')[0];
+}
+
+function getL1Label(l1Code: string, items: any[]): string {
+  const l1Item = items.find(i => i.level === 1 && i.category_code === l1Code);
+  if (l1Item) return l1Item.full_name;
+  return `Κατηγορία ${l1Code}`;
+}
+
 export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
 
-  // Visits
   const [visits, setVisits] = useState<any[]>([]);
   const [visitsLoading, setVisitsLoading] = useState(true);
 
-  // Sales (monthly summary)
   const [sales, setSales] = useState<any[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
+  const [salesPeriodIdx, setSalesPeriodIdx] = useState(0);
 
-  // Documents (orders & invoices)
+  const [salesByCategory, setSalesByCategory] = useState<any[]>([]);
+  const [salesByCategoryLoading, setSalesByCategoryLoading] = useState(true);
+  const [expandedCatL1s, setExpandedCatL1s] = useState<Set<string>>(new Set());
+
   const [documents, setDocuments] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(true);
   const [docPeriodIdx, setDocPeriodIdx] = useState(0);
   const [docTypeFilter, setDocTypeFilter] = useState<'all' | 'order' | 'invoice' | 'credit'>('all');
   const [docsExpanded, setDocsExpanded] = useState(false);
 
-  // Entity profile
   const [competitorInfo, setCompetitorInfo] = useState<any>(null);
   const [shopProfile, setShopProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  // Categories discussed
+
   const [categories, setCategories] = useState<any[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [catFilter, setCatFilter] = useState<CatFilterType>('all');
+  const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
+  const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
-useEffect(() => {
-  authedFetch(`/api/customers/${customer.code}/categories`)
-    .then(data => setCategories(Array.isArray(data) ? data : []))
-    .catch(console.error)
-    .finally(() => setCategoriesLoading(false));
-}, [customer.code, visitsRefreshKey]);
+  useEffect(() => {
+    authedFetch('/api/categories')
+      .then((data: any[]) => {
+        const map = new Map<string, string>();
+        if (Array.isArray(data)) {
+          data.forEach(c => {
+            if (c.category_code) map.set(String(c.category_code), c.full_name ?? c.short_name ?? c.category_code);
+          });
+        }
+        setCategoryMaster(map);
+      })
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    authedFetch(`/api/customers/${customer.code}/categories`)
+      .then(data => setCategories(Array.isArray(data) ? data : []))
+      .catch(console.error)
+      .finally(() => setCategoriesLoading(false));
+  }, [customer.code, visitsRefreshKey]);
 
   useEffect(() => {
     authedFetch(`/api/visits?customer_code=${customer.code}`)
@@ -135,26 +211,32 @@ useEffect(() => {
   }, [customer.code, visitsRefreshKey]);
 
   useEffect(() => {
-    const from = '2025-01-01';
-    const to = '2026-12-31';
-    authedFetch(`/api/erp/customers/${customer.code}/sales?from=${from}&to=${to}`)
+    setSalesLoading(true);
+    authedFetch(`/api/erp/customers/${customer.code}/sales?from=2023-01-01&to=2026-12-31`)
       .then(data => setSales(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setSalesLoading(false));
   }, [customer.code]);
 
-    useEffect(() => {
-      setDocsLoading(true);
-      setDocsExpanded(false);
-      const { from, to } = DOC_PERIODS[docPeriodIdx];
-      authedFetch(`/api/erp/customers/${customer.code}/documents?from=${from}&to=${to}`)
-        .then(data => {
-          console.log('Documents sample:', data.slice(0, 3));
-          setDocuments(Array.isArray(data) ? data : []);
-        })
-        .catch(console.error)
-        .finally(() => setDocsLoading(false));
-    }, [customer.code, docPeriodIdx]);
+  useEffect(() => {
+    setSalesByCategoryLoading(true);
+    setExpandedCatL1s(new Set());
+    const { dateFrom, dateTo } = SALES_PERIODS[salesPeriodIdx];
+    authedFetch(`/api/erp/customers/${customer.code}/sales-by-category?from=${dateFrom}&to=${dateTo}`)
+      .then(data => setSalesByCategory(data.grouped ?? []))
+      .catch(console.error)
+      .finally(() => setSalesByCategoryLoading(false));
+  }, [customer.code, salesPeriodIdx]);
+
+  useEffect(() => {
+    setDocsLoading(true);
+    setDocsExpanded(false);
+    const { from, to } = DOC_PERIODS[docPeriodIdx];
+    authedFetch(`/api/erp/customers/${customer.code}/documents?from=${from}&to=${to}`)
+      .then(data => setDocuments(Array.isArray(data) ? data : []))
+      .catch(console.error)
+      .finally(() => setDocsLoading(false));
+  }, [customer.code, docPeriodIdx]);
 
   useEffect(() => {
     authedFetch(`/api/entity-profile/customer/${customer.code}`)
@@ -166,24 +248,74 @@ useEffect(() => {
       .finally(() => setProfileLoading(false));
   }, [customer.code]);
 
-  const totalSales = sales.reduce((sum: number, s: any) => sum + (s.netamnt ?? 0), 0);
+  const sp = SALES_PERIODS[salesPeriodIdx];
+  const currentTotal = sumPeriod(sales, sp.from, sp.to);
+  const prevTotal    = sumPeriod(sales, sp.prevFrom, sp.prevTo);
+  const growthPct    = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
+  const isUp         = growthPct !== null && growthPct >= 0;
+  const diffAbs      = currentTotal - prevTotal;
 
   const filteredDocs = docTypeFilter === 'all' ? documents : documents.filter(d => d.type === docTypeFilter);
-  const visibleDocs = docsExpanded ? filteredDocs : filteredDocs.slice(0, 8);
-
+  const visibleDocs  = docsExpanded ? filteredDocs : filteredDocs.slice(0, 8);
   const docCounts = {
-    order: documents.filter(d => d.type === 'order').length,
+    order:   documents.filter(d => d.type === 'order').length,
     invoice: documents.filter(d => d.type === 'invoice').length,
-    credit: documents.filter(d => d.type === 'credit').length,
+    credit:  documents.filter(d => d.type === 'credit').length,
   };
-
   const lastInvoice = documents.find(d => d.type === 'invoice');
-  const lastOrder = documents.find(d => d.type === 'order');
+  const lastOrder   = documents.find(d => d.type === 'order');
+
+  const totalDiscussions = categories.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
+
+  function matchesFilter(cat: any): boolean {
+    const n = cat.times_discussed ?? 0;
+    if (catFilter === 'all') return true;
+    if (catFilter === '0')   return n === 0;
+    if (catFilter === '1')   return n === 1;
+    if (catFilter === '2')   return n === 2;
+    if (catFilter === '3+')  return n >= 3;
+    return true;
+  }
+
+  const l1Groups = (() => {
+    const map = new Map<string, { l1Code: string; items: any[] }>();
+    categories.forEach(cat => {
+      const l1 = getL1Code(cat);
+      if (!map.has(l1)) map.set(l1, { l1Code: l1, items: [] });
+      map.get(l1)!.items.push(cat);
+    });
+    return Array.from(map.values());
+  })();
+
+  const filteredGroups = l1Groups
+    .map(g => ({ ...g, filtered: g.items.filter(matchesFilter) }))
+    .filter(g => g.filtered.length > 0);
+
+  function toggleL1(code: string) {
+    setExpandedL1s(prev => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  }
+
+  function toggleCatL1(code: string) {
+    setExpandedCatL1s(prev => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  }
+
+  function groupStats(items: any[]) {
+    const totalTimes = items.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
+    const lastDate = items.map(c => c.last_discussed).filter(Boolean).sort().reverse()[0] ?? null;
+    return { totalTimes, lastDate };
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
 
-      {/* HEADER */}
       <header className="bg-gradient-to-r from-indigo-700 to-purple-800 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4 space-y-2">
           <div className="flex items-center justify-between">
@@ -211,7 +343,6 @@ useEffect(() => {
         </div>
       </header>
 
-      {/* CONTENT */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
 
         {/* CUSTOMER DETAILS */}
@@ -363,9 +494,7 @@ useEffect(() => {
               <Calendar className="w-5 h-5 text-purple-600" />
               <h2 className="text-base font-semibold">Επισκέψεις</h2>
             </div>
-            {visits.length > 0 && (
-              <span className="text-xs text-slate-500">{visits.length} σύνολο</span>
-            )}
+            {visits.length > 0 && <span className="text-xs text-slate-500">{visits.length} σύνολο</span>}
           </div>
           {visitsLoading ? (
             <div className="text-sm text-slate-400">Φόρτωση...</div>
@@ -394,34 +523,193 @@ useEffect(() => {
           )}
         </section>
 
-        {/* SALES */}
+        {/* ── SALES ANALYSIS ───────────────────────────────────────────────────── */}
         <section className="bg-white rounded-xl shadow p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-blue-600" />
-              <h2 className="text-base font-semibold">Sales Overview</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <BarChart2 className="w-5 h-5 text-blue-600 shrink-0" />
+              <h2 className="text-base font-semibold">Sales Analysis</h2>
+              <span className="text-xs text-slate-400 whitespace-nowrap">{sp.label} vs {sp.prevLabel}</span>
             </div>
-            {!salesLoading && sales.length > 0 && (
-              <span className="text-sm font-semibold text-green-600">
-                €{totalSales.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            )}
+            <select
+              value={salesPeriodIdx}
+              onChange={e => setSalesPeriodIdx(Number(e.target.value))}
+              className="text-xs border border-slate-300 rounded-lg px-2 py-1 text-slate-600 focus:ring-2 focus:ring-indigo-500"
+            >
+              {SALES_PERIODS.map((p, i) => (
+                <option key={p.label} value={i}>{p.label}</option>
+              ))}
+            </select>
           </div>
+
           {salesLoading ? (
             <div className="text-sm text-slate-400">Φόρτωση...</div>
-          ) : sales.length === 0 ? (
-            <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν πωλήσεις</div>
           ) : (
-            <div className="space-y-1">
-              {sales.map((s: any) => (
-                <div key={s.month} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0 text-sm">
-                  <div className="text-slate-600">{s.month}</div>
-                  <div className={`font-medium ${s.netamnt < 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                    €{s.netamnt.toLocaleString('el-GR', { minimumFractionDigits: 2 })}
-                  </div>
+            <>
+              {/* Period cards */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+                  <div className="text-xs text-indigo-500 font-medium mb-1">Τρέχουσα Περίοδος ({sp.label})</div>
+                  <div className="text-2xl font-bold text-indigo-700 leading-tight">{fmtEur(currentTotal)}</div>
+                  {growthPct !== null && (
+                    <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-green-600' : 'text-red-500'}`}>
+                      {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                      {isUp ? '+' : ''}{growthPct.toFixed(1)}% vs {sp.prevLabel}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <div className="text-xs text-slate-500 font-medium mb-1">Ίδια Περίοδος Πέρσι ({sp.prevLabel})</div>
+                  <div className="text-2xl font-bold text-slate-600 leading-tight">{fmtEur(prevTotal)}</div>
+                  {growthPct !== null && (
+                    <div className={`text-xs mt-2 font-medium ${isUp ? 'text-green-600' : 'text-red-500'}`}>
+                      {isUp ? '+' : ''}{fmtEur(Math.abs(diffAbs))} {isUp ? 'αύξηση' : 'μείωση'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Monthly bar chart */}
+              {(() => {
+                const months = sales
+                  .filter(s => s.month >= sp.from && s.month <= sp.to)
+                  .sort((a, b) => a.month.localeCompare(b.month));
+                const prevMonthMap = new Map<string, number>();
+                sales
+                  .filter(s => s.month >= sp.prevFrom && s.month <= sp.prevTo)
+                  .forEach(s => prevMonthMap.set(s.month, s.netamnt));
+                function toPrevMonth(curMonth: string): string {
+                  const [y, m] = curMonth.split('-').map(Number);
+                  const [py] = sp.prevFrom.split('-').map(Number);
+                  const [cy] = sp.from.split('-').map(Number);
+                  return `${py + (y - cy)}-${String(m).padStart(2, '0')}`;
+                }
+                if (months.length === 0) return null;
+                const allAmounts = [...months.map(m => m.netamnt), ...months.map(m => prevMonthMap.get(toPrevMonth(m.month)) ?? 0)];
+                const maxAmt = Math.max(...allAmounts, 1);
+                return (
+                  <div>
+                    <div className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-wide">Ανά Μήνα</div>
+                    <div className="space-y-2">
+                      {months.map(m => {
+                        const prevKey = toPrevMonth(m.month);
+                        const prevAmt = prevMonthMap.get(prevKey) ?? null;
+                        const curPct  = Math.max((m.netamnt / maxAmt) * 100, 2);
+                        const prevPct = prevAmt !== null ? Math.max((prevAmt / maxAmt) * 100, 2) : 0;
+                        const monthLabel = new Date(m.month + '-01').toLocaleString('el-GR', { month: 'short' });
+                        return (
+                          <div key={m.month} className="text-xs">
+                            <div className="flex items-center gap-2 mb-1 text-slate-500">
+                              <span className="w-7 shrink-0 font-medium">{monthLabel}</span>
+                              <span className="font-semibold text-slate-700">{fmtEur(m.netamnt)}</span>
+                              {prevAmt !== null && <span className="text-slate-400">vs {fmtEur(prevAmt)}</span>}
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-sm h-2 mb-0.5">
+                              <div className="h-2 rounded-sm bg-indigo-400 transition-all" style={{ width: `${curPct}%` }} />
+                            </div>
+                            {prevAmt !== null && (
+                              <div className="w-full bg-slate-100 rounded-sm h-1.5">
+                                <div className="h-1.5 rounded-sm bg-slate-300 transition-all" style={{ width: `${prevPct}%` }} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {months.length > 0 && prevMonthMap.size > 0 && (
+                      <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-2 rounded-sm bg-indigo-400 inline-block" />{sp.label}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 h-1.5 rounded-sm bg-slate-300 inline-block" />{sp.prevLabel}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ── SALES BY CATEGORY ─────────────────────────────────────────── */}
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <div className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Ανά Κατηγορία</div>
+                {salesByCategoryLoading ? (
+                  <div className="text-sm text-slate-400">Φόρτωση...</div>
+                ) : salesByCategory.length === 0 ? (
+                  <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν κατηγορίες για αυτή την περίοδο</div>
+                ) : (
+                  <div className="space-y-1">
+                    {salesByCategory.map(group => {
+                      const isExp = expandedCatL1s.has(group.l1_code);
+                      const maxGroupRev = Math.max(...salesByCategory.map((g: any) => g.total_revenue), 1);
+                      const groupBarPct = Math.max((group.total_revenue / maxGroupRev) * 100, 2);
+                      const l1Name = categoryMaster.get(group.l1_code) ?? `Κατηγορία ${group.l1_code}`;
+                      return (
+                        <div key={group.l1_code} className="rounded-lg border border-slate-100 overflow-hidden">
+                          <button
+                            onClick={() => toggleCatL1(group.l1_code)}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
+                              ${isExp ? 'bg-blue-50 border-b border-blue-100' : 'bg-white hover:bg-slate-50'}`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {isExp
+                                ? <ChevronDown className="w-4 h-4 text-blue-400 shrink-0" />
+                                : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                              }
+                              <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-mono shrink-0">
+                                {group.l1_code}
+                              </span>
+                              <span className="text-sm font-medium text-slate-700 truncate">{l1Name}</span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 ml-2">
+                              <span className="text-xs text-slate-400 hidden sm:block">{group.invoice_count} τιμολόγια</span>
+                              <span className="text-sm font-semibold text-slate-700">{fmtEur(group.total_revenue)}</span>
+                            </div>
+                          </button>
+                          {!isExp && (
+                            <div className="px-3 pb-2 bg-white">
+                              <div className="w-full bg-slate-100 rounded-sm h-1.5">
+                                <div className="h-1.5 rounded-sm bg-blue-300 transition-all" style={{ width: `${groupBarPct}%` }} />
+                              </div>
+                            </div>
+                          )}
+                          {isExp && (
+                            <div className="divide-y divide-slate-50">
+                              {group.categories.map((cat: any) => {
+                                const maxRev = Math.max(...group.categories.map((c: any) => parseFloat(c.net_revenue)), 1);
+                                const barPct = Math.max((parseFloat(cat.net_revenue) / maxRev) * 100, 2);
+                                return (
+                                  <div key={cat.category_code} className="px-4 py-2.5 bg-white hover:bg-slate-50">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-4 shrink-0 flex justify-center">
+                                          <div className="w-px h-4 bg-slate-200" />
+                                        </div>
+                                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono shrink-0 uppercase">
+                                          {cat.short_name}
+                                        </span>
+                                        <span className="text-sm text-slate-700 truncate">{cat.full_name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                                        <span className="text-xs text-slate-400">{Math.round(parseFloat(cat.total_qty))} τεμ.</span>
+                                        <span className="text-sm font-semibold text-slate-700">{fmtEur(parseFloat(cat.net_revenue))}</span>
+                                      </div>
+                                    </div>
+                                    <div className="ml-6 w-full bg-slate-100 rounded-sm h-1.5">
+                                      <div className="h-1.5 rounded-sm bg-indigo-400 transition-all" style={{ width: `${barPct}%` }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </section>
 
@@ -432,7 +720,6 @@ useEffect(() => {
               <FileText className="w-5 h-5 text-indigo-600" />
               <h2 className="text-base font-semibold">Παραγγελίες & Τιμολόγια</h2>
             </div>
-            {/* Period selector */}
             <select
               value={docPeriodIdx}
               onChange={e => setDocPeriodIdx(Number(e.target.value))}
@@ -443,25 +730,15 @@ useEffect(() => {
               ))}
             </select>
           </div>
-
-          {/* Summary badges */}
           {!docsLoading && documents.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
-              <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                {docCounts.order} παραγγελίες
-              </span>
-              <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                {docCounts.invoice} τιμολόγια
-              </span>
+              <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{docCounts.order} παραγγελίες</span>
+              <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{docCounts.invoice} τιμολόγια</span>
               {docCounts.credit > 0 && (
-                <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-                  {docCounts.credit} πιστωτικά
-                </span>
+                <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{docCounts.credit} πιστωτικά</span>
               )}
             </div>
           )}
-
-          {/* Last invoice + last order */}
           {!docsLoading && (lastInvoice || lastOrder) && (
             <div className="grid grid-cols-2 gap-3 mb-4">
               {lastInvoice && (
@@ -469,9 +746,7 @@ useEffect(() => {
                   <div className="text-xs text-green-600 font-medium mb-1">Τελευταίο Τιμολόγιο</div>
                   <div className="text-sm font-semibold text-slate-800">{lastInvoice.doc_number}</div>
                   <div className="text-xs text-slate-500">{formatDate(lastInvoice.trndate)}</div>
-                  <div className="text-sm font-bold text-green-700 mt-1">
-                    €{lastInvoice.netamnt.toLocaleString('el-GR', { minimumFractionDigits: 2 })}
-                  </div>
+                  <div className="text-sm font-bold text-green-700 mt-1">€{lastInvoice.netamnt.toLocaleString('el-GR', { minimumFractionDigits: 2 })}</div>
                 </div>
               )}
               {lastOrder && (
@@ -479,15 +754,11 @@ useEffect(() => {
                   <div className="text-xs text-blue-600 font-medium mb-1">Τελευταία Παραγγελία</div>
                   <div className="text-sm font-semibold text-slate-800">{lastOrder.doc_number}</div>
                   <div className="text-xs text-slate-500">{formatDate(lastOrder.trndate)}</div>
-                  <div className="text-sm font-bold text-blue-700 mt-1">
-                    €{lastOrder.netamnt.toLocaleString('el-GR', { minimumFractionDigits: 2 })}
-                  </div>
+                  <div className="text-sm font-bold text-blue-700 mt-1">€{lastOrder.netamnt.toLocaleString('el-GR', { minimumFractionDigits: 2 })}</div>
                 </div>
               )}
             </div>
           )}
-
-          {/* Type filter */}
           {!docsLoading && documents.length > 0 && (
             <div className="flex gap-2 mb-3">
               {(['all', 'order', 'invoice', 'credit'] as const).map(t => (
@@ -495,9 +766,7 @@ useEffect(() => {
                   key={t}
                   onClick={() => { setDocTypeFilter(t); setDocsExpanded(false); }}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                    docTypeFilter === t
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'
+                    docTypeFilter === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'
                   }`}
                 >
                   {t === 'all' ? 'Όλα' : TYPE_CONFIG[t].label}
@@ -505,8 +774,6 @@ useEffect(() => {
               ))}
             </div>
           )}
-
-          {/* Document list */}
           {docsLoading ? (
             <div className="text-sm text-slate-400">Φόρτωση...</div>
           ) : filteredDocs.length === 0 ? (
@@ -519,9 +786,7 @@ useEffect(() => {
                   return (
                     <div key={doc.findoc} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0 text-sm">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${cfg.bg} ${cfg.text}`}>
-                          {cfg.label}
-                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
                         <span className="font-mono text-xs text-slate-600 truncate">{doc.doc_number}</span>
                         <span className="text-xs text-slate-400 shrink-0">{formatDate(doc.trndate)}</span>
                       </div>
@@ -545,53 +810,111 @@ useEffect(() => {
           )}
         </section>
 
-{/* CATEGORY INTELLIGENCE */}
-<section className="bg-white rounded-xl shadow p-5">
-  <div className="flex items-center gap-2 mb-4">
-    <Lightbulb className="w-5 h-5 text-purple-600" />
-    <h2 className="text-base font-semibold">Category Intelligence</h2>
-    {categories.length > 0 && (
-      <span className="text-xs text-slate-400 ml-auto">{categories.length} κατηγορίες</span>
-    )}
-  </div>
-
-  {categoriesLoading ? (
-    <div className="text-sm text-slate-400">Φόρτωση...</div>
-  ) : categories.length === 0 ? (
-    <div className="text-sm text-slate-400 italic">Καμία κατηγορία ακόμα</div>
-  ) : (
-    <div className="space-y-2">
-      {categories.map((cat: any) => (
-        <div
-          key={`${cat.category_code}-${cat.subcategory_code ?? ''}`}
-          className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <Tag className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-slate-700 truncate">
-                {cat.full_name}
+        {/* ── CATEGORY INTELLIGENCE ────────────────────────────────────────────── */}
+        <section className="bg-white rounded-xl shadow p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Lightbulb className="w-5 h-5 text-purple-600" />
+              <h2 className="text-base font-semibold">Κατηγορίες που Συζητήθηκαν</h2>
+            </div>
+            {categories.length > 0 && (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{categories.length} κατηγορίες</span>
+                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">{totalDiscussions} αναφορές σύνολο</span>
               </div>
-              <div className="text-xs text-slate-400">
-                {cat.subcategory_code
-                  ? `${cat.category_code} › ${cat.subcategory_code}`
-                  : cat.category_code}
+            )}
+          </div>
+          {categoriesLoading ? (
+            <div className="text-sm text-slate-400">Φόρτωση...</div>
+          ) : categories.length === 0 ? (
+            <div className="text-sm text-slate-400 italic">Καμία κατηγορία ακόμα</div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {CAT_FILTER_LABELS.map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setCatFilter(f.key)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      catFilter === f.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-300 hover:border-purple-400'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
-            </div>
-          </div>
-          <div className="text-right shrink-0 ml-3">
-            <div className="text-xs font-medium text-purple-600">
-              {cat.times_discussed}×
-            </div>
-            <div className="text-xs text-slate-400">
-              {formatDate(cat.last_discussed)}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )}
-</section>
+              {filteredGroups.length === 0 ? (
+                <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν κατηγορίες</div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredGroups.map(group => {
+                    const isExpanded = expandedL1s.has(group.l1Code);
+                    const { totalTimes, lastDate } = groupStats(group.items);
+                    const subCount = group.items.length;
+                    const l1Label = categoryMaster.get(group.l1Code) ?? getL1Label(group.l1Code, group.items);
+                    const badgeStyle = getDiscussionBadgeStyle(totalTimes);
+                    return (
+                      <div key={group.l1Code} className="rounded-lg border border-slate-100 overflow-hidden">
+                        <button
+                          onClick={() => toggleL1(group.l1Code)}
+                          className={`w-full flex items-center justify-between px-3 py-3 text-left transition-colors
+                            ${isExpanded ? 'bg-indigo-50 border-b border-indigo-100' : 'bg-white hover:bg-slate-50'}`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {isExpanded
+                              ? <ChevronDown className="w-4 h-4 text-indigo-400 shrink-0" />
+                              : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                            }
+                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono shrink-0">{group.l1Code}</span>
+                            <span className="text-sm font-medium text-slate-700 truncate">{l1Label}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span className="text-xs text-slate-400 hidden sm:block">{subCount} υποκατ.</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeStyle}`}>{totalTimes}×</span>
+                            {lastDate && <span className="text-xs text-slate-400">{formatDate(lastDate)}</span>}
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="divide-y divide-slate-50">
+                            {group.filtered.map(cat => {
+                              const n = cat.times_discussed ?? 0;
+                              const subBadge = getDiscussionBadgeStyle(n);
+                              return (
+                                <div
+                                  key={`${cat.category_code}-${cat.subcategory_code ?? ''}`}
+                                  className="flex items-center justify-between px-4 py-2.5 bg-white hover:bg-slate-50"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-4 shrink-0 flex justify-center">
+                                      <div className="w-px h-4 bg-slate-200" />
+                                    </div>
+                                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-mono shrink-0 uppercase">
+                                      {cat.short_name ?? cat.full_name?.slice(0, 6)}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <div className="text-sm text-slate-700 truncate">{cat.full_name}</div>
+                                      {cat.subcategory_code && (
+                                        <div className="text-xs text-slate-400 font-mono">{cat.subcategory_code}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${subBadge}`}>{n}×</span>
+                                    {cat.last_discussed && <span className="text-xs text-slate-400">{formatDate(cat.last_discussed)}</span>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </section>
 
       </main>
 
