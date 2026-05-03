@@ -3,13 +3,19 @@ export type Customer = {
   name: string;
   nameGreek?: string;
   city: string;
-
   areaCode: string;
   area: string;
-
   type?: string;
   group?: string;
   lastVisitDate?: string;
   assignedRepId?: string;
   trdr_id?: number;
+  salesmanCode?: string;
+  afm?: string;
+  address?: string;
+  email?: string;
+  fax?: string;
+  zip?: string;
+  shipmentName?: string;
+  carrierName?: string;
 };
