@@ -229,6 +229,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   }, [customer.code, salesPeriodIdx]);
 
   useEffect(() => {
+  console.log('documents sample:', documents.slice(0, 3));
     setDocsLoading(true);
     setDocsExpanded(false);
     const { from, to } = DOC_PERIODS[docPeriodIdx];
