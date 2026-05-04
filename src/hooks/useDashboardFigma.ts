@@ -106,6 +106,8 @@ export function useDashboardFigma() {
       .catch(console.error);
   }, []);
 
+  
+
   useEffect(() => {
     authedFetch('/api/erp/customers')
       .then(res => {
@@ -116,13 +118,15 @@ export function useDashboardFigma() {
   }, []);
 
   /* ===================== FETCH SALES ===================== */
-  const fetchSales = useCallback(async (period: Period) => {
+const fetchSales = useCallback(async (period: Period) => {
     setSalesLoading(true);
     try {
+      const salesmanParam = repModeOverride && currentUser.salesman_code
+        ? `&salesmanCode=${currentUser.salesman_code}` : '';
       const [current, compare, areas] = await Promise.all([
         authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}`),
         authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}`),
-        authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}`),
+        authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}`),
       ]);
       setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
       setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
@@ -134,9 +138,9 @@ export function useDashboardFigma() {
     } finally {
       setSalesLoading(false);
     }
-  }, []);
+  }, [repModeOverride, currentUser.salesman_code]);
 
-  useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
+  useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales, repModeOverride]);
 
   /* ===================== FETCH SALES BY CATEGORY ===================== */
   const fetchSalesByCategory = useCallback(async (period: Period, area: string, city: string) => {
@@ -176,42 +180,44 @@ export function useDashboardFigma() {
   }, [currentUser.role, salesByCategory.length, selectedPeriod, selectedArea, selectedCity, fetchSalesByCategory]);
 
   /* ===================== FETCH SKUs ===================== */
-  const fetchDashboardSkus = useCallback(async (categoryId: string) => {
-    if (dashboardSkuData[categoryId] || dashboardSkuLoading.has(categoryId)) return;
-    const params = new URLSearchParams({ from: selectedPeriod.from, to: selectedPeriod.to });
-    if (selectedArea) params.set('area', selectedArea);
-    if (selectedCity) params.set('city', selectedCity);
-    setDashboardSkuLoading(prev => new Set(prev).add(categoryId));
-    try {
-      const data = await authedFetch(`/api/erp/skus-by-category?${params.toString()}&categoryId=${categoryId}`);
-      setDashboardSkuData(prev => ({ ...prev, [categoryId]: data[categoryId] ?? [] }));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDashboardSkuLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
-    }
-  }, [selectedPeriod, selectedArea, selectedCity, dashboardSkuData, dashboardSkuLoading]);
+    const fetchDashboardSkus = useCallback(async (categoryId: string) => {
+        if (dashboardSkuData[categoryId] || dashboardSkuLoading.has(categoryId)) return;
+        const params = new URLSearchParams({ from: selectedPeriod.from, to: selectedPeriod.to });
+        if (selectedArea) params.set('area', selectedArea);
+        if (selectedCity) params.set('city', selectedCity);
+        if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
+        setDashboardSkuLoading(prev => new Set(prev).add(categoryId));
+        try {
+          const data = await authedFetch(`/api/erp/skus-by-category?${params.toString()}&categoryId=${categoryId}`);
+          setDashboardSkuData(prev => ({ ...prev, [categoryId]: data[categoryId] ?? [] }));
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setDashboardSkuLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
+        }
+      }, [selectedPeriod, selectedArea, selectedCity, dashboardSkuData, dashboardSkuLoading, repModeOverride, currentUser.salesman_code]);
 
   /* ===================== FETCH TOP CUSTOMERS ===================== */
   const fetchTopCustomers = useCallback(async (categoryId: string) => {
-    if (topCustomersData[categoryId] || topCustomersLoading.has(categoryId)) return;
-    const params = new URLSearchParams({
-      from: selectedPeriod.from, to: selectedPeriod.to,
-      prevFrom: selectedPeriod.compareFrom, prevTo: selectedPeriod.compareTo,
-      categoryId,
-    });
-    if (selectedArea) params.set('area', selectedArea);
-    if (selectedCity) params.set('city', selectedCity);
-    setTopCustomersLoading(prev => new Set(prev).add(categoryId));
-    try {
-      const data = await authedFetch(`/api/erp/top-customers-by-category?${params.toString()}`);
-      setTopCustomersData(prev => ({ ...prev, [categoryId]: Array.isArray(data) ? data : [] }));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setTopCustomersLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
-    }
-  }, [selectedPeriod, selectedArea, selectedCity, topCustomersData, topCustomersLoading]);
+      if (topCustomersData[categoryId] || topCustomersLoading.has(categoryId)) return;
+      const params = new URLSearchParams({
+        from: selectedPeriod.from, to: selectedPeriod.to,
+        prevFrom: selectedPeriod.compareFrom, prevTo: selectedPeriod.compareTo,
+        categoryId,
+      });
+      if (selectedArea) params.set('area', selectedArea);
+      if (selectedCity) params.set('city', selectedCity);
+      if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
+      setTopCustomersLoading(prev => new Set(prev).add(categoryId));
+      try {
+        const data = await authedFetch(`/api/erp/top-customers-by-category?${params.toString()}`);
+        setTopCustomersData(prev => ({ ...prev, [categoryId]: Array.isArray(data) ? data : [] }));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setTopCustomersLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
+      }
+    }, [selectedPeriod, selectedArea, selectedCity, topCustomersData, topCustomersLoading, repModeOverride, currentUser.salesman_code]);
 
   const setSelectedPeriod = useCallback((periodKey: string) => {
     const period = PERIODS.find(p => p.key === periodKey) ?? PERIODS[0];
@@ -219,12 +225,14 @@ export function useDashboardFigma() {
   }, []);
 
   /* ===================== GEO DRILL-DOWN ===================== */
-  const drillDownToArea = useCallback(async (area: string) => {
+const drillDownToArea = useCallback(async (area: string) => {
     setSelectedGeoArea(area);
     setCityLoading(true);
     try {
+      const salesmanParam = repModeOverride && currentUser.salesman_code
+        ? `&salesmanCode=${currentUser.salesman_code}` : '';
       const data = await authedFetch(
-        `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}`
+        `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}${salesmanParam}`
       );
       setCityStats(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -232,7 +240,7 @@ export function useDashboardFigma() {
     } finally {
       setCityLoading(false);
     }
-  }, [selectedPeriod]);
+  }, [selectedPeriod, repModeOverride, currentUser.salesman_code]);
 
   const backToAreas = useCallback(() => { setSelectedGeoArea(null); setCityStats([]); }, []);
 
@@ -331,7 +339,7 @@ export function useDashboardFigma() {
     showNewProspectDialog, setShowNewProspectDialog,
     currentUser, setCurrentUser,
     customerByTrdrId, scopedSales, customersWithSalesSet,
-    repModeOverride, setRepModeOverride,
+    repModeOverride, setRepModeOverride, clearTopCustomersCache: () => { setTopCustomersData({}); setDashboardSkuData({}); },
     salesByCategory, salesByCategoryLoading, salesByCategoryExpanded,
     setSalesByCategoryExpanded, expandSalesByCategory,
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,

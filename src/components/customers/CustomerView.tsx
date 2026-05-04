@@ -159,6 +159,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [skuLoading, setSkuLoading] = useState<Set<string>>(new Set());
   const [rankData, setRankData] = useState<Record<string, any>>({});
   const [rankLoading, setRankLoading] = useState<Set<string>>(new Set());
+  const [topCustData, setTopCustData] = useState<Record<string, any[]>>({});
+  const [topCustLoading, setTopCustLoading] = useState<Set<string>>(new Set());
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [docsLoading, setDocsLoading] = useState(true);
@@ -282,10 +284,20 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     }
   }
 
+  function fetchTopCust(categoryId: string) {
+  if (topCustData[categoryId] || topCustLoading.has(categoryId)) return;
+  const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
+  setTopCustLoading(prev => new Set(prev).add(categoryId));
+  authedFetch(`/api/erp/top-customers-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}&categoryId=${categoryId}`)
+    .then(data => setTopCustData(prev => ({ ...prev, [categoryId]: Array.isArray(data) ? data : [] })))
+    .catch(console.error)
+    .finally(() => setTopCustLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; }));
+  }
+
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL2(code: string) { setExpandedL2s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL3(code: string) { setExpandedL3s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
-  function handleExpandCategory(catIdKey: string) { fetchSkus(catIdKey); fetchRank(catIdKey); }
+  function handleExpandCategory(catIdKey: string) { fetchSkus(catIdKey); fetchRank(catIdKey); fetchTopCust(catIdKey); }
 
   const sp = SALES_PERIODS[salesPeriodIdx];
   const currentTotal = sumPeriod(sales, sp.from, sp.to);
@@ -320,47 +332,73 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const filteredGroups = l1Groups.map(g => ({ ...g, filtered: g.items.filter(matchesFilter) })).filter(g => g.filtered.length > 0);
 
   function renderCategoryExpanded(catIdKey: string) {
-    const skus = skuData[catIdKey] ?? [];
-    const isLoadingSkus = skuLoading.has(catIdKey);
-    const areaRank = rankData[`${catIdKey}-area`];
-    const greeceRank = rankData[`${catIdKey}-greece`];
-    const isLoadingAreaRank = rankLoading.has(`${catIdKey}-area`);
-    const isLoadingGreeceRank = rankLoading.has(`${catIdKey}-greece`);
-    return (
-      <div className="bg-slate-50 border-t border-slate-100">
-        <div className="px-4 py-2 border-b border-slate-200">
-          <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top SKUs</div>
-          {isLoadingSkus ? <div className="text-xs text-slate-400">Φόρτωση...</div> : skus.length === 0 ? (
-            <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν προϊόντα</div>
-          ) : (
-            <div className="space-y-1">
-              {skus.map((sku: any) => (
-                <div key={sku.mtrl_id} className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-mono text-slate-400 shrink-0">{sku.sku_code}</span>
-                    <span className="text-xs text-slate-600 truncate">{sku.sku_name}</span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-2">
-                    <span className="text-xs text-slate-400">{Math.round(sku.qty)} τεμ.</span>
-                    <span className="text-xs font-semibold text-slate-700">{fmtEur(sku.revenue)}</span>
+  const skus = skuData[catIdKey] ?? [];
+  const isLoadingSkus = skuLoading.has(catIdKey);
+  const areaRank = rankData[`${catIdKey}-area`];
+  const greeceRank = rankData[`${catIdKey}-greece`];
+  const isLoadingAreaRank = rankLoading.has(`${catIdKey}-area`);
+  const isLoadingGreeceRank = rankLoading.has(`${catIdKey}-greece`);
+  const topCusts = topCustData[catIdKey] ?? [];
+  const isLoadingTopCust = topCustLoading.has(catIdKey);
+  return (
+    <div className="bg-slate-50 border-t border-slate-100">
+      <div className="px-4 py-2 border-b border-slate-200">
+        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top SKUs</div>
+        {isLoadingSkus ? <div className="text-xs text-slate-400">Φόρτωση...</div> : skus.length === 0 ? (
+          <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν προϊόντα</div>
+        ) : (
+          <div className="space-y-1">
+            {skus.map((sku: any) => (
+              <div key={sku.mtrl_id} className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-mono text-slate-400 shrink-0">{sku.sku_code}</span>
+                  <span className="text-xs text-slate-600 truncate">{sku.sku_name}</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 ml-2">
+                  <span className="text-xs text-slate-400">{Math.round(sku.qty)} τεμ.</span>
+                  <span className="text-xs font-semibold text-slate-700">{fmtEur(sku.revenue)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="px-4 py-2 border-b border-slate-200">
+        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top 10 Πελάτες</div>
+        {isLoadingTopCust ? <div className="text-xs text-slate-400">Φόρτωση...</div> : topCusts.length === 0 ? (
+          <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν πελάτες</div>
+        ) : (
+          <div className="space-y-1">
+            {topCusts.map((c: any, i: number) => (
+              <div key={c.customer_code} className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`text-xs font-bold w-5 shrink-0 text-center ${i < 3 ? 'text-amber-500' : 'text-slate-400'}`}>#{i + 1}</span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-slate-700 truncate">{c.customer_name}</div>
+                    <div className="text-xs text-slate-400">{c.city}</div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="px-4 py-2">
-          <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Κατάταξη</div>
-          {(isLoadingAreaRank || isLoadingGreeceRank) ? <div className="text-xs text-slate-400">Φόρτωση κατάταξης...</div> : (
-            <div className="flex gap-2">
-              <RankCard title={`Στην περιοχή (${customer.area ?? '—'})`} rank={areaRank?.rank ?? null} total={areaRank?.total_customers ?? null} percentile={areaRank?.percentile ?? null} revenue={areaRank?.revenue ?? null} />
-              <RankCard title="Στην Ελλάδα" rank={greeceRank?.rank ?? null} total={greeceRank?.total_customers ?? null} percentile={greeceRank?.percentile ?? null} revenue={greeceRank?.revenue ?? null} />
-            </div>
-          )}
-        </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <span className="text-xs text-slate-400">{Math.round(parseFloat(c.qty))} τεμ.</span>
+                  <span className="text-xs font-semibold text-slate-700">{fmtEur(parseFloat(c.revenue))}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    );
-  }
+      <div className="px-4 py-2">
+        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Κατάταξη</div>
+        {(isLoadingAreaRank || isLoadingGreeceRank) ? <div className="text-xs text-slate-400">Φόρτωση κατάταξης...</div> : (
+          <div className="flex gap-2">
+            <RankCard title={`Στην περιοχή (${customer.area ?? '—'})`} rank={areaRank?.rank ?? null} total={areaRank?.total_customers ?? null} percentile={areaRank?.percentile ?? null} revenue={areaRank?.revenue ?? null} />
+            <RankCard title="Στην Ελλάδα" rank={greeceRank?.rank ?? null} total={greeceRank?.total_customers ?? null} percentile={greeceRank?.percentile ?? null} revenue={greeceRank?.revenue ?? null} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
   function renderDocLines(findoc: number, netamnt: number) {
     const lines = docLines[findoc];
@@ -650,8 +688,16 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                 const maxL2Rev = Math.max(...group.l2s.map((l: any) => l.net_revenue), 1);
                                 return (
                                   <div key={l2Key} className="bg-white">
-                                    <button onClick={() => { toggleL2(l2Key); if (!isL2Exp && l2.category_id) handleExpandCategory(l2IdKey); }}
-                                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left">
+                                    <button onClick={() => {
+                                      toggleL2(l2Key);
+                                      if (!isL2Exp) {
+                                        const effectiveId = l2.category_id
+                                          ? l2IdKey
+                                          : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
+                                        if (effectiveId) handleExpandCategory(effectiveId);
+                                      }
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left">
                                       <div className="flex items-center gap-2 min-w-0">
                                         <div className="w-3 shrink-0" />
                                         {isL2Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
@@ -673,7 +719,12 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                     <div className="px-3 pb-1 bg-white"><div className="ml-8 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} /></div></div>
                                     {isL2Exp && (
                                       <div>
-                                        {l2.category_id && renderCategoryExpanded(l2IdKey)}
+                                        {(() => {
+                                          const effectiveId = l2.category_id
+                                            ? l2IdKey
+                                            : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
+                                          return effectiveId ? renderCategoryExpanded(effectiveId) : null;
+                                        })()}
                                         {hasL3 && (
                                           <div className="border-t border-slate-200 divide-y divide-slate-100 bg-slate-50">
                                             <div className="px-4 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide bg-white">Υποκατηγορίες</div>
@@ -685,7 +736,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                               return (
                                                 <div key={l3Key} className="bg-white">
                                                   <button onClick={() => { toggleL3(l3Key); if (!isL3Exp) handleExpandCategory(l3IdKey); }}
-                                                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
+                                                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
                                                     <div className="flex items-center gap-2 min-w-0">
                                                       <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
                                                       {isL3Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}

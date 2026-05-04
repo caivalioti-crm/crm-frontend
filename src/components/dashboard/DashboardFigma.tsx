@@ -153,10 +153,10 @@ export function DashboardFigma() {
     showNewVisitDialog, setShowNewVisitDialog, showNewProspectDialog, setShowNewProspectDialog,
     currentUser, categoryMaster, customersWithSalesSet,
     salesByCategory, salesByCategoryLoading, salesByCategoryExpanded,
-    setSalesByCategoryExpanded, expandSalesByCategory,
+    setSalesByCategoryExpanded, expandSalesByCategory, 
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
     topCustomersData, topCustomersLoading, fetchTopCustomers,
-    repModeOverride, setRepModeOverride,
+    repModeOverride, setRepModeOverride, clearTopCustomersCache,
   } = useDashboardFigma();
 
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
@@ -215,7 +215,7 @@ export function DashboardFigma() {
                 <span className="font-medium text-sm">{currentUser.name}</span>
               </div>
               {currentUser.role === 'manager' && (
-                <button onClick={() => setRepModeOverride(v => !v)}
+                <button onClick={() => { setRepModeOverride(v => !v); clearTopCustomersCache(); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${repModeOverride ? 'bg-white text-indigo-700 border-white' : 'bg-white/10 text-white/90 border-white/20 hover:bg-white/20'}`}>
                   <Users className="w-4 h-4" />
                   <span className="hidden sm:block">{repModeOverride ? 'My Customers' : 'All Customers'}</span>
@@ -492,9 +492,14 @@ export function DashboardFigma() {
                                         <button
                                           onClick={() => {
                                             toggleL2(l2Key);
-                                            if (!isL2Exp && l2.category_id) {
-                                              fetchDashboardSkus(l2IdKey);
-                                              fetchTopCustomers(l2IdKey);
+                                            if (!isL2Exp) {
+                                              const effectiveId = l2.category_id
+                                                ? l2IdKey
+                                                : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
+                                              if (effectiveId) {
+                                                fetchDashboardSkus(effectiveId);
+                                                fetchTopCustomers(effectiveId);
+                                              }
                                             }
                                           }}
                                           className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left"
@@ -534,15 +539,20 @@ export function DashboardFigma() {
                                         {isL2Exp && (
                                           <div className="border-t border-slate-100">
                                             {/* L2 SKUs + Top Customers */}
-                                            {l2.category_id && (
-                                              <DrillContent
-                                                catIdKey={l2IdKey}
-                                                skus={dashboardSkuData[l2IdKey] ?? []}
-                                                skusLoading={dashboardSkuLoading.has(l2IdKey)}
-                                                topCustomers={topCustomersData[l2IdKey] ?? []}
-                                                topCustomersLoading={topCustomersLoading.has(l2IdKey)}
-                                              />
-                                            )}
+                                            {(() => {
+                                              const effectiveId = l2.category_id
+                                                ? l2IdKey
+                                                : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
+                                              return effectiveId ? (
+                                                <DrillContent
+                                                  catIdKey={effectiveId}
+                                                  skus={dashboardSkuData[effectiveId] ?? []}
+                                                  skusLoading={dashboardSkuLoading.has(effectiveId)}
+                                                  topCustomers={topCustomersData[effectiveId] ?? []}
+                                                  topCustomersLoading={topCustomersLoading.has(effectiveId)}
+                                                />
+                                              ) : null;
+                                            })()}
 
                                             {/* L3 children */}
                                             {hasL3 && (
