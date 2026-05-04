@@ -1,12 +1,12 @@
 import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart,
   Lightbulb, Users, Swords, Store, FileText, Tag, ChevronDown, ChevronRight,
-  TrendingUp, TrendingDown, BarChart2, Medal,
+  TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
 import { NewVisitDialog } from '../visits/NewVisitDialog';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import type { CommercialEntityBase } from '../../types/commercialEntity';
 
@@ -47,10 +47,10 @@ const STOCK_BEHAVIOR_LABELS: Record<string, string> = {
   keeps_stock: 'Τηρεί Απόθεμα', on_demand: "Παραγγελία κατ'ανάγκη", mixed: 'Μικτό',
 };
 
-const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  order:   { label: 'Παραγγελία', bg: 'bg-blue-100',  text: 'text-blue-700' },
-  invoice: { label: 'Τιμολόγιο',  bg: 'bg-green-100', text: 'text-green-700' },
-  credit:  { label: 'Πίστωση',    bg: 'bg-red-100',   text: 'text-red-700' },
+const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
+  order:   { label: 'Παραγγελία', bg: 'bg-blue-100',  text: 'text-blue-700',  icon: ShoppingCart },
+  invoice: { label: 'Τιμολόγιο',  bg: 'bg-green-100', text: 'text-green-700', icon: Receipt },
+  credit:  { label: 'Πίστωση',    bg: 'bg-red-100',   text: 'text-red-700',   icon: Tag },
 };
 
 const DOC_PERIODS = [
@@ -94,7 +94,6 @@ function GrowthBadge({ pct }: { pct: number | null }) {
   );
 }
 
-// ─── Rank card ────────────────────────────────────────────────────────────────
 function RankCard({ title, rank, total, percentile, revenue }: {
   title: string; rank: number | null; total: number | null;
   percentile: number | null; revenue: number | null;
@@ -105,10 +104,8 @@ function RankCard({ title, rank, total, percentile, revenue }: {
       <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν δεδομένα</div>
     </div>
   );
-
   const isTop10 = rank <= 10;
   const topPct = percentile ? Math.round(percentile) : null;
-
   return (
     <div className={`rounded-lg p-3 border flex-1 ${isTop10 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
       <div className={`text-xs font-medium mb-1 ${isTop10 ? 'text-amber-600' : 'text-slate-400'}`}>{title}</div>
@@ -117,9 +114,7 @@ function RankCard({ title, rank, total, percentile, revenue }: {
         <span className={`text-lg font-bold ${isTop10 ? 'text-amber-700' : 'text-slate-700'}`}>#{rank}</span>
         <span className="text-xs text-slate-400">/ {total}</span>
       </div>
-      {!isTop10 && topPct !== null && (
-        <div className="text-xs text-slate-500 mt-0.5">Top {topPct}%</div>
-      )}
+      {!isTop10 && topPct !== null && <div className="text-xs text-slate-500 mt-0.5">Top {topPct}%</div>}
       {revenue !== null && <div className="text-xs text-slate-400 mt-1">{fmtEur(revenue)}</div>}
     </div>
   );
@@ -154,17 +149,14 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [salesPeriodIdx, setSalesPeriodIdx] = useState(0);
   const [salesByCategory, setSalesByCategory] = useState<any[]>([]);
   const [salesByCategoryLoading, setSalesByCategoryLoading] = useState(true);
+  const [balance, setBalance] = useState<{ balance: number; entries: any[] } | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
 
-  // Hierarchy expand state
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
   const [expandedL3s, setExpandedL3s] = useState<Set<string>>(new Set());
-
-  // SKU data
   const [skuData, setSkuData] = useState<Record<string, any[]>>({});
   const [skuLoading, setSkuLoading] = useState<Set<string>>(new Set());
-
-  // Rank data: key = `${categoryId}-area` or `${categoryId}-greece`
   const [rankData, setRankData] = useState<Record<string, any>>({});
   const [rankLoading, setRankLoading] = useState<Set<string>>(new Set());
 
@@ -173,6 +165,10 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [docPeriodIdx, setDocPeriodIdx] = useState(0);
   const [docTypeFilter, setDocTypeFilter] = useState<'all' | 'order' | 'invoice' | 'credit'>('all');
   const [docsExpanded, setDocsExpanded] = useState(false);
+  const [expandedDocId, setExpandedDocId] = useState<number | null>(null);
+  const [docLines, setDocLines] = useState<Record<number, any[]>>({});
+  const [docLinesLoading, setDocLinesLoading] = useState<Set<number>>(new Set());
+
   const [competitorInfo, setCompetitorInfo] = useState<any>(null);
   const [shopProfile, setShopProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -182,69 +178,79 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [expandedDiscL1s, setExpandedDiscL1s] = useState<Set<string>>(new Set());
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
+  const docsRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     authedFetch('/api/categories')
       .then((data: any[]) => {
         const map = new Map<string, string>();
         if (Array.isArray(data)) data.forEach(c => { if (c.category_code) map.set(String(c.category_code), c.full_name ?? c.short_name ?? c.category_code); });
         setCategoryMaster(map);
-      })
-      .catch(console.error);
+      }).catch(console.error);
   }, []);
 
   useEffect(() => {
     authedFetch(`/api/customers/${customer.code}/categories`)
       .then(data => setCategories(Array.isArray(data) ? data : []))
-      .catch(console.error)
-      .finally(() => setCategoriesLoading(false));
+      .catch(console.error).finally(() => setCategoriesLoading(false));
   }, [customer.code, visitsRefreshKey]);
 
   useEffect(() => {
     authedFetch(`/api/visits?customer_code=${customer.code}`)
       .then(data => setVisits(Array.isArray(data) ? data : []))
-      .catch(console.error)
-      .finally(() => setVisitsLoading(false));
+      .catch(console.error).finally(() => setVisitsLoading(false));
   }, [customer.code, visitsRefreshKey]);
 
   useEffect(() => {
     setSalesLoading(true);
     authedFetch(`/api/erp/customers/${customer.code}/sales?from=2023-01-01&to=2026-12-31`)
       .then(data => setSales(Array.isArray(data) ? data : []))
-      .catch(console.error)
-      .finally(() => setSalesLoading(false));
+      .catch(console.error).finally(() => setSalesLoading(false));
   }, [customer.code]);
 
   useEffect(() => {
     setSalesByCategoryLoading(true);
-    setExpandedL1s(new Set());
-    setExpandedL2s(new Set());
-    setExpandedL3s(new Set());
-    setSkuData({});
-    setRankData({});
+    setExpandedL1s(new Set()); setExpandedL2s(new Set()); setExpandedL3s(new Set());
+    setSkuData({}); setRankData({});
     const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
     authedFetch(`/api/erp/customers/${customer.code}/sales-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}`)
       .then(data => setSalesByCategory(data.grouped ?? []))
-      .catch(console.error)
-      .finally(() => setSalesByCategoryLoading(false));
+      .catch(console.error).finally(() => setSalesByCategoryLoading(false));
   }, [customer.code, salesPeriodIdx]);
 
   useEffect(() => {
-  console.log('documents sample:', documents.slice(0, 3));
     setDocsLoading(true);
     setDocsExpanded(false);
+    setExpandedDocId(null);
     const { from, to } = DOC_PERIODS[docPeriodIdx];
     authedFetch(`/api/erp/customers/${customer.code}/documents?from=${from}&to=${to}`)
       .then(data => setDocuments(Array.isArray(data) ? data : []))
-      .catch(console.error)
-      .finally(() => setDocsLoading(false));
+      .catch(console.error).finally(() => setDocsLoading(false));
   }, [customer.code, docPeriodIdx]);
 
   useEffect(() => {
     authedFetch(`/api/entity-profile/customer/${customer.code}`)
       .then(data => { setCompetitorInfo(data.competitor_info ?? null); setShopProfile(data.shop_profile ?? null); })
-      .catch(console.error)
-      .finally(() => setProfileLoading(false));
+      .catch(console.error).finally(() => setProfileLoading(false));
   }, [customer.code]);
+
+  useEffect(() => {
+    authedFetch(`/api/erp/customers/${customer.code}/balance`)
+      .then(data => setBalance(data))
+      .catch(console.error).finally(() => setBalanceLoading(false));
+  }, [customer.code]);
+
+  function toggleDocExpand(findoc: number) {
+    if (expandedDocId === findoc) { setExpandedDocId(null); return; }
+    setExpandedDocId(findoc);
+    if (!docLines[findoc] && !docLinesLoading.has(findoc)) {
+      setDocLinesLoading(prev => new Set(prev).add(findoc));
+      authedFetch(`/api/erp/customers/${customer.code}/documents/${findoc}/lines`)
+        .then(data => setDocLines(prev => ({ ...prev, [findoc]: data })))
+        .catch(console.error)
+        .finally(() => setDocLinesLoading(prev => { const n = new Set(prev); n.delete(findoc); return n; }));
+    }
+  }
 
   function fetchSkus(categoryId: string) {
     if (skuData[categoryId] || skuLoading.has(categoryId)) return;
@@ -260,8 +266,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     const { dateFrom, dateTo } = SALES_PERIODS[salesPeriodIdx];
     const areaKey = `${categoryId}-area`;
     const greeceKey = `${categoryId}-greece`;
-
-    // Area rank
     if (!rankData[areaKey] && !rankLoading.has(areaKey) && customer.area) {
       setRankLoading(prev => new Set(prev).add(areaKey));
       authedFetch(`/api/erp/customer-category-rank?from=${dateFrom}&to=${dateTo}&customerCode=${customer.code}&categoryId=${categoryId}&area=${encodeURIComponent(customer.area)}`)
@@ -269,8 +273,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
         .catch(console.error)
         .finally(() => setRankLoading(prev => { const n = new Set(prev); n.delete(areaKey); return n; }));
     }
-
-    // Greece rank (no area filter)
     if (!rankData[greeceKey] && !rankLoading.has(greeceKey)) {
       setRankLoading(prev => new Set(prev).add(greeceKey));
       authedFetch(`/api/erp/customer-category-rank?from=${dateFrom}&to=${dateTo}&customerCode=${customer.code}&categoryId=${categoryId}`)
@@ -283,11 +285,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL2(code: string) { setExpandedL2s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL3(code: string) { setExpandedL3s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
-
-  function handleExpandCategory(catIdKey: string) {
-    fetchSkus(catIdKey);
-    fetchRank(catIdKey);
-  }
+  function handleExpandCategory(catIdKey: string) { fetchSkus(catIdKey); fetchRank(catIdKey); }
 
   const sp = SALES_PERIODS[salesPeriodIdx];
   const currentTotal = sumPeriod(sales, sp.from, sp.to);
@@ -321,7 +319,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
 
   const filteredGroups = l1Groups.map(g => ({ ...g, filtered: g.items.filter(matchesFilter) })).filter(g => g.filtered.length > 0);
 
-  // ─── Category drill row ───────────────────────────────────────────────────
   function renderCategoryExpanded(catIdKey: string) {
     const skus = skuData[catIdKey] ?? [];
     const isLoadingSkus = skuLoading.has(catIdKey);
@@ -329,15 +326,11 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     const greeceRank = rankData[`${catIdKey}-greece`];
     const isLoadingAreaRank = rankLoading.has(`${catIdKey}-area`);
     const isLoadingGreeceRank = rankLoading.has(`${catIdKey}-greece`);
-
     return (
       <div className="bg-slate-50 border-t border-slate-100">
-        {/* SKUs */}
         <div className="px-4 py-2 border-b border-slate-200">
           <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top SKUs</div>
-          {isLoadingSkus ? (
-            <div className="text-xs text-slate-400">Φόρτωση...</div>
-          ) : skus.length === 0 ? (
+          {isLoadingSkus ? <div className="text-xs text-slate-400">Φόρτωση...</div> : skus.length === 0 ? (
             <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν προϊόντα</div>
           ) : (
             <div className="space-y-1">
@@ -356,28 +349,12 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             </div>
           )}
         </div>
-
-        {/* Rank cards */}
         <div className="px-4 py-2">
           <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Κατάταξη</div>
-          {(isLoadingAreaRank || isLoadingGreeceRank) ? (
-            <div className="text-xs text-slate-400">Φόρτωση κατάταξης...</div>
-          ) : (
+          {(isLoadingAreaRank || isLoadingGreeceRank) ? <div className="text-xs text-slate-400">Φόρτωση κατάταξης...</div> : (
             <div className="flex gap-2">
-              <RankCard
-                title={`Στην περιοχή (${customer.area ?? '—'})`}
-                rank={areaRank?.rank ?? null}
-                total={areaRank?.total_customers ?? null}
-                percentile={areaRank?.percentile ?? null}
-                revenue={areaRank?.revenue ?? null}
-              />
-              <RankCard
-                title="Στην Ελλάδα"
-                rank={greeceRank?.rank ?? null}
-                total={greeceRank?.total_customers ?? null}
-                percentile={greeceRank?.percentile ?? null}
-                revenue={greeceRank?.revenue ?? null}
-              />
+              <RankCard title={`Στην περιοχή (${customer.area ?? '—'})`} rank={areaRank?.rank ?? null} total={areaRank?.total_customers ?? null} percentile={areaRank?.percentile ?? null} revenue={areaRank?.revenue ?? null} />
+              <RankCard title="Στην Ελλάδα" rank={greeceRank?.rank ?? null} total={greeceRank?.total_customers ?? null} percentile={greeceRank?.percentile ?? null} revenue={greeceRank?.revenue ?? null} />
             </div>
           )}
         </div>
@@ -385,30 +362,85 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     );
   }
 
+  function renderDocLines(findoc: number, netamnt: number) {
+    const lines = docLines[findoc];
+    const loading = docLinesLoading.has(findoc);
+    if (loading) return <div className="px-4 py-3 text-xs text-slate-400">Φόρτωση γραμμών...</div>;
+    if (!lines || lines.length === 0) return <div className="px-4 py-3 text-xs text-slate-400 italic">Δεν βρέθηκαν γραμμές</div>;
+    return (
+      <div className="border-t border-slate-100 bg-slate-50">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-200 text-slate-400 font-medium">
+              <th className="text-left px-4 py-2">Κωδ.</th>
+              <th className="text-left px-4 py-2 hidden sm:table-cell">Περιγραφή</th>
+              <th className="text-right px-3 py-2">Τεμ.</th>
+              <th className="text-right px-4 py-2">Αξία</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {lines.map((line: any, i: number) => (
+              <tr key={i} className="hover:bg-white transition-colors">
+                <td className="px-4 py-2 font-mono text-slate-600 whitespace-nowrap">{line.sku_code}</td>
+                <td className="px-4 py-2 text-slate-600 hidden sm:table-cell truncate max-w-xs">{line.sku_name}</td>
+                <td className="px-3 py-2 text-right text-slate-500">{Math.round(Number(line.qty ?? 0))}</td>
+                <td className="px-4 py-2 text-right font-semibold text-slate-700">{fmtEur(Number(line.netlineval ?? 0))}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-slate-200 bg-white">
+              <td colSpan={2} className="px-4 py-2 text-slate-400 text-xs hidden sm:table-cell">{lines.length} γραμμές</td>
+              <td className="px-3 py-2 text-right text-xs font-medium text-slate-500">Σύνολο</td>
+              <td className="px-4 py-2 text-right font-bold text-slate-800">{fmtEur(netamnt)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <header className="bg-gradient-to-r from-indigo-700 to-purple-800 text-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <button onClick={onBack} className="flex items-center gap-2 text-white/90 hover:text-white">
-              <ArrowLeft className="w-5 h-5" /><span className="font-medium">Back</span>
-            </button>
-            <button onClick={() => setShowNewVisitDialog(true)} className="flex items-center gap-2 bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg font-medium text-sm">
-              <Plus className="w-4 h-4" />New Visit
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="px-3 py-1 bg-white/20 rounded-md font-mono text-sm">{customer.code}</span>
-            <h1 className="text-xl font-bold">{customer.name}</h1>
-          </div>
-            {(customer.city || customer.area) && (
-              <div className="text-white/70 text-sm">{customer.city}{customer.city && customer.area ? ', ' : ''}{customer.area}</div>
-            )}
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-              <span className="text-white/40 text-xs font-mono">{customer.code}</span>
-              {customer.afm && <span className="text-white/30 text-xs">· ΑΦΜ {customer.afm}</span>}
-              <span className="text-white/30 text-xs">· {SALES_PERIODS[salesPeriodIdx].label}</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
+          {/* Top row */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button onClick={onBack} className="text-white/80 hover:text-white shrink-0">
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-xs shrink-0">{customer.code}</span>
+              <h1 className="text-base font-bold truncate">{customer.name}</h1>
             </div>
+            <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => {
+                    const el = docsRef.current;
+                    if (el) {
+                      const top = el.getBoundingClientRect().top + window.scrollY - 155;
+                      window.scrollTo({ top, behavior: 'smooth' });
+                    }
+                  }}
+                  title="Παραγγελίες & Τιμολόγια"
+                  className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                  <FileText className="w-4 h-4" />
+                </button>
+              <button onClick={() => setShowNewVisitDialog(true)} title="Νέα Επίσκεψη"
+                className="p-2 bg-green-500 hover:bg-green-600 rounded-lg transition-colors">
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          {/* Subtitle */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(customer.city || customer.area) && (
+              <span className="text-white/60 text-xs">{customer.city}{customer.city && customer.area ? ', ' : ''}{customer.area}</span>
+            )}
+            {customer.afm && <span className="text-white/40 text-xs">· ΑΦΜ {customer.afm}</span>}
+            <span className="text-white/40 text-xs">· {SALES_PERIODS[salesPeriodIdx].label}</span>
+            
+          </div>
         </div>
       </header>
 
@@ -530,7 +562,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 </div>
               </div>
 
-              {/* Monthly bars */}
               {(() => {
                 const months = sales.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
                 const prevMonthMap = new Map<string, number>();
@@ -577,12 +608,10 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 );
               })()}
 
-              {/* SALES BY CATEGORY — L1 → L2 → L3 */}
+              {/* SALES BY CATEGORY */}
               <div className="mt-5 pt-4 border-t border-slate-100">
                 <div className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Ανά Κατηγορία</div>
-                {salesByCategoryLoading ? (
-                  <div className="text-sm text-slate-400">Φόρτωση...</div>
-                ) : salesByCategory.length === 0 ? (
+                {salesByCategoryLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : salesByCategory.length === 0 ? (
                   <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν κατηγορίες για αυτή την περίοδο</div>
                 ) : (
                   <div className="space-y-1">
@@ -591,10 +620,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                       const maxGroupRev = Math.max(...salesByCategory.map((g: any) => g.total_revenue), 1);
                       const groupBarPct = Math.max((group.total_revenue / maxGroupRev) * 100, 2);
                       const l1Name = categoryMaster.get(group.l1_code) ?? `Κατηγορία ${group.l1_code}`;
-
                       return (
                         <div key={group.l1_code} className="rounded-lg border border-slate-100 overflow-hidden">
-                          {/* L1 */}
                           <button onClick={() => toggleL1(group.l1_code)}
                             className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors ${isL1Exp ? 'bg-blue-50 border-b border-blue-100' : 'bg-white hover:bg-slate-50'}`}>
                             <div className="flex items-center gap-2 min-w-0">
@@ -611,14 +638,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                               </div>
                             </div>
                           </button>
-
-                          {!isL1Exp && (
-                            <div className="px-3 pb-2 bg-white">
-                              <div className="w-full bg-slate-100 rounded-sm h-1.5"><div className="h-1.5 rounded-sm bg-blue-300 transition-all" style={{ width: `${groupBarPct}%` }} /></div>
-                            </div>
-                          )}
-
-                          {/* L2 rows */}
+                          {!isL1Exp && <div className="px-3 pb-2 bg-white"><div className="w-full bg-slate-100 rounded-sm h-1.5"><div className="h-1.5 rounded-sm bg-blue-300 transition-all" style={{ width: `${groupBarPct}%` }} /></div></div>}
                           {isL1Exp && (
                             <div className="divide-y divide-slate-50">
                               {group.l2s.map((l2: any) => {
@@ -628,16 +648,10 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                 const hasL3 = l2.l3s && l2.l3s.length > 0;
                                 const l2Name = l2.full_name ?? categoryMaster.get(l2Key) ?? l2Key;
                                 const maxL2Rev = Math.max(...group.l2s.map((l: any) => l.net_revenue), 1);
-
                                 return (
                                   <div key={l2Key} className="bg-white">
-                                    <button
-                                      onClick={() => {
-                                        toggleL2(l2Key);
-                                        if (!isL2Exp && l2.category_id) handleExpandCategory(l2IdKey);
-                                      }}
-                                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left"
-                                    >
+                                    <button onClick={() => { toggleL2(l2Key); if (!isL2Exp && l2.category_id) handleExpandCategory(l2IdKey); }}
+                                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left">
                                       <div className="flex items-center gap-2 min-w-0">
                                         <div className="w-3 shrink-0" />
                                         {isL2Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
@@ -652,28 +666,14 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                             <span className="text-xs text-slate-400">{Math.round(l2.total_qty)} τεμ.</span>
                                             <div className="text-sm font-semibold text-slate-700">{fmtEur(l2.net_revenue)}</div>
                                           </div>
-                                          {l2.prev_qty > 0 && (
-                                            <div className="flex items-center gap-2 justify-end">
-                                              <span className="text-xs text-slate-300">{Math.round(l2.prev_qty)} τεμ.</span>
-                                              <div className="text-xs text-slate-400">{fmtEur(l2.prev_revenue)}</div>
-                                            </div>
-                                          )}
+                                          {l2.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l2.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l2.prev_revenue)}</div></div>}
                                         </div>
                                       </div>
                                     </button>
-
-                                    <div className="px-3 pb-1 bg-white">
-                                      <div className="ml-8 w-full bg-slate-100 rounded-sm h-1">
-                                        <div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} />
-                                      </div>
-                                    </div>
-
+                                    <div className="px-3 pb-1 bg-white"><div className="ml-8 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} /></div></div>
                                     {isL2Exp && (
                                       <div>
-                                        {/* L2 SKUs + rank */}
                                         {l2.category_id && renderCategoryExpanded(l2IdKey)}
-
-                                        {/* L3 children */}
                                         {hasL3 && (
                                           <div className="border-t border-slate-200 divide-y divide-slate-100 bg-slate-50">
                                             <div className="px-4 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide bg-white">Υποκατηγορίες</div>
@@ -682,16 +682,10 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                               const l3IdKey = String(l3.category_id);
                                               const isL3Exp = expandedL3s.has(l3Key);
                                               const maxL3Rev = Math.max(...l2.l3s.map((x: any) => x.net_revenue), 1);
-
                                               return (
                                                 <div key={l3Key} className="bg-white">
-                                                  <button
-                                                    onClick={() => {
-                                                      toggleL3(l3Key);
-                                                      if (!isL3Exp) handleExpandCategory(l3IdKey);
-                                                    }}
-                                                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left"
-                                                  >
+                                                  <button onClick={() => { toggleL3(l3Key); if (!isL3Exp) handleExpandCategory(l3IdKey); }}
+                                                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
                                                     <div className="flex items-center gap-2 min-w-0">
                                                       <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
                                                       {isL3Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
@@ -705,22 +699,11 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                                           <span className="text-xs text-slate-400">{Math.round(l3.total_qty)} τεμ.</span>
                                                           <div className="text-sm font-semibold text-slate-700">{fmtEur(l3.net_revenue)}</div>
                                                         </div>
-                                                        {l3.prev_qty > 0 && (
-                                                          <div className="flex items-center gap-2 justify-end">
-                                                            <span className="text-xs text-slate-300">{Math.round(l3.prev_qty)} τεμ.</span>
-                                                            <div className="text-xs text-slate-400">{fmtEur(l3.prev_revenue)}</div>
-                                                          </div>
-                                                        )}
+                                                        {l3.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l3.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l3.prev_revenue)}</div></div>}
                                                       </div>
                                                     </div>
                                                   </button>
-
-                                                  <div className="px-4 pb-1 bg-white">
-                                                    <div className="ml-10 w-full bg-slate-100 rounded-sm h-1">
-                                                      <div className="h-1 rounded-sm bg-indigo-300 transition-all" style={{ width: `${Math.max((l3.net_revenue / maxL3Rev) * 100, 2)}%` }} />
-                                                    </div>
-                                                  </div>
-
+                                                  <div className="px-4 pb-1 bg-white"><div className="ml-10 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-indigo-300 transition-all" style={{ width: `${Math.max((l3.net_revenue / maxL3Rev) * 100, 2)}%` }} /></div></div>
                                                   {isL3Exp && renderCategoryExpanded(l3IdKey)}
                                                 </div>
                                               );
@@ -745,20 +728,31 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
         </section>
 
         {/* ORDERS & INVOICES */}
-        <section className="bg-white rounded-xl shadow p-5">
+        <section ref={docsRef} className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600" /><h2 className="text-base font-semibold">Παραγγελίες & Τιμολόγια</h2></div>
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-base font-semibold">Παραγγελίες & Τιμολόγια</h2>
+            </div>
             <select value={docPeriodIdx} onChange={e => setDocPeriodIdx(Number(e.target.value))} className="text-xs border border-slate-300 rounded-lg px-2 py-1 text-slate-600 focus:ring-2 focus:ring-indigo-500">
               {DOC_PERIODS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
             </select>
           </div>
+
           {!docsLoading && documents.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{docCounts.order} παραγγελίες</span>
               <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{docCounts.invoice} τιμολόγια</span>
               {docCounts.credit > 0 && <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{docCounts.credit} πιστωτικά</span>}
+              {!balanceLoading && balance && (
+                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${balance.balance > 0 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                  <AlertCircle className="w-3 h-3" />
+                  Υπόλοιπο €{Math.abs(balance.balance).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
+                </span>
+              )}
             </div>
           )}
+
           {!docsLoading && (lastInvoice || lastOrder) && (
             <div className="grid grid-cols-2 gap-3 mb-4">
               {lastInvoice && (
@@ -779,6 +773,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               )}
             </div>
           )}
+
           {!docsLoading && documents.length > 0 && (
             <div className="flex gap-2 mb-3">
               {(['all', 'order', 'invoice', 'credit'] as const).map(t => (
@@ -789,23 +784,38 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               ))}
             </div>
           )}
+
           {docsLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : filteredDocs.length === 0 ? (
             <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν έγγραφα</div>
           ) : (
             <>
-              <div className="space-y-1">
+              <div className="border border-slate-100 rounded-lg overflow-hidden">
                 {visibleDocs.map((doc: any) => {
                   const cfg = TYPE_CONFIG[doc.type] ?? TYPE_CONFIG.invoice;
+                  const isExpanded = expandedDocId === doc.findoc;
+                  const Icon = cfg.icon;
                   return (
-                    <div key={doc.findoc} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0 text-sm">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
-                        <span className="font-mono text-xs text-slate-600 truncate">{doc.doc_number}</span>
-                        <span className="text-xs text-slate-400 shrink-0">{formatDate(doc.trndate)}</span>
-                      </div>
-                      <div className={`font-medium shrink-0 ml-2 ${doc.netamnt < 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                        €{Math.abs(doc.netamnt).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
-                      </div>
+                    <div key={doc.findoc} className="border-b border-slate-50 last:border-0">
+                      <button onClick={() => toggleDocExpand(doc.findoc)}
+                        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50 ${isExpanded ? 'bg-slate-50' : 'bg-white'}`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Icon className={`w-4 h-4 shrink-0 ${cfg.text}`} />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
+                              <span className="font-mono text-xs text-slate-700 font-medium truncate">{doc.doc_number}</span>
+                            </div>
+                            <div className="text-xs text-slate-400 mt-0.5">{formatDate(doc.trndate)}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <span className={`text-sm font-semibold ${doc.netamnt < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+                            {doc.netamnt < 0 ? '-' : ''}€{Math.abs(doc.netamnt).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
+                          </span>
+                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+                      {isExpanded && renderDocLines(doc.findoc, doc.netamnt)}
                     </div>
                   );
                 })}
@@ -813,7 +823,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               {filteredDocs.length > 8 && (
                 <button onClick={() => setDocsExpanded(v => !v)} className="mt-3 w-full flex items-center justify-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium py-2 border border-dashed border-indigo-200 rounded-lg">
                   <ChevronDown className={`w-4 h-4 transition-transform ${docsExpanded ? 'rotate-180' : ''}`} />
-                  {docsExpanded ? 'Show less' : `Show all ${filteredDocs.length} documents`}
+                  {docsExpanded ? 'Λιγότερα' : `Εμφάνιση όλων (${filteredDocs.length})`}
                 </button>
               )}
             </>
