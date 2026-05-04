@@ -63,6 +63,7 @@ function GrowthBadge({ pct }: { pct: number | null }) {
   );
 }
 
+
 // ─── Reusable SKU + Top Customers tab panel ───────────────────────────────────
 function DrillContent({
   catIdKey,
@@ -143,6 +144,9 @@ function DrillContent({
   );
 }
 
+type CustomerSortMode = 'name' | 'area_then_name';
+type PerformanceFilter = 'all' | 'up' | 'down';
+
 export function DashboardFigma() {
   const {
     customers, customersTotal, totalRevenue, compareRevenue, revenueGrowth,
@@ -170,6 +174,12 @@ export function DashboardFigma() {
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
   const [expandedL3s, setExpandedL3s] = useState<Set<string>>(new Set());
   const [salesFilter, setSalesFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [customerSortMode, setCustomerSortMode] =
+      useState<CustomerSortMode>('name');
+  
+const [performanceFilter, setPerformanceFilter] =
+  useState<PerformanceFilter>('all');
+
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
@@ -186,12 +196,61 @@ export function DashboardFigma() {
   }, [filteredCustomers, getDaysSinceVisit]);
 
     const displayedCustomers = useMemo(() => {
-      let result = filteredCustomers;
-      if (notVisitedDays) result = result.filter(c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays);
-      if (salesFilter === 'with') result = result.filter(c => customersWithSalesSet.has(String(c.trdr_id)));
-      if (salesFilter === 'without') result = result.filter(c => !customersWithSalesSet.has(String(c.trdr_id)));
-      return result;
-    }, [filteredCustomers, notVisitedDays, getDaysSinceVisit, salesFilter, customersWithSalesSet]);
+      let result = customers;
+
+      // filters
+      if (notVisitedDays) {
+        result = result.filter(
+          c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays
+        );
+      }
+
+      if (salesFilter === 'with') {
+        result = result.filter(c =>
+          customersWithSalesSet.has(String(c.trdr_id))
+        );
+      }
+
+      if (salesFilter === 'without') {
+        result = result.filter(c =>
+          !customersWithSalesSet.has(String(c.trdr_id))
+        );
+      }
+
+
+      if (performanceFilter !== 'all') {
+        result = result.filter(c => {
+          if (c.growth_pct === null || c.growth_pct === undefined) return false;
+
+
+                  return performanceFilter === (Number(c.growth_pct) >= 0 ? 'up' : 'down');
+        });
+      }
+
+
+      // sorting (IMPORTANT: copy before sort)
+      const sorted = [...result].sort((a, b) => {
+        if (customerSortMode === 'area_then_name') {
+          const areaCompare = (a.area ?? '').localeCompare(b.area ?? '');
+          if (areaCompare !== 0) return areaCompare;
+
+          return a.name.localeCompare(b.name);
+        }
+
+        // default: name A–Z
+        return a.name.localeCompare(b.name);
+      });
+
+      return sorted;
+    }, [
+      filteredCustomers,
+      notVisitedDays,
+      getDaysSinceVisit,
+      salesFilter,
+      customersWithSalesSet,
+      customerSortMode
+    ]);
+
 
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL2(code: string) { setExpandedL2s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
@@ -709,14 +768,93 @@ export function DashboardFigma() {
               </div>
             </section>
 
-            {/* ===== CUSTOMERS ===== */}
-            <div id="section-customers">
-              <CustomerListSection
-                title={currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec' ? 'All Customers' : 'Your Customers'}
-                customers={displayedCustomers} currentUserRole={currentUser.role}
-                onSelectCustomer={setSelectedCustomer} getDaysSinceVisit={getDaysSinceVisit}
-              />
-            </div>
+              {/* Performance Filter */}
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Performance ({selectedPeriod.shortLabel})
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    {
+                      label: 'Όλοι',
+                      value: 'all' as const,
+                    },
+                    {
+                      label: 'Trending Up',
+                      value: 'up' as const,
+                      icon: <TrendingUp className="w-3 h-3" />
+                    },
+                    {
+                      label: 'Trending Down',
+                      value: 'down' as const,
+                      icon: <TrendingDown className="w-3 h-3" />
+                    }
+                  ]).map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPerformanceFilter(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                        performanceFilter === opt.value
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                      }`}
+                    >
+                      {opt.icon}
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ===== CUSTOMERS ===== */}
+              <div id="section-customers">
+
+                {/* ---- Customer sort toggle (NEW) ---- */}
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Order by:</span>
+
+                  <button
+                    onClick={() => setCustomerSortMode('name')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                      ${
+                        customerSortMode === 'name'
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                      }`}
+                  >
+                    Name A–Z
+                  </button>
+
+                  <button
+                    onClick={() => setCustomerSortMode('area_then_name')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                      ${
+                        customerSortMode === 'area_then_name'
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                      }`}
+                  >
+                    Area → Name
+                  </button>
+                </div>
+                {/* ---- End customer sort toggle ---- */}
+
+                <CustomerListSection
+                  title={
+                    currentUser.role === 'manager' ||
+                    currentUser.role === 'admin' ||
+                    currentUser.role === 'exec'
+                      ? 'All Customers'
+                      : 'Your Customers'
+                  }
+                  customers={displayedCustomers}
+                  currentUserRole={currentUser.role}
+                  onSelectCustomer={setSelectedCustomer}
+                  getDaysSinceVisit={getDaysSinceVisit}
+                />
+              </div>
 
             {/* ===== PROSPECTS ===== */}
             <div id="section-prospects">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, TrendingUp, User, ChevronDown } from 'lucide-react';
+import { MapPin, TrendingUp, User, TrendingDown, ChevronDown } from 'lucide-react';
 import { formatDate } from '../../utils/dateFormat';
 
 const DEFAULT_VISIBLE = 5;
@@ -50,6 +50,15 @@ export function CustomerListSection({
       {/* List */}
       <div className="divide-y divide-gray-200">
         {visibleCustomers.map(customer => {
+          
+
+          const growthRaw = customer.growth_pct;
+          const growth =
+            growthRaw === null || growthRaw === undefined || isNaN(Number(growthRaw))
+              ? null
+              : Number(growthRaw);
+
+
           const days = getDaysSinceVisit(customer.lastVisitDate);
 
           return (
@@ -114,8 +123,24 @@ export function CustomerListSection({
                   </div>
                 </div>
 
-                {/* Right icon */}
-                <TrendingUp className="w-4 h-4 text-gray-400 group-hover:text-blue-600 shrink-0 mt-1" />
+                {/* Performance indicator */}
+                {growth !== null && (
+                  <div
+                    className={`flex items-center gap-1 text-xs font-semibold shrink-0 mt-1
+                      ${growth > 0
+                        ? 'text-green-600'
+                        : growth < 0
+                        ? 'text-red-600'
+                        : 'text-gray-400'
+                      }`}
+                  >
+                    {growth > 0 && <TrendingUp className="w-4 h-4" />}
+                    {growth < 0 && <TrendingDown className="w-4 h-4" />}
+                    {growth === 0 && <span>●</span>}
+                    {growth > 0 ? '+' : ''}
+                    {growth.toFixed(1)}%
+                  </div>
+                )}
               </div>
             </button>
           );

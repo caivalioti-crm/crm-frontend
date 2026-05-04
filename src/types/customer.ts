@@ -18,4 +18,5 @@ export type Customer = {
   zip?: string;
   shipmentName?: string;
   carrierName?: string;
+  growth_pct?: number | null;
 };
