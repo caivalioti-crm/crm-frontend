@@ -3,9 +3,10 @@ import { X, Plus, Phone, UserCheck, Video, MessageSquare, Search } from 'lucide-
 import { supabase } from '../../lib/supabaseClient';
 import { SmartDateInput, dateToISO } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
+import { VoiceMemo } from '../ui/VoiceMemo';
 import type { SelectedCategory, CategoryItem } from '../ui/CategorySelector';
 
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 type Customer = {
   code: string;
@@ -85,6 +86,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
 
   const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<SelectedCategory[]>([]);
+  const [voiceMemoBlob, setVoiceMemoBlob] = useState<Blob | null>(null);
 
   useEffect(() => {
     if (isOpen && allCategories.length === 0) {
@@ -159,15 +161,32 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     setIsSaving(true);
     setError(null);
     try {
-      await authedPost('/api/visits', {
-        customer_code: selectedCustomerCode,
-        visit_date: isoDate,
-        visit_time: visitTime || null,
-        visit_type: visitType,
-        notes,
-        tasks,
-        categories: selectedCategories,
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const formData = new FormData();
+      formData.append('customer_code', selectedCustomerCode);
+      formData.append('visit_date', isoDate);
+      formData.append('visit_time', visitTime || '');
+      formData.append('visit_type', visitType);
+      formData.append('notes', notes);
+      formData.append('tasks', JSON.stringify(tasks));
+      formData.append('categories', JSON.stringify(selectedCategories));
+      if (voiceMemoBlob) {
+        formData.append('voice_memo', voiceMemoBlob, 'memo.webm');
+      }
+
+      const res = await fetch(`${BASE_URL}/api/visits`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
       });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Request failed');
+      }
+
       onSave?.();
       handleClose();
     } catch (err: any) {
@@ -191,6 +210,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     setVisitDate(todayDisplay());
     setError(null);
     onClose();
+    setVoiceMemoBlob(null);
   };
 
   if (!isOpen) return null;
@@ -309,6 +329,12 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
             <textarea value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Enter notes about the visit..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 min-h-[100px]" />
+          </div>
+
+          {/* Voice Memo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Voice Memo (optional)</label>
+            <VoiceMemo onRecordingComplete={(blob) => setVoiceMemoBlob(blob)} />
           </div>
 
           {/* Tasks */}

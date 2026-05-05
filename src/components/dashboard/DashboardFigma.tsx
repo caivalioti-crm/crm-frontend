@@ -21,6 +21,8 @@ const NOT_VISITED_OPTIONS = [
 
 const DEFAULT_VISIBLE_ITEMS = 6;
 
+
+
 function ExpandableFilterGroup({ label, selected, items, onSelect, onClear }: {
   label: string; selected: string; items: string[];
   onSelect: (val: string) => void; onClear: () => void;
@@ -220,10 +222,10 @@ const [performanceFilter, setPerformanceFilter] =
 
       if (performanceFilter !== 'all') {
         result = result.filter(c => {
-          if (c.growth_pct === null || c.growth_pct === undefined) return false;
-
-
-                  return performanceFilter === (Number(c.growth_pct) >= 0 ? 'up' : 'down');
+          const g = Number(c.growth_pct);
+          if (performanceFilter === 'up') return isNaN(g) || g >= 0;
+          if (performanceFilter === 'down') return !isNaN(g) && g < 0;
+          return true;
         });
       }
 
@@ -248,7 +250,8 @@ const [performanceFilter, setPerformanceFilter] =
       getDaysSinceVisit,
       salesFilter,
       customersWithSalesSet,
-      customerSortMode
+      customerSortMode,
+      performanceFilter
     ]);
 
 
@@ -264,8 +267,13 @@ const [performanceFilter, setPerformanceFilter] =
       <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white sticky top-0 z-50 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <div className="shrink-0">
-              <h1 className="text-lg font-extrabold leading-tight">Soft1 Auto Parts CRM</h1>
+            <div className="shrink-0 cursor-pointer"
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setSelectedProspect(null);
+                  }}
+                >
+              <h1 className="text-lg font-extrabold leading-tight">Aivaliotis CRM</h1>
               <p className="text-blue-200 text-xs">Sales Representative Dashboard</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -287,15 +295,16 @@ const [performanceFilter, setPerformanceFilter] =
               </button>
             </div>
           </div>
+          
           <div className="flex items-center gap-2 border-t border-white/20 pt-2">
             {[
-              { icon: <TrendingUp className="w-4 h-4" />, label: 'Performance', id: 'section-performance', roles: null },
-              { icon: <MapPin className="w-4 h-4" />, label: 'Geo', id: 'section-geo', roles: null },
-              { icon: <BarChart2 className="w-4 h-4" />, label: 'Categories', id: 'section-categories', roles: ['admin', 'manager', 'exec'] },
-              { icon: <ClipboardList className="w-4 h-4" />, label: 'Visits', id: 'section-visits', roles: null },
-              { icon: <Search className="w-4 h-4" />, label: 'Customers', id: 'section-filter', roles: null },
-              { icon: <Users className="w-4 h-4" />, label: 'List', id: 'section-customers', roles: null },
-              { icon: <UserPlus className="w-4 h-4" />, label: 'Prospects', id: 'section-prospects', roles: null },
+              { icon: <TrendingUp className="w-4 h-4" />,  id: 'section-performance', roles: null },
+              { icon: <MapPin className="w-4 h-4" />,  id: 'section-geo', roles: null },
+              { icon: <BarChart2 className="w-4 h-4" />,  id: 'section-categories', roles: ['admin', 'manager', 'exec'] },
+              { icon: <ClipboardList className="w-4 h-4" />,  id: 'section-visits', roles: null },
+              { icon: <Search className="w-4 h-4" />,  id: 'section-filter', roles: null },
+              { icon: <Users className="w-4 h-4" />,  id: 'section-customers', roles: null },
+              { icon: <UserPlus className="w-4 h-4" />,  id: 'section-prospects', roles: null },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
               .map(({ icon, label, id }) => (
@@ -306,6 +315,7 @@ const [performanceFilter, setPerformanceFilter] =
                   <span className="hidden sm:block">{label}</span>
                 </button>
               ))}
+
           </div>
             {/* Context bar */}
             {(selectedArea || selectedCity || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all') && (
@@ -343,6 +353,7 @@ const [performanceFilter, setPerformanceFilter] =
             </div>
           )}
         </div>
+
       </header>
 
       {/* ================= BODY ================= */}
@@ -766,9 +777,7 @@ const [performanceFilter, setPerformanceFilter] =
                   </div>
                 </div>
               </div>
-            </section>
-
-              {/* Performance Filter */}
+                           {/* Performance Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" />
@@ -807,6 +816,9 @@ const [performanceFilter, setPerformanceFilter] =
                   ))}
                 </div>
               </div>
+            </section>
+
+              
 
               {/* ===== CUSTOMERS ===== */}
               <div id="section-customers">

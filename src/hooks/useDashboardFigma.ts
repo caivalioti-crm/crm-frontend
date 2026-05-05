@@ -311,6 +311,29 @@ const drillDownToArea = useCallback(async (area: string) => {
   () => new Set(geoFilteredSales.map(s => String(s.customerCode))),
   [geoFilteredSales]
   );
+  const customersWithGrowth = useMemo(() => {
+  // sum revenue per customer for current and compare period
+  const currentRevMap = new Map<string, number>();
+  const compareRevMap = new Map<string, number>();
+
+  scopedSales.forEach(s => {
+    const key = String(s.customerCode);
+    currentRevMap.set(key, (currentRevMap.get(key) ?? 0) + s.netAmount);
+  });
+
+  scopedCompareSales.forEach(s => {
+    const key = String(s.customerCode);
+    compareRevMap.set(key, (compareRevMap.get(key) ?? 0) + s.netAmount);
+  });
+
+  return scopedCustomers.map(c => {
+    const key = String(c.trdr_id);
+    const curr = currentRevMap.get(key) ?? 0;
+    const prev = compareRevMap.get(key) ?? 0;
+    const growth_pct = prev === 0 ? null : ((curr - prev) / prev) * 100;
+    return { ...c, growth_pct, current_revenue: curr, prev_revenue: prev };
+  });
+}, [scopedCustomers, scopedSales, scopedCompareSales]);
 
   /* ===================== VISIT INTELLIGENCE ===================== */
   const getDaysSinceVisit = (lastVisitDate: string | undefined | null): number => {
@@ -323,7 +346,7 @@ const drillDownToArea = useCallback(async (area: string) => {
 
   /* ===================== EXPORT ===================== */
   return {
-    customers: scopedCustomers, customersTotal: scopedCustomers.length,
+    customers: customersWithGrowth, customersTotal: scopedCustomers.length,
     totalRevenue, compareRevenue, revenueGrowth, customersWithSales,
     salesLoading, areaStats, cityStats, cityLoading,
     selectedGeoArea, drillDownToArea, backToAreas,
