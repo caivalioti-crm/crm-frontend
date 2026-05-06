@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { UserPlus, ChevronDown, Plus, Search, MapPin, Eye, Bell } from 'lucide-react';
+import { UserPlus, ChevronDown, Plus, Search, MapPin, Eye} from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 type Prospect = {
   id: string;
@@ -57,7 +57,7 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
-export function ProspectsList({ currentUser, onNewProspect, onSelectProspect }: ProspectsListProps) {
+export function ProspectsList({ onNewProspect, onSelectProspect }: ProspectsListProps) {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);

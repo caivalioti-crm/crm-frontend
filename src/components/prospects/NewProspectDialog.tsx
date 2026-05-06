@@ -1,9 +1,9 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Search, AlertTriangle, CheckCircle, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import { SmartDateInput } from '../ui/SmartDateInput';
 
-const BASE_URL = 'http://localhost:3001';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 type NewProspectDialogProps = {
   isOpen: boolean;
@@ -52,7 +52,7 @@ async function authedPost(url: string, body: any) {
   return res.json();
 }
 
-export function NewProspectDialog({ isOpen, onClose, currentUser, onSave, areas, cities, onViewCustomer, onViewProspect }: NewProspectDialogProps) {
+export function NewProspectDialog({ isOpen, onClose, onSave, areas, cities, onViewCustomer, onViewProspect }: NewProspectDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // VAT check

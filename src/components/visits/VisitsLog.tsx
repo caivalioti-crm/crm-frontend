@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag, MessageSquare, Bell, Trash2, Pencil, X } from 'lucide-react';
+import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag, MessageSquare, Bell, Trash2, Pencil} from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
 import type { SelectedCategory, CategoryItem } from '../ui/CategorySelector';
 
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 type Task = {
   id: string;

@@ -68,7 +68,6 @@ function GrowthBadge({ pct }: { pct: number | null }) {
 
 // ─── Reusable SKU + Top Customers tab panel ───────────────────────────────────
 function DrillContent({
-  catIdKey,
   skus, skusLoading,
   topCustomers, topCustomersLoading,
 }: {
@@ -308,12 +307,12 @@ const [performanceFilter, setPerformanceFilter] =
               { icon: <UserPlus className="w-4 h-4" />,  id: 'section-prospects', roles: null },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
-              .map(({ icon, label, id }) => (
+              .map(({ icon, id }) => (
                 <button key={id}
                   onClick={() => { const el = document.getElementById(id); if (el) { const top = el.getBoundingClientRect().top + window.scrollY - 120; window.scrollTo({ top, behavior: 'smooth' }); } }}
-                  className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/25 rounded-lg transition-colors text-white/90 text-sm font-medium" title={label}>
+                  className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/25 rounded-lg transition-colors text-white/90 text-sm font-medium">
                   {icon}
-                  <span className="hidden sm:block">{label}</span>
+                  <span className="hidden sm:block"></span>
                 </button>
               ))}
 

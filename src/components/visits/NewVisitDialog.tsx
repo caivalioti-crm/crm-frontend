@@ -6,7 +6,7 @@ import { CategorySelector } from '../ui/CategorySelector';
 import { VoiceMemo } from '../ui/VoiceMemo';
 import type { SelectedCategory, CategoryItem } from '../ui/CategorySelector';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL || 'import.meta.env.VITE_API_URL';
 
 type Customer = {
   code: string;
@@ -40,23 +40,6 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
-async function authedPost(url: string, body: any) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  const res = await fetch(`${BASE_URL}${url}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Request failed');
-  }
-  return res.json();
-}
 
 const todayDisplay = () => {
   const now = new Date();

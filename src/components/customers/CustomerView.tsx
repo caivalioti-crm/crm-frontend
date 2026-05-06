@@ -1,6 +1,6 @@
 import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
-  Lightbulb, Users, Swords, Store, FileText, Tag, ChevronDown, ChevronRight, 
+  Lightbulb, Users, Store, FileText, Tag, ChevronDown, ChevronRight, 
   TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt, User,
   ClipboardList,
 } from 'lucide-react';
@@ -10,9 +10,9 @@ import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import type { CommercialEntityBase } from '../../types/commercialEntity';
-import { HatGlasses } from 'lucide-react';
 
-const BASE_URL = 'http://localhost:3001';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 async function authedFetch(url: string) {
   const { data: { session } } = await supabase.auth.getSession();
