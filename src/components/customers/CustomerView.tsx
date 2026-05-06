@@ -1,7 +1,8 @@
 import {
-  ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart,
-  Lightbulb, Users, Swords, Store, FileText, Tag, ChevronDown, ChevronRight,
-  TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt,
+  ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
+  Lightbulb, Users, Swords, Store, FileText, Tag, ChevronDown, ChevronRight, 
+  TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt, User,
+  ClipboardList,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
@@ -9,6 +10,7 @@ import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import type { CommercialEntityBase } from '../../types/commercialEntity';
+import { HatGlasses } from 'lucide-react';
 
 const BASE_URL = 'http://localhost:3001';
 
@@ -139,6 +141,30 @@ function getL1Label(l1Code: string, items: any[]): string {
   return l1Item ? l1Item.full_name : `Κατηγορία ${l1Code}`;
 }
 
+function CollapsibleSection({ title, icon, children, defaultCollapsed = false }: {
+  title: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  defaultCollapsed?: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  return (
+    <div className="bg-white rounded-xl shadow overflow-hidden">
+      <button
+        onClick={() => setCollapsed(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-base font-semibold text-slate-900">{title}</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
+      </button>
+      {!collapsed && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
+
 export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
@@ -180,7 +206,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [expandedDiscL1s, setExpandedDiscL1s] = useState<Set<string>>(new Set());
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
-  const docsRef = useRef<HTMLElement>(null);
+  const docsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     authedFetch('/api/categories')
@@ -440,52 +466,97 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
-      <header className="bg-gradient-to-r from-indigo-700 to-purple-800 text-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
-          {/* Top row */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <button onClick={onBack} className="text-white/80 hover:text-white shrink-0">
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-xs shrink-0">{customer.code}</span>
-              <h1 className="text-base font-bold truncate">{customer.name}</h1>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => {
-                    const el = docsRef.current;
-                    if (el) {
-                      const top = el.getBoundingClientRect().top + window.scrollY - 155;
-                      window.scrollTo({ top, behavior: 'smooth' });
-                    }
-                  }}
-                  title="Παραγγελίες & Τιμολόγια"
-                  className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
-                  <FileText className="w-4 h-4" />
-                </button>
-              <button onClick={() => setShowNewVisitDialog(true)} title="Νέα Επίσκεψη"
-                className="p-2 bg-green-500 hover:bg-green-600 rounded-lg transition-colors">
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          {/* Subtitle */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {(customer.city || customer.area) && (
-              <span className="text-white/60 text-xs">{customer.city}{customer.city && customer.area ? ', ' : ''}{customer.area}</span>
-            )}
-            {customer.afm && <span className="text-white/40 text-xs">· ΑΦΜ {customer.afm}</span>}
-            <span className="text-white/40 text-xs">· {SALES_PERIODS[salesPeriodIdx].label}</span>
-            
-          </div>
+      
+      <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
+
+        {/* Row 1: Back + New Visit */}
+        <div className="flex items-center justify-between">
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+          <button onClick={() => setShowNewVisitDialog(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
+            <Plus className="w-4 h-4" />
+            New Visit
+          </button>
         </div>
-      </header>
+
+        {/* Row 2: Code + Name */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-sm font-bold shrink-0">
+            {customer.code}
+          </span>
+          <h1 className="text-lg font-extrabold leading-tight">{customer.name}</h1>
+        </div>
+
+        {/* Row 3: Tags */}
+        <div className="flex flex-wrap gap-1.5">
+          {customer.type && (
+            <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.type}</span>
+          )}
+          {customer.group && (
+            <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.group}</span>
+          )}
+          {customer.city && (
+            <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs text-white/70">{customer.city}{customer.area ? `, ${customer.area}` : ''}</span>
+          )}
+        </div>
+
+        {/* Row 4: Show Details + Jump nav + Pending */}
+        <div className="flex items-center justify-between border-t border-white/10 pt-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Jump nav */}
+            <div className="flex items-center gap-1"> 
+              {[
+                { icon: <User className="w-4 h-4" />, id: 'section-customer', title: 'Στοιχεία Πελάτη' },
+                { icon: <HatGlassesIcon className="w-4 h-4" />, id: 'section-comp', title: 'Ανταγωνισμός' },
+                { icon: <BarChart2 className="w-4 h-4" />, id: 'section-sales', title: 'Πωλήσεις' },
+                { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', title: 'Επισκέψεις' },
+                { icon: <Lightbulb className="w-4 h-4" />, id: 'section-categories', title: 'Κατηγορίες' },
+              ].map((item, i) => (
+                <button key={i}
+                  onClick={() => {
+                    const el = document.getElementById(item.id);
+                    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' });
+                  }}
+                  title={item.title}
+                  className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                  {item.icon}
+                </button>
+              ))}
+              {/* Docs button separately — uses ref */}
+              <button
+                onClick={() => {
+                  if (docsRef.current) {
+                    const top = docsRef.current.getBoundingClientRect().top + window.scrollY - 170;
+                    window.scrollTo({ top, behavior: 'smooth' });
+                  }
+                }}
+                title="Έγγραφα"
+                className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                <FileText className="w-4 h-4" />
+              </button>
+            </div>
+
+          </div>
+
+          <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))}
+            className="text-xs bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-white focus:ring-2 focus:ring-white/30">
+            {SALES_PERIODS.map((p, i) => <option key={p.label} value={i} className="text-slate-800">{p.label}</option>)}
+          </select>
+        </div>
+
+      </div>
+    </header>
+    
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
 
         {/* CUSTOMER DETAILS */}
-        <section className="bg-white rounded-xl shadow p-5 border-l-4 border-indigo-500">
+        <section id="section-customer" className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center gap-2 mb-4"><Info className="w-5 h-5 text-indigo-600" /><h2 className="text-base font-semibold">Στοιχεία Πελάτη</h2></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-sm text-slate-700">
             <div className="space-y-2">
@@ -510,62 +581,67 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
         </section>
 
         {/* SHOP PROFILE + COMPETITOR INFO */}
-        {!profileLoading && (shopProfile || competitorInfo) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {shopProfile && (
-              <section className="bg-white rounded-xl shadow p-5 border-l-4 border-blue-400">
-                <div className="flex items-center gap-2 mb-3"><Store className="w-5 h-5 text-blue-500" /><h2 className="text-base font-semibold">Προφίλ Καταστήματος</h2></div>
-                <div className="space-y-2 text-sm text-slate-700">
-                  {shopProfile.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[shopProfile.shop_type] ?? shopProfile.shop_type}</span></div>}
-                  {shopProfile.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{shopProfile.number_of_employees}</span></div>}
-                  {shopProfile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-500">Εμβαδό</span><span className="font-medium">{shopProfile.shop_size_m2} m²</span></div>}
-                  {shopProfile.stock_behavior && <div className="flex justify-between"><span className="text-slate-500">Απόθεμα</span><span className="font-medium">{STOCK_BEHAVIOR_LABELS[shopProfile.stock_behavior] ?? shopProfile.stock_behavior}</span></div>}
-                </div>
-              </section>
-            )}
-            {competitorInfo && (
-              <section className="bg-white rounded-xl shadow p-5 border-l-4 border-orange-400">
-                <div className="flex items-center gap-2 mb-3"><Swords className="w-5 h-5 text-orange-500" /><h2 className="text-base font-semibold">Ανταγωνισμός</h2></div>
-                <div className="space-y-2 text-sm text-slate-700">
-                  {competitorInfo.main_competitor && <div className="flex justify-between"><span className="text-slate-500">Κύριος</span><span className="font-medium">{competitorInfo.main_competitor}</span></div>}
-                  {competitorInfo.other_competitors && <div className="flex justify-between"><span className="text-slate-500">Άλλοι</span><span className="font-medium">{competitorInfo.other_competitors}</span></div>}
-                  {competitorInfo.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-500">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(competitorInfo.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-                  {competitorInfo.competitor_strengths && <div><div className="text-slate-500 mb-1">Δυνατά σημεία</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.competitor_strengths}</div></div>}
-                  {competitorInfo.switch_reason && <div><div className="text-slate-500 mb-1">Λόγος αλλαγής</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.switch_reason}</div></div>}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-
-        {/* VISITS */}
-        <section className="bg-white rounded-xl shadow p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2"><Calendar className="w-5 h-5 text-purple-600" /><h2 className="text-base font-semibold">Επισκέψεις</h2></div>
-            {visits.length > 0 && <span className="text-xs text-slate-500">{visits.length} σύνολο</span>}
-          </div>
-          {visitsLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : visits.length === 0 ? (
-            <div className="text-sm text-slate-400 italic">Καμία επίσκεψη ακόμα</div>
-          ) : (
-            <div className="space-y-2">
-              {visits.slice(0, 5).map((v: any) => (
-                <div key={v.id} className="flex items-start justify-between py-2 border-b border-slate-50 last:border-0">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">{formatDate(v.visit_date)}</div>
-                    {v.notes && <div className="text-xs text-slate-500 mt-0.5">{v.notes}</div>}
-                    {v.visit_type && <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded mt-1 inline-block">{v.visit_type}</span>}
-                  </div>
-                  {v.owner_name && <span className="text-xs text-slate-400">{v.owner_name}</span>}
-                </div>
-              ))}
-              {visits.length > 5 && <div className="text-xs text-indigo-500 pt-1">+{visits.length - 5} ακόμα επισκέψεις</div>}
+        <section id="section-comp" className="bg-white rounded-xl shadow overflow-hidden">
+          {profileLoading ? (
+            <div className="px-5 py-4 text-sm text-slate-400">Φόρτωση...</div>
+          ) : (!shopProfile && !competitorInfo) ? (
+            <div className="px-5 py-4 flex items-center gap-2 text-sm text-slate-400">
+              <Store className="w-4 h-4 shrink-0" />
+              <span>Δεν υπάρχουν στοιχεία προφίλ ή ανταγωνισμού</span>
             </div>
+          ) : (
+            <CollapsibleSection
+              title="Προφίλ & Ανταγωνισμός"
+              icon={<Store className="w-5 h-5 text-blue-500" />}
+              defaultCollapsed={true}
+            >
+            <div className="space-y-4">
+              {shopProfile && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Store className="w-4 h-4 text-blue-500" />
+                    <span className="text-sm font-semibold text-slate-700">Προφίλ Καταστήματος</span>
+                  </div>
+                  <div className="space-y-2 text-sm text-slate-700">
+                    {shopProfile.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[shopProfile.shop_type] ?? shopProfile.shop_type}</span></div>}
+                    {shopProfile.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{shopProfile.number_of_employees}</span></div>}
+                    {shopProfile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-500">Εμβαδό</span><span className="font-medium">{shopProfile.shop_size_m2} m²</span></div>}
+                    {shopProfile.stock_behavior && <div className="flex justify-between"><span className="text-slate-500">Απόθεμα</span><span className="font-medium">{STOCK_BEHAVIOR_LABELS[shopProfile.stock_behavior] ?? shopProfile.stock_behavior}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              {shopProfile && competitorInfo && (
+                <div className="border-t border-slate-100" />
+              )}
+
+              {competitorInfo && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="w-4 h-4 text-orange-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 16.5a4.5 4.5 0 0 1-9 0V8a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1z"/>
+                      <path d="M22 16.5a4.5 4.5 0 0 1-9 0V8a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1z"/>
+                      <path d="M15 8a3 3 0 0 0-6 0"/>
+                    </svg>
+                    <span className="text-sm font-semibold text-slate-700">Ανταγωνισμός</span>
+                  </div>
+                  <div className="space-y-2 text-sm text-slate-700">
+                    {competitorInfo.main_competitor && <div className="flex justify-between"><span className="text-slate-500">Κύριος</span><span className="font-medium">{competitorInfo.main_competitor}</span></div>}
+                    {competitorInfo.other_competitors && <div className="flex justify-between"><span className="text-slate-500">Άλλοι</span><span className="font-medium">{competitorInfo.other_competitors}</span></div>}
+                    {competitorInfo.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-500">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(competitorInfo.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+                    {competitorInfo.competitor_strengths && <div><div className="text-slate-500 mb-1">Δυνατά σημεία</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.competitor_strengths}</div></div>}
+                    {competitorInfo.switch_reason && <div><div className="text-slate-500 mb-1">Λόγος αλλαγής</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.switch_reason}</div></div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CollapsibleSection>
           )}
         </section>
 
         {/* SALES ANALYSIS */}
-        <section className="bg-white rounded-xl shadow p-5">
-          <div className="flex items-center justify-between mb-4">
+        <section id="section-sales" className="bg-white rounded-xl shadow p-5">
+            <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 flex-wrap">
               <BarChart2 className="w-5 h-5 text-blue-600 shrink-0" />
               <h2 className="text-base font-semibold">Sales Analysis</h2>
@@ -599,6 +675,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                   )}
                 </div>
               </div>
+              
 
               {(() => {
                 const months = sales.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
@@ -645,6 +722,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                   </div>
                 );
               })()}
+              
 
               {/* SALES BY CATEGORY */}
               <div className="mt-5 pt-4 border-t border-slate-100">
@@ -778,8 +856,114 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
           )}
         </section>
 
+        
+
+        {/* VISITS */}
+        <section id="section-visits" className="bg-white rounded-xl shadow p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2"><Calendar className="w-5 h-5 text-purple-600" /><h2 className="text-base font-semibold">Επισκέψεις</h2></div>
+            {visits.length > 0 && <span className="text-xs text-slate-500">{visits.length} σύνολο</span>}
+          </div>
+          {visitsLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : visits.length === 0 ? (
+            <div className="text-sm text-slate-400 italic">Καμία επίσκεψη ακόμα</div>
+          ) : (
+            <div className="space-y-2">
+              {visits.slice(0, 5).map((v: any) => (
+                <div key={v.id} className="flex items-start justify-between py-2 border-b border-slate-50 last:border-0">
+                  <div>
+                    <div className="text-sm font-medium text-slate-700">{formatDate(v.visit_date)}</div>
+                    {v.notes && <div className="text-xs text-slate-500 mt-0.5">{v.notes}</div>}
+                    {v.visit_type && <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded mt-1 inline-block">{v.visit_type}</span>}
+                  </div>
+                  {v.owner_name && <span className="text-xs text-slate-400">{v.owner_name}</span>}
+                </div>
+              ))}
+              {visits.length > 5 && <div className="text-xs text-indigo-500 pt-1">+{visits.length - 5} ακόμα επισκέψεις</div>}
+            </div>
+          )}
+        </section>
+
+        {/* CATEGORY INTELLIGENCE */}
+        <section id="section-categories" className="bg-white rounded-xl shadow p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-2"><Lightbulb className="w-5 h-5 text-purple-600" /><h2 className="text-base font-semibold">Κατηγορίες που Συζητήθηκαν</h2></div>
+            {categories.length > 0 && (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{categories.length} κατηγορίες</span>
+                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">{totalDiscussions} αναφορές σύνολο</span>
+              </div>
+            )}
+          </div>
+          {categoriesLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : categories.length === 0 ? (
+            <div className="text-sm text-slate-400 italic">Καμία κατηγορία ακόμα</div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {CAT_FILTER_LABELS.map(f => (
+                  <button key={f.key} onClick={() => setCatFilter(f.key)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${catFilter === f.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-300 hover:border-purple-400'}`}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              {filteredGroups.length === 0 ? <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν κατηγορίες</div> : (
+                <div className="space-y-1">
+                  {filteredGroups.map(group => {
+                    const isExpanded = expandedDiscL1s.has(group.l1Code);
+                    const totalTimes = group.items.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
+                    const lastDate = group.items.map(c => c.last_discussed).filter(Boolean).sort().reverse()[0] ?? null;
+                    const l1Label = categoryMaster.get(group.l1Code) ?? getL1Label(group.l1Code, group.items);
+                    const badgeStyle = getDiscussionBadgeStyle(totalTimes);
+                    return (
+                      <div key={group.l1Code} className="rounded-lg border border-slate-100 overflow-hidden">
+                        <button onClick={() => setExpandedDiscL1s(prev => { const n = new Set(prev); n.has(group.l1Code) ? n.delete(group.l1Code) : n.add(group.l1Code); return n; })}
+                          className={`w-full flex items-center justify-between px-3 py-3 text-left transition-colors ${isExpanded ? 'bg-indigo-50 border-b border-indigo-100' : 'bg-white hover:bg-slate-50'}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {isExpanded ? <ChevronDown className="w-4 h-4 text-indigo-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono shrink-0">{group.l1Code}</span>
+                            <span className="text-sm font-medium text-slate-700 truncate">{l1Label}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span className="text-xs text-slate-400 hidden sm:block">{group.items.length} υποκατ.</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeStyle}`}>{totalTimes}×</span>
+                            {lastDate && <span className="text-xs text-slate-400">{formatDate(lastDate)}</span>}
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="divide-y divide-slate-50">
+                            {group.filtered.map(cat => {
+                              const n = cat.times_discussed ?? 0;
+                              return (
+                                <div key={`${cat.category_code}-${cat.subcategory_code ?? ''}`} className="flex items-center justify-between px-4 py-2.5 bg-white hover:bg-slate-50">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
+                                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-mono shrink-0 uppercase">{cat.short_name ?? cat.full_name?.slice(0, 6)}</span>
+                                    <div className="min-w-0">
+                                      <div className="text-sm text-slate-700 truncate">{cat.full_name}</div>
+                                      {cat.subcategory_code && <div className="text-xs text-slate-400 font-mono">{cat.subcategory_code}</div>}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getDiscussionBadgeStyle(n)}`}>{n}×</span>
+                                    {cat.last_discussed && <span className="text-xs text-slate-400">{formatDate(cat.last_discussed)}</span>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
         {/* ORDERS & INVOICES */}
-        <section ref={docsRef} className="bg-white rounded-xl shadow p-5">
+        
+        <div ref={docsRef} id="section-docs" className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-indigo-600" />
@@ -879,85 +1063,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               )}
             </>
           )}
-        </section>
-
-        {/* CATEGORY INTELLIGENCE */}
-        <section className="bg-white rounded-xl shadow p-5">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-2"><Lightbulb className="w-5 h-5 text-purple-600" /><h2 className="text-base font-semibold">Κατηγορίες που Συζητήθηκαν</h2></div>
-            {categories.length > 0 && (
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{categories.length} κατηγορίες</span>
-                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">{totalDiscussions} αναφορές σύνολο</span>
-              </div>
-            )}
-          </div>
-          {categoriesLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : categories.length === 0 ? (
-            <div className="text-sm text-slate-400 italic">Καμία κατηγορία ακόμα</div>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {CAT_FILTER_LABELS.map(f => (
-                  <button key={f.key} onClick={() => setCatFilter(f.key)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${catFilter === f.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-300 hover:border-purple-400'}`}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-              {filteredGroups.length === 0 ? <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν κατηγορίες</div> : (
-                <div className="space-y-1">
-                  {filteredGroups.map(group => {
-                    const isExpanded = expandedDiscL1s.has(group.l1Code);
-                    const totalTimes = group.items.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
-                    const lastDate = group.items.map(c => c.last_discussed).filter(Boolean).sort().reverse()[0] ?? null;
-                    const l1Label = categoryMaster.get(group.l1Code) ?? getL1Label(group.l1Code, group.items);
-                    const badgeStyle = getDiscussionBadgeStyle(totalTimes);
-                    return (
-                      <div key={group.l1Code} className="rounded-lg border border-slate-100 overflow-hidden">
-                        <button onClick={() => setExpandedDiscL1s(prev => { const n = new Set(prev); n.has(group.l1Code) ? n.delete(group.l1Code) : n.add(group.l1Code); return n; })}
-                          className={`w-full flex items-center justify-between px-3 py-3 text-left transition-colors ${isExpanded ? 'bg-indigo-50 border-b border-indigo-100' : 'bg-white hover:bg-slate-50'}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            {isExpanded ? <ChevronDown className="w-4 h-4 text-indigo-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono shrink-0">{group.l1Code}</span>
-                            <span className="text-sm font-medium text-slate-700 truncate">{l1Label}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            <span className="text-xs text-slate-400 hidden sm:block">{group.items.length} υποκατ.</span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeStyle}`}>{totalTimes}×</span>
-                            {lastDate && <span className="text-xs text-slate-400">{formatDate(lastDate)}</span>}
-                          </div>
-                        </button>
-                        {isExpanded && (
-                          <div className="divide-y divide-slate-50">
-                            {group.filtered.map(cat => {
-                              const n = cat.times_discussed ?? 0;
-                              return (
-                                <div key={`${cat.category_code}-${cat.subcategory_code ?? ''}`} className="flex items-center justify-between px-4 py-2.5 bg-white hover:bg-slate-50">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
-                                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-mono shrink-0 uppercase">{cat.short_name ?? cat.full_name?.slice(0, 6)}</span>
-                                    <div className="min-w-0">
-                                      <div className="text-sm text-slate-700 truncate">{cat.full_name}</div>
-                                      {cat.subcategory_code && <div className="text-xs text-slate-400 font-mono">{cat.subcategory_code}</div>}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getDiscussionBadgeStyle(n)}`}>{n}×</span>
-                                    {cat.last_discussed && <span className="text-xs text-slate-400">{formatDate(cat.last_discussed)}</span>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </section>
+        </div>
+        
       </main>
 
       <NewVisitDialog
