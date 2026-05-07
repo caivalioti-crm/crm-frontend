@@ -194,6 +194,16 @@ export function useDashboardFigma() {
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+  authedFetch('/api/erp/customers')
+    .then(res => {
+      const items = Array.isArray(res.items) ? res.items : [];
+      const mapped = items.map(mapErpCustomer);
+      console.log('mapped sample:', mapped.slice(0, 3).map((c: Customer) => ({ code: c.code, is_active: c.is_active })));
+      setCustomers(mapped);
+    })
+    .catch(console.error);
+}, []);
   /* ===================== FETCH SALES ===================== */
   const fetchSales = useCallback(async (period: Period) => {
     setSalesLoading(true);
