@@ -19,4 +19,5 @@ export type Customer = {
   shipmentName?: string;
   carrierName?: string;
   growth_pct?: number | null;
+  is_active?: boolean;
 };

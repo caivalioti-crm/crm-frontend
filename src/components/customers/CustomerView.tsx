@@ -35,7 +35,7 @@ export interface CustomerViewProps {
     contactName?: string; vatNumber?: string; createdDate?: string;
     lastVisitDate?: string; transportCompany?: string; transportMeans?: string;
     overallDiscount?: number; afm?: string; fax?: string; zip?: string;
-    shipmentName?: string; carrierName?: string;
+    shipmentName?: string; carrierName?: string; is_active?: boolean;
   };
   onBack: () => void;
 }
@@ -550,6 +550,12 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               {customer.code}
             </span>
             <h1 className="text-lg font-extrabold leading-tight">{customer.name}</h1>
+                    {/* INACTIVE BADGE */}
+            {customer.is_active === false && (
+              <span className="px-2 py-0.5 bg-amber-400 text-amber-900 text-xs font-semibold rounded-full shrink-0">
+                Inactive
+              </span>
+            )}
           </div>
 
           {/* Row 3: Tags */}

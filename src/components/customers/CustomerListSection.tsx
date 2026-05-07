@@ -78,7 +78,13 @@ export function CustomerListSection({
                     <h3 className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 break-words">
                       {customer.name}
                     </h3>
-                  </div>
+                  {/* INACTIVE BADGE */}
+                  {customer.is_active === false && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-300 text-xs font-medium rounded-full shrink-0">
+                      Inactive
+                    </span>
+                  )}
+                </div>
 
                   {/* Meta */}
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
