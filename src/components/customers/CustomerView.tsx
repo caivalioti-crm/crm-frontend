@@ -55,6 +55,19 @@ const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; ico
   credit:  { label: 'Πίστωση',    bg: 'bg-red-100',   text: 'text-red-700',   icon: Tag },
 };
 
+// ─── Date helpers — defined ONCE, used by both DOC_PERIODS and SALES_PERIODS ──
+const _now = new Date();
+// YTD ends at the last COMPLETED month (e.g. if today is May 7 → April = month 4)
+const _ytdMonth = _now.getMonth(); // 0-based: 0=Jan … 11=Dec; getMonth() gives PREVIOUS completed month when day<full month
+// e.g. in May (getMonth()=4): _ytdMonth = 4 → April (1-based: 4)
+const _ytdMonthStr = String(_ytdMonth).padStart(2, '0'); // "04"
+const _ytdLabel = new Date(_now.getFullYear(), _ytdMonth - 1, 1)
+  .toLocaleString('el-GR', { month: 'short' }); // "Απρ"
+// Last day of YTD month (handles 28/30/31 correctly)
+const _ytdDateTo   = new Date(_now.getFullYear(),     _ytdMonth, 0).toISOString().split('T')[0]; // e.g. "2026-04-30"
+const _ytdPrevTo   = new Date(_now.getFullYear() - 1, _ytdMonth, 0).toISOString().split('T')[0]; // e.g. "2025-04-30"
+const _ytdPrevMonthStr = _ytdMonthStr; // same month number, prior year
+
 const DOC_PERIODS = [
   { label: '2026 YTD', from: '2026-01-01', to: '2026-12-31' },
   { label: '2025',     from: '2025-01-01', to: '2025-12-31' },
@@ -62,20 +75,67 @@ const DOC_PERIODS = [
   { label: 'Όλα',      from: '2022-01-01', to: '2026-12-31' },
 ];
 
-const _now = new Date();
-const _curYearMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
-const _curMonthLabel = _now.toLocaleString('el-GR', { month: 'short' });
-
 const SALES_PERIODS = [
-  { label: 'Q1 2026',   from: '2026-01', to: '2026-03', prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025', dateFrom: '2026-01-01', dateTo: '2026-03-31', prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31' },
-  { label: 'Q2 2026',   from: '2026-04', to: '2026-06', prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025', dateFrom: '2026-04-01', dateTo: '2026-06-30', prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30' },
-  { label: `2026 YTD (έως ${_curMonthLabel})`, from: '2026-01', to: _curYearMonth, prevFrom: '2025-01', prevTo: `2025-${String(_now.getMonth() + 1).padStart(2, '0')}`, prevLabel: `Ιαν–${_curMonthLabel} 2025`, dateFrom: '2026-01-01', dateTo: `${_curYearMonth}-31`, prevDateFrom: '2025-01-01', prevDateTo: `2025-${String(_now.getMonth() + 1).padStart(2, '0')}-31` },
-  { label: '2025 Full', from: '2025-01', to: '2025-12', prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024',    dateFrom: '2025-01-01', dateTo: '2025-12-31', prevDateFrom: '2024-01-01', prevDateTo: '2024-12-31' },
-  { label: 'Q4 2025',   from: '2025-10', to: '2025-12', prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024', dateFrom: '2025-10-01', dateTo: '2025-12-31', prevDateFrom: '2024-10-01', prevDateTo: '2024-12-31' },
-  { label: 'Q3 2025',   from: '2025-07', to: '2025-09', prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024', dateFrom: '2025-07-01', dateTo: '2025-09-30', prevDateFrom: '2024-07-01', prevDateTo: '2024-09-30' },
-  { label: 'Q2 2025',   from: '2025-04', to: '2025-06', prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024', dateFrom: '2025-04-01', dateTo: '2025-06-30', prevDateFrom: '2024-04-01', prevDateTo: '2024-06-30' },
-  { label: 'Q1 2025',   from: '2025-01', to: '2025-03', prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024', dateFrom: '2025-01-01', dateTo: '2025-03-31', prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31' },
+  {
+    label: 'Q1 2026',
+    from: '2026-01', to: '2026-03',
+    prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025',
+    dateFrom: '2026-01-01', dateTo: '2026-03-31',
+    prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31',
+  },
+  {
+    label: 'Q2 2026',
+    from: '2026-04', to: '2026-06',
+    prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025',
+    dateFrom: '2026-04-01', dateTo: '2026-06-30',
+    prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30',
+  },
+  {
+    // FIX: both `to` and `prevTo` use identical _ytdMonthStr so the windows are symmetric
+    label: `2026 YTD (έως ${_ytdLabel})`,
+    from: '2026-01',       to: `2026-${_ytdMonthStr}`,       // e.g. 2026-04
+    prevFrom: '2025-01',   prevTo: `2025-${_ytdPrevMonthStr}`, // e.g. 2025-04  ← was wrong before
+    prevLabel: `Ιαν–${_ytdLabel} 2025`,
+    dateFrom: '2026-01-01', dateTo: _ytdDateTo,               // e.g. 2026-04-30
+    prevDateFrom: '2025-01-01', prevDateTo: _ytdPrevTo,       // e.g. 2025-04-30
+  },
+  {
+    label: '2025 Full',
+    from: '2025-01', to: '2025-12',
+    prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024',
+    dateFrom: '2025-01-01', dateTo: '2025-12-31',
+    prevDateFrom: '2024-01-01', prevDateTo: '2024-12-31',
+  },
+  {
+    label: 'Q4 2025',
+    from: '2025-10', to: '2025-12',
+    prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024',
+    dateFrom: '2025-10-01', dateTo: '2025-12-31',
+    prevDateFrom: '2024-10-01', prevDateTo: '2024-12-31',
+  },
+  {
+    label: 'Q3 2025',
+    from: '2025-07', to: '2025-09',
+    prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024',
+    dateFrom: '2025-07-01', dateTo: '2025-09-30',
+    prevDateFrom: '2024-07-01', prevDateTo: '2024-09-30',
+  },
+  {
+    label: 'Q2 2025',
+    from: '2025-04', to: '2025-06',
+    prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024',
+    dateFrom: '2025-04-01', dateTo: '2025-06-30',
+    prevDateFrom: '2024-04-01', prevDateTo: '2024-06-30',
+  },
+  {
+    label: 'Q1 2025',
+    from: '2025-01', to: '2025-03',
+    prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024',
+    dateFrom: '2025-01-01', dateTo: '2025-03-31',
+    prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31',
+  },
 ];
+
 
 function sumPeriod(sales: any[], fromMonth: string, toMonth: string): number {
   return sales.filter(s => s.month >= fromMonth && s.month <= toMonth).reduce((sum, s) => sum + (s.netamnt ?? 0), 0);
@@ -172,7 +232,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [visitsLoading, setVisitsLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
-  const [salesPeriodIdx, setSalesPeriodIdx] = useState(0);
+  const [salesPeriodIdx, setSalesPeriodIdx] = useState(2); // default to YTD (index 2)
   const [salesByCategory, setSalesByCategory] = useState<any[]>([]);
   const [salesByCategoryLoading, setSalesByCategoryLoading] = useState(true);
   const [balance, setBalance] = useState<{ balance: number; entries: any[] } | null>(null);
@@ -311,13 +371,13 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   }
 
   function fetchTopCust(categoryId: string) {
-  if (topCustData[categoryId] || topCustLoading.has(categoryId)) return;
-  const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
-  setTopCustLoading(prev => new Set(prev).add(categoryId));
-  authedFetch(`/api/erp/top-customers-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}&categoryId=${categoryId}`)
-    .then(data => setTopCustData(prev => ({ ...prev, [categoryId]: Array.isArray(data) ? data : [] })))
-    .catch(console.error)
-    .finally(() => setTopCustLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; }));
+    if (topCustData[categoryId] || topCustLoading.has(categoryId)) return;
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
+    setTopCustLoading(prev => new Set(prev).add(categoryId));
+    authedFetch(`/api/erp/top-customers-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}&categoryId=${categoryId}`)
+      .then(data => setTopCustData(prev => ({ ...prev, [categoryId]: Array.isArray(data) ? data : [] })))
+      .catch(console.error)
+      .finally(() => setTopCustLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; }));
   }
 
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
@@ -358,73 +418,73 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const filteredGroups = l1Groups.map(g => ({ ...g, filtered: g.items.filter(matchesFilter) })).filter(g => g.filtered.length > 0);
 
   function renderCategoryExpanded(catIdKey: string) {
-  const skus = skuData[catIdKey] ?? [];
-  const isLoadingSkus = skuLoading.has(catIdKey);
-  const areaRank = rankData[`${catIdKey}-area`];
-  const greeceRank = rankData[`${catIdKey}-greece`];
-  const isLoadingAreaRank = rankLoading.has(`${catIdKey}-area`);
-  const isLoadingGreeceRank = rankLoading.has(`${catIdKey}-greece`);
-  const topCusts = topCustData[catIdKey] ?? [];
-  const isLoadingTopCust = topCustLoading.has(catIdKey);
-  return (
-    <div className="bg-slate-50 border-t border-slate-100">
-      <div className="px-4 py-2 border-b border-slate-200">
-        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top SKUs</div>
-        {isLoadingSkus ? <div className="text-xs text-slate-400">Φόρτωση...</div> : skus.length === 0 ? (
-          <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν προϊόντα</div>
-        ) : (
-          <div className="space-y-1">
-            {skus.map((sku: any) => (
-              <div key={sku.mtrl_id} className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-mono text-slate-400 shrink-0">{sku.sku_code}</span>
-                  <span className="text-xs text-slate-600 truncate">{sku.sku_name}</span>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-2">
-                  <span className="text-xs text-slate-400">{Math.round(sku.qty)} τεμ.</span>
-                  <span className="text-xs font-semibold text-slate-700">{fmtEur(sku.revenue)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="px-4 py-2 border-b border-slate-200">
-        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top 10 Πελάτες</div>
-        {isLoadingTopCust ? <div className="text-xs text-slate-400">Φόρτωση...</div> : topCusts.length === 0 ? (
-          <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν πελάτες</div>
-        ) : (
-          <div className="space-y-1">
-            {topCusts.map((c: any, i: number) => (
-              <div key={c.customer_code} className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`text-xs font-bold w-5 shrink-0 text-center ${i < 3 ? 'text-amber-500' : 'text-slate-400'}`}>#{i + 1}</span>
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium text-slate-700 truncate">{c.customer_name}</div>
-                    <div className="text-xs text-slate-400">{c.city}</div>
+    const skus = skuData[catIdKey] ?? [];
+    const isLoadingSkus = skuLoading.has(catIdKey);
+    const areaRank = rankData[`${catIdKey}-area`];
+    const greeceRank = rankData[`${catIdKey}-greece`];
+    const isLoadingAreaRank = rankLoading.has(`${catIdKey}-area`);
+    const isLoadingGreeceRank = rankLoading.has(`${catIdKey}-greece`);
+    const topCusts = topCustData[catIdKey] ?? [];
+    const isLoadingTopCust = topCustLoading.has(catIdKey);
+    return (
+      <div className="bg-slate-50 border-t border-slate-100">
+        <div className="px-4 py-2 border-b border-slate-200">
+          <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top SKUs</div>
+          {isLoadingSkus ? <div className="text-xs text-slate-400">Φόρτωση...</div> : skus.length === 0 ? (
+            <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν προϊόντα</div>
+          ) : (
+            <div className="space-y-1">
+              {skus.map((sku: any) => (
+                <div key={sku.mtrl_id} className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-mono text-slate-400 shrink-0">{sku.sku_code}</span>
+                    <span className="text-xs text-slate-600 truncate">{sku.sku_name}</span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-2">
+                    <span className="text-xs text-slate-400">{Math.round(sku.qty)} τεμ.</span>
+                    <span className="text-xs font-semibold text-slate-700">{fmtEur(sku.revenue)}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <span className="text-xs text-slate-400">{Math.round(parseFloat(c.qty))} τεμ.</span>
-                  <span className="text-xs font-semibold text-slate-700">{fmtEur(parseFloat(c.revenue))}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="px-4 py-2 border-b border-slate-200">
+          <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Top 10 Πελάτες</div>
+          {isLoadingTopCust ? <div className="text-xs text-slate-400">Φόρτωση...</div> : topCusts.length === 0 ? (
+            <div className="text-xs text-slate-400 italic">Δεν βρέθηκαν πελάτες</div>
+          ) : (
+            <div className="space-y-1">
+              {topCusts.map((c: any, i: number) => (
+                <div key={c.customer_code} className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-xs font-bold w-5 shrink-0 text-center ${i < 3 ? 'text-amber-500' : 'text-slate-400'}`}>#{i + 1}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-slate-700 truncate">{c.customer_name}</div>
+                      <div className="text-xs text-slate-400">{c.city}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <span className="text-xs text-slate-400">{Math.round(parseFloat(c.qty))} τεμ.</span>
+                    <span className="text-xs font-semibold text-slate-700">{fmtEur(parseFloat(c.revenue))}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="px-4 py-2">
+          <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Κατάταξη</div>
+          {(isLoadingAreaRank || isLoadingGreeceRank) ? <div className="text-xs text-slate-400">Φόρτωση κατάταξης...</div> : (
+            <div className="flex gap-2">
+              <RankCard title={`Στην περιοχή (${customer.area ?? '—'})`} rank={areaRank?.rank ?? null} total={areaRank?.total_customers ?? null} percentile={areaRank?.percentile ?? null} revenue={areaRank?.revenue ?? null} />
+              <RankCard title="Στην Ελλάδα" rank={greeceRank?.rank ?? null} total={greeceRank?.total_customers ?? null} percentile={greeceRank?.percentile ?? null} revenue={greeceRank?.revenue ?? null} />
+            </div>
+          )}
+        </div>
       </div>
-      <div className="px-4 py-2">
-        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Κατάταξη</div>
-        {(isLoadingAreaRank || isLoadingGreeceRank) ? <div className="text-xs text-slate-400">Φόρτωση κατάταξης...</div> : (
-          <div className="flex gap-2">
-            <RankCard title={`Στην περιοχή (${customer.area ?? '—'})`} rank={areaRank?.rank ?? null} total={areaRank?.total_customers ?? null} percentile={areaRank?.percentile ?? null} revenue={areaRank?.revenue ?? null} />
-            <RankCard title="Στην Ελλάδα" rank={greeceRank?.rank ?? null} total={greeceRank?.total_customers ?? null} percentile={greeceRank?.percentile ?? null} revenue={greeceRank?.revenue ?? null} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+    );
+  }
 
   function renderDocLines(findoc: number, netamnt: number) {
     const lines = docLines[findoc];
@@ -468,48 +528,46 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     <div className="min-h-screen bg-slate-100 flex flex-col">
       
       <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
 
-        {/* Row 1: Back + New Visit */}
-        <div className="flex items-center justify-between">
-          <button onClick={onBack}
-            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </button>
-          <button onClick={() => setShowNewVisitDialog(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
-            <Plus className="w-4 h-4" />
-            New Visit
-          </button>
-        </div>
+          {/* Row 1: Back + New Visit */}
+          <div className="flex items-center justify-between">
+            <button onClick={onBack}
+              className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Dashboard
+            </button>
+            <button onClick={() => setShowNewVisitDialog(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
+              <Plus className="w-4 h-4" />
+              New Visit
+            </button>
+          </div>
 
-        {/* Row 2: Code + Name */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-sm font-bold shrink-0">
-            {customer.code}
-          </span>
-          <h1 className="text-lg font-extrabold leading-tight">{customer.name}</h1>
-        </div>
-
-        {/* Row 3: Tags */}
-        <div className="flex flex-wrap gap-1.5">
-          {customer.type && (
-            <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.type}</span>
-          )}
-          {customer.group && (
-            <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.group}</span>
-          )}
-          {customer.city && (
-            <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs text-white/70">{customer.city}{customer.area ? `, ${customer.area}` : ''}</span>
-          )}
-        </div>
-
-        {/* Row 4: Show Details + Jump nav + Pending */}
-        <div className="flex items-center justify-between border-t border-white/10 pt-2">
+          {/* Row 2: Code + Name */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Jump nav */}
-            <div className="flex items-center gap-1"> 
+            <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-sm font-bold shrink-0">
+              {customer.code}
+            </span>
+            <h1 className="text-lg font-extrabold leading-tight">{customer.name}</h1>
+          </div>
+
+          {/* Row 3: Tags */}
+          <div className="flex flex-wrap gap-1.5">
+            {customer.type && (
+              <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.type}</span>
+            )}
+            {customer.group && (
+              <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.group}</span>
+            )}
+            {customer.city && (
+              <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs text-white/70">{customer.city}{customer.area ? `, ${customer.area}` : ''}</span>
+            )}
+          </div>
+
+          {/* Row 4: Jump nav + Period selector */}
+          <div className="flex items-center justify-between border-t border-white/10 pt-2">
+            <div className="flex items-center gap-1">
               {[
                 { icon: <User className="w-4 h-4" />, id: 'section-customer', title: 'Στοιχεία Πελάτη' },
                 { icon: <HatGlassesIcon className="w-4 h-4" />, id: 'section-comp', title: 'Ανταγωνισμός' },
@@ -527,7 +585,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                   {item.icon}
                 </button>
               ))}
-              {/* Docs button separately — uses ref */}
               <button
                 onClick={() => {
                   if (docsRef.current) {
@@ -541,17 +598,14 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               </button>
             </div>
 
+            <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))}
+              className="text-xs bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-white focus:ring-2 focus:ring-white/30">
+              {SALES_PERIODS.map((p, i) => <option key={p.label} value={i} className="text-slate-800">{p.label}</option>)}
+            </select>
           </div>
 
-          <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))}
-            className="text-xs bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-white focus:ring-2 focus:ring-white/30">
-            {SALES_PERIODS.map((p, i) => <option key={p.label} value={i} className="text-slate-800">{p.label}</option>)}
-          </select>
         </div>
-
-      </div>
-    </header>
-    
+      </header>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
 
@@ -595,53 +649,49 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               icon={<Store className="w-5 h-5 text-blue-500" />}
               defaultCollapsed={true}
             >
-            <div className="space-y-4">
-              {shopProfile && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Store className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm font-semibold text-slate-700">Προφίλ Καταστήματος</span>
+              <div className="space-y-4">
+                {shopProfile && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Store className="w-4 h-4 text-blue-500" />
+                      <span className="text-sm font-semibold text-slate-700">Προφίλ Καταστήματος</span>
+                    </div>
+                    <div className="space-y-2 text-sm text-slate-700">
+                      {shopProfile.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[shopProfile.shop_type] ?? shopProfile.shop_type}</span></div>}
+                      {shopProfile.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{shopProfile.number_of_employees}</span></div>}
+                      {shopProfile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-500">Εμβαδό</span><span className="font-medium">{shopProfile.shop_size_m2} m²</span></div>}
+                      {shopProfile.stock_behavior && <div className="flex justify-between"><span className="text-slate-500">Απόθεμα</span><span className="font-medium">{STOCK_BEHAVIOR_LABELS[shopProfile.stock_behavior] ?? shopProfile.stock_behavior}</span></div>}
+                    </div>
                   </div>
-                  <div className="space-y-2 text-sm text-slate-700">
-                    {shopProfile.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[shopProfile.shop_type] ?? shopProfile.shop_type}</span></div>}
-                    {shopProfile.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{shopProfile.number_of_employees}</span></div>}
-                    {shopProfile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-500">Εμβαδό</span><span className="font-medium">{shopProfile.shop_size_m2} m²</span></div>}
-                    {shopProfile.stock_behavior && <div className="flex justify-between"><span className="text-slate-500">Απόθεμα</span><span className="font-medium">{STOCK_BEHAVIOR_LABELS[shopProfile.stock_behavior] ?? shopProfile.stock_behavior}</span></div>}
+                )}
+                {shopProfile && competitorInfo && <div className="border-t border-slate-100" />}
+                {competitorInfo && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <svg className="w-4 h-4 text-orange-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 16.5a4.5 4.5 0 0 1-9 0V8a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1z"/>
+                        <path d="M22 16.5a4.5 4.5 0 0 1-9 0V8a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1z"/>
+                        <path d="M15 8a3 3 0 0 0-6 0"/>
+                      </svg>
+                      <span className="text-sm font-semibold text-slate-700">Ανταγωνισμός</span>
+                    </div>
+                    <div className="space-y-2 text-sm text-slate-700">
+                      {competitorInfo.main_competitor && <div className="flex justify-between"><span className="text-slate-500">Κύριος</span><span className="font-medium">{competitorInfo.main_competitor}</span></div>}
+                      {competitorInfo.other_competitors && <div className="flex justify-between"><span className="text-slate-500">Άλλοι</span><span className="font-medium">{competitorInfo.other_competitors}</span></div>}
+                      {competitorInfo.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-500">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(competitorInfo.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+                      {competitorInfo.competitor_strengths && <div><div className="text-slate-500 mb-1">Δυνατά σημεία</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.competitor_strengths}</div></div>}
+                      {competitorInfo.switch_reason && <div><div className="text-slate-500 mb-1">Λόγος αλλαγής</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.switch_reason}</div></div>}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {shopProfile && competitorInfo && (
-                <div className="border-t border-slate-100" />
-              )}
-
-              {competitorInfo && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-4 h-4 text-orange-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 16.5a4.5 4.5 0 0 1-9 0V8a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1z"/>
-                      <path d="M22 16.5a4.5 4.5 0 0 1-9 0V8a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1z"/>
-                      <path d="M15 8a3 3 0 0 0-6 0"/>
-                    </svg>
-                    <span className="text-sm font-semibold text-slate-700">Ανταγωνισμός</span>
-                  </div>
-                  <div className="space-y-2 text-sm text-slate-700">
-                    {competitorInfo.main_competitor && <div className="flex justify-between"><span className="text-slate-500">Κύριος</span><span className="font-medium">{competitorInfo.main_competitor}</span></div>}
-                    {competitorInfo.other_competitors && <div className="flex justify-between"><span className="text-slate-500">Άλλοι</span><span className="font-medium">{competitorInfo.other_competitors}</span></div>}
-                    {competitorInfo.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-500">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(competitorInfo.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-                    {competitorInfo.competitor_strengths && <div><div className="text-slate-500 mb-1">Δυνατά σημεία</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.competitor_strengths}</div></div>}
-                    {competitorInfo.switch_reason && <div><div className="text-slate-500 mb-1">Λόγος αλλαγής</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.switch_reason}</div></div>}
-                  </div>
-                </div>
-              )}
-            </div>
-          </CollapsibleSection>
+                )}
+              </div>
+            </CollapsibleSection>
           )}
         </section>
 
         {/* SALES ANALYSIS */}
         <section id="section-sales" className="bg-white rounded-xl shadow p-5">
-            <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 flex-wrap">
               <BarChart2 className="w-5 h-5 text-blue-600 shrink-0" />
               <h2 className="text-base font-semibold">Sales Analysis</h2>
@@ -675,7 +725,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                   )}
                 </div>
               </div>
-              
 
               {(() => {
                 const months = sales.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
@@ -722,7 +771,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                   </div>
                 );
               })()}
-              
 
               {/* SALES BY CATEGORY */}
               <div className="mt-5 pt-4 border-t border-slate-100">
@@ -814,7 +862,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                                               return (
                                                 <div key={l3Key} className="bg-white">
                                                   <button onClick={() => { toggleL3(l3Key); if (!isL3Exp) handleExpandCategory(l3IdKey); }}
-                                                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
+                                                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
                                                     <div className="flex items-center gap-2 min-w-0">
                                                       <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
                                                       {isL3Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
@@ -855,8 +903,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             </>
           )}
         </section>
-
-        
 
         {/* VISITS */}
         <section id="section-visits" className="bg-white rounded-xl shadow p-5">
@@ -962,7 +1008,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
         </section>
 
         {/* ORDERS & INVOICES */}
-        
         <div ref={docsRef} id="section-docs" className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -1064,7 +1109,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             </>
           )}
         </div>
-        
+
       </main>
 
       <NewVisitDialog
