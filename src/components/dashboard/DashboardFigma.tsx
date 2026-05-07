@@ -216,10 +216,10 @@ export function DashboardFigma() {
 
     // CHANGE 1: Active/Inactive filter logic
     if (activeFilter === 'active') {
-      result = result.filter(c => c.is_active !== false);
+      result = result.filter(c => c.is_active === true || (c.is_active as any) === 'true');
     }
     if (activeFilter === 'inactive') {
-      result = result.filter(c => c.is_active === false);
+      result = result.filter(c => c.is_active === false || (c.is_active as any) === 'false');
     }
 
     const sorted = [...result].sort((a, b) => {
