@@ -234,6 +234,7 @@ export function DashboardFigma() {
     return sorted;
   }, [
     customers,
+    filteredCustomers,
     notVisitedDays,
     getDaysSinceVisit,
     salesFilter,

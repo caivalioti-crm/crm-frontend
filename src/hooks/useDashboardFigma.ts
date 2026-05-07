@@ -397,6 +397,7 @@ export function useDashboardFigma() {
   // array always contained ALL customers regardless of active filters — so
   // displayedCustomers in DashboardFigma.tsx never shrank when filters were applied.
   const customersWithGrowth = useMemo(() => {
+    console.log('sample is_active:', customers.slice(0, 5).map(c => ({ code: c.code, is_active: c.is_active })));
     const currentRevMap = new Map<string, number>();
     const compareRevMap = new Map<string, number>();
 
