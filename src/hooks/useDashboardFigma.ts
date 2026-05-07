@@ -185,19 +185,11 @@ export function useDashboardFigma() {
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    authedFetch('/api/erp/customers')
-      .then(res => {
-        const items = Array.isArray(res.items) ? res.items : [];
-        setCustomers(items.map(mapErpCustomer));
-      })
-      .catch(console.error);
-  }, []);
-
-  useEffect(() => {
+useEffect(() => {
   authedFetch('/api/erp/customers')
     .then(res => {
       const items = Array.isArray(res.items) ? res.items : [];
+      console.log('raw item sample:', items.slice(0, 3).map((r: any) => ({ code: r.code, is_active: r.is_active })));
       const mapped = items.map(mapErpCustomer);
       console.log('mapped sample:', mapped.slice(0, 3).map((c: Customer) => ({ code: c.code, is_active: c.is_active })));
       setCustomers(mapped);
@@ -206,28 +198,26 @@ export function useDashboardFigma() {
 }, []);
   /* ===================== FETCH SALES ===================== */
   const fetchSales = useCallback(async (period: Period) => {
-    setSalesLoading(true);
-    try {
-      const salesmanParam = repModeOverride && currentUser.salesman_code
-        ? `&salesmanCode=${currentUser.salesman_code}` : '';
-      const [current, compare, areas] = await Promise.all([
-        authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}`),
-        authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}`),
-        authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}`),
-      ]);
-      setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
-      setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
-      setAreaStats(Array.isArray(areas) ? areas : []);
-      setCityStats([]);
-      setSelectedGeoArea(null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSalesLoading(false);
-    }
-  }, [repModeOverride, currentUser.salesman_code]);
-
-  // FIX: depend on selectedPeriod (the derived object) — re-runs whenever selectedPeriodKey changes
+  setSalesLoading(true);
+  try {
+    const salesmanParam = repModeOverride && currentUser.salesman_code
+      ? `&salesmanCode=${currentUser.salesman_code}` : '';
+    const [current, compare, areas] = await Promise.all([
+      authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}`),
+      authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
+      authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}`),
+    ]);
+    setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
+    setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
+    setAreaStats(Array.isArray(areas) ? areas : []);
+    setCityStats([]);
+    setSelectedGeoArea(null);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setSalesLoading(false);
+  }
+}, [repModeOverride, currentUser.salesman_code]);
   useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
 
   /* ===================== FETCH SALES BY CATEGORY ===================== */
