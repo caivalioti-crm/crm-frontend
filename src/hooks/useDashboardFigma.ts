@@ -31,83 +31,63 @@ function toLocalDateString(d: Date): string {
 }
 
 // ─── Dynamic YTD (computed once at module load) ───────────────────────────────
-// YTD ends at the last COMPLETED month.
-// _now.getMonth() is 0-based; if today is May (getMonth()=4) we want April.
 // _ytdTo is the first day of the CURRENT month (exclusive upper bound):
-//   new Date(2026, 4, 1) → 2026-05-01  ✓  (means "up to but not including May")
+//   new Date(2026, 4, 1) → 2026-05-01  ✓
 const _now = new Date();
-const _ytdMonth1 = _now.getMonth(); // used as 1-based month for Date constructor trick
-const _ytdTo    = toLocalDateString(new Date(_now.getFullYear(),     _ytdMonth1, 1)); // "2026-05-01"
-const _ytdCmpTo = toLocalDateString(new Date(_now.getFullYear() - 1, _ytdMonth1, 1)); // "2025-05-01"
+const _ytdMonth1 = _now.getMonth();
+const _ytdTo    = toLocalDateString(new Date(_now.getFullYear(),     _ytdMonth1, 1));
+const _ytdCmpTo = toLocalDateString(new Date(_now.getFullYear() - 1, _ytdMonth1, 1));
 const _ytdLabel  = new Date(_now.getFullYear(), _ytdMonth1 - 1, 1)
-  .toLocaleString('en-GB', { month: 'short' }); // "Apr"
+  .toLocaleString('en-GB', { month: 'short' });
 
 export const PERIODS: Period[] = [
   {
     key: '2026-YTD',
     label: `2026 Year to Date (Jan–${_ytdLabel})`,
     shortLabel: `2026 YTD (έως ${_ytdLabel})`,
-    from: '2026-01-01',
-    to: _ytdTo,           // dynamic — last day of last completed month
-    compareFrom: '2025-01-01',
-    compareTo: _ytdCmpTo, // same month, prior year — always symmetric
+    from: '2026-01-01', to: _ytdTo,
+    compareFrom: '2025-01-01', compareTo: _ytdCmpTo,
     compareLabel: `vs Jan–${_ytdLabel} 2025`,
   },
   {
-    key: '2026-Q1',
-    label: 'Q1 2026 (Jan–Mar)',     shortLabel: 'Q1 2026',
+    key: '2026-Q1', label: 'Q1 2026 (Jan–Mar)', shortLabel: 'Q1 2026',
     from: '2026-01-01', to: '2026-03-31',
-    compareFrom: '2025-01-01', compareTo: '2025-03-31',
-    compareLabel: 'vs Q1 2025',
+    compareFrom: '2025-01-01', compareTo: '2025-03-31', compareLabel: 'vs Q1 2025',
   },
   {
-    key: '2026-Q2',
-    label: 'Q2 2026 (Apr–Jun)',     shortLabel: 'Q2 2026',
+    key: '2026-Q2', label: 'Q2 2026 (Apr–Jun)', shortLabel: 'Q2 2026',
     from: '2026-04-01', to: '2026-06-30',
-    compareFrom: '2025-04-01', compareTo: '2025-06-30',
-    compareLabel: 'vs Q2 2025',
+    compareFrom: '2025-04-01', compareTo: '2025-06-30', compareLabel: 'vs Q2 2025',
   },
   {
-    key: '2025-FULL',
-    label: '2025 Full Year',        shortLabel: '2025 Full Year',
+    key: '2025-FULL', label: '2025 Full Year', shortLabel: '2025 Full Year',
     from: '2025-01-01', to: '2025-12-31',
-    compareFrom: '2024-01-01', compareTo: '2024-12-31',
-    compareLabel: 'vs 2024',
+    compareFrom: '2024-01-01', compareTo: '2024-12-31', compareLabel: 'vs 2024',
   },
   {
-    key: '2025-Q4',
-    label: 'Q4 2025 (Oct–Dec)',     shortLabel: 'Q4 2025',
+    key: '2025-Q4', label: 'Q4 2025 (Oct–Dec)', shortLabel: 'Q4 2025',
     from: '2025-10-01', to: '2025-12-31',
-    compareFrom: '2024-10-01', compareTo: '2024-12-31',
-    compareLabel: 'vs Q4 2024',
+    compareFrom: '2024-10-01', compareTo: '2024-12-31', compareLabel: 'vs Q4 2024',
   },
   {
-    key: '2025-Q3',
-    label: 'Q3 2025 (Jul–Sep)',     shortLabel: 'Q3 2025',
+    key: '2025-Q3', label: 'Q3 2025 (Jul–Sep)', shortLabel: 'Q3 2025',
     from: '2025-07-01', to: '2025-09-30',
-    compareFrom: '2024-07-01', compareTo: '2024-09-30',
-    compareLabel: 'vs Q3 2024',
+    compareFrom: '2024-07-01', compareTo: '2024-09-30', compareLabel: 'vs Q3 2024',
   },
   {
-    key: '2025-Q2',
-    label: 'Q2 2025 (Apr–Jun)',     shortLabel: 'Q2 2025',
+    key: '2025-Q2', label: 'Q2 2025 (Apr–Jun)', shortLabel: 'Q2 2025',
     from: '2025-04-01', to: '2025-06-30',
-    compareFrom: '2024-04-01', compareTo: '2024-06-30',
-    compareLabel: 'vs Q2 2024',
+    compareFrom: '2024-04-01', compareTo: '2024-06-30', compareLabel: 'vs Q2 2024',
   },
   {
-    key: '2025-Q1',
-    label: 'Q1 2025 (Jan–Mar)',     shortLabel: 'Q1 2025',
+    key: '2025-Q1', label: 'Q1 2025 (Jan–Mar)', shortLabel: 'Q1 2025',
     from: '2025-01-01', to: '2025-03-31',
-    compareFrom: '2024-01-01', compareTo: '2024-03-31',
-    compareLabel: 'vs Q1 2024',
+    compareFrom: '2024-01-01', compareTo: '2024-03-31', compareLabel: 'vs Q1 2024',
   },
   {
-    key: '2024-FULL',
-    label: '2024 Full Year',        shortLabel: '2024 Full Year',
+    key: '2024-FULL', label: '2024 Full Year', shortLabel: '2024 Full Year',
     from: '2024-01-01', to: '2024-12-31',
-    compareFrom: '2023-01-01', compareTo: '2023-12-31',
-    compareLabel: 'vs 2023',
+    compareFrom: '2023-01-01', compareTo: '2023-12-31', compareLabel: 'vs 2023',
   },
 ];
 
@@ -145,19 +125,20 @@ export function useDashboardFigma() {
   const [topCustomersLoading, setTopCustomersLoading] = useState<Set<string>>(new Set());
 
   /* ===================== UI STATE ===================== */
-  // FIX: store period KEY (primitive string) — avoids object reference issues
-  // with controlled <select value={selectedPeriod.key}> causing stale renders.
   const [selectedPeriodKey, setSelectedPeriodKey] = useState<string>(PERIODS[0].key);
-
-  // Always derive the full object from the key — guaranteed to be in sync.
   const selectedPeriod: Period = useMemo(
     () => PERIODS.find(p => p.key === selectedPeriodKey) ?? PERIODS[0],
     [selectedPeriodKey]
   );
 
   const [selectedGeoArea, setSelectedGeoArea] = useState<string | null>(null);
-  const [selectedArea, setSelectedArea] = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
+
+  // MULTI-SELECT: areas and cities are string arrays
+  // Invariant: selectedAreas and selectedCities are mutually exclusive —
+  // selecting areas clears cities and vice versa.
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [showNewProspectDialog, setShowNewProspectDialog] = useState(false);
@@ -185,43 +166,42 @@ export function useDashboardFigma() {
       .catch(console.error);
   }, []);
 
-useEffect(() => {
-  authedFetch('/api/erp/customers')
-    .then(res => {
-      const items = Array.isArray(res.items) ? res.items : [];
-      console.log('raw item sample:', items.slice(0, 3).map((r: any) => ({ code: r.code, is_active: r.is_active })));
-      const mapped = items.map(mapErpCustomer);
-      console.log('mapped sample:', mapped.slice(0, 3).map((c: Customer) => ({ code: c.code, is_active: c.is_active })));
-      setCustomers(mapped);
-    })
-    .catch(console.error);
-}, []);
+  useEffect(() => {
+    authedFetch('/api/erp/customers')
+      .then(res => {
+        const items = Array.isArray(res.items) ? res.items : [];
+        setCustomers(items.map(mapErpCustomer));
+      })
+      .catch(console.error);
+  }, []);
+
   /* ===================== FETCH SALES ===================== */
   const fetchSales = useCallback(async (period: Period) => {
-  setSalesLoading(true);
-  try {
-    const salesmanParam = repModeOverride && currentUser.salesman_code
-      ? `&salesmanCode=${currentUser.salesman_code}` : '';
-    const [current, compare, areas] = await Promise.all([
-      authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}`),
-      authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
-      authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}`),
-    ]);
-    setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
-    setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
-    setAreaStats(Array.isArray(areas) ? areas : []);
-    setCityStats([]);
-    setSelectedGeoArea(null);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setSalesLoading(false);
-  }
-}, [repModeOverride, currentUser.salesman_code]);
+    setSalesLoading(true);
+    try {
+      const salesmanParam = repModeOverride && currentUser.salesman_code
+        ? `&salesmanCode=${currentUser.salesman_code}` : '';
+      const [current, compare, areas] = await Promise.all([
+        authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}`),
+        authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
+        authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}`),
+      ]);
+      setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
+      setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
+      setAreaStats(Array.isArray(areas) ? areas : []);
+      setCityStats([]);
+      setSelectedGeoArea(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSalesLoading(false);
+    }
+  }, [repModeOverride, currentUser.salesman_code]);
+
   useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
 
   /* ===================== FETCH SALES BY CATEGORY ===================== */
-  const fetchSalesByCategory = useCallback(async (period: Period, area: string, city: string) => {
+  const fetchSalesByCategory = useCallback(async (period: Period, areas: string[], cities: string[]) => {
     setSalesByCategoryLoading(true);
     setSalesByCategory([]);
     setDashboardSkuData({});
@@ -231,8 +211,9 @@ useEffect(() => {
         from: period.from, to: period.to,
         prevFrom: period.compareFrom, prevTo: period.compareTo,
       });
-      if (area) params.set('area', area);
-      if (city) params.set('city', city);
+      // Backend supports single area/city — pass first selected only
+      if (areas.length === 1) params.set('area', areas[0]);
+      if (cities.length === 1) params.set('city', cities[0]);
       if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
       const data = await authedFetch(`/api/erp/sales-by-category?${params.toString()}`);
       setSalesByCategory(data.grouped ?? []);
@@ -245,24 +226,24 @@ useEffect(() => {
 
   useEffect(() => {
     if (salesByCategoryExpanded) {
-      fetchSalesByCategory(selectedPeriod, selectedArea, selectedCity);
+      fetchSalesByCategory(selectedPeriod, selectedAreas, selectedCities);
     }
-  }, [selectedPeriod, selectedArea, selectedCity, salesByCategoryExpanded, repModeOverride, fetchSalesByCategory]);
+  }, [selectedPeriod, selectedAreas, selectedCities, salesByCategoryExpanded, repModeOverride, fetchSalesByCategory]);
 
   const expandSalesByCategory = useCallback(() => {
     if (!FULL_ACCESS_ROLES.includes(currentUser.role)) return;
     setSalesByCategoryExpanded(true);
     if (salesByCategory.length === 0) {
-      fetchSalesByCategory(selectedPeriod, selectedArea, selectedCity);
+      fetchSalesByCategory(selectedPeriod, selectedAreas, selectedCities);
     }
-  }, [currentUser.role, salesByCategory.length, selectedPeriod, selectedArea, selectedCity, fetchSalesByCategory]);
+  }, [currentUser.role, salesByCategory.length, selectedPeriod, selectedAreas, selectedCities, fetchSalesByCategory]);
 
   /* ===================== FETCH SKUs ===================== */
   const fetchDashboardSkus = useCallback(async (categoryId: string) => {
     if (dashboardSkuData[categoryId] || dashboardSkuLoading.has(categoryId)) return;
     const params = new URLSearchParams({ from: selectedPeriod.from, to: selectedPeriod.to });
-    if (selectedArea) params.set('area', selectedArea);
-    if (selectedCity) params.set('city', selectedCity);
+    if (selectedAreas.length === 1) params.set('area', selectedAreas[0]);
+    if (selectedCities.length === 1) params.set('city', selectedCities[0]);
     if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
     setDashboardSkuLoading(prev => new Set(prev).add(categoryId));
     try {
@@ -273,7 +254,7 @@ useEffect(() => {
     } finally {
       setDashboardSkuLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
     }
-  }, [selectedPeriod, selectedArea, selectedCity, dashboardSkuData, dashboardSkuLoading, repModeOverride, currentUser.salesman_code]);
+  }, [selectedPeriod, selectedAreas, selectedCities, dashboardSkuData, dashboardSkuLoading, repModeOverride, currentUser.salesman_code]);
 
   /* ===================== FETCH TOP CUSTOMERS ===================== */
   const fetchTopCustomers = useCallback(async (categoryId: string) => {
@@ -283,8 +264,8 @@ useEffect(() => {
       prevFrom: selectedPeriod.compareFrom, prevTo: selectedPeriod.compareTo,
       categoryId,
     });
-    if (selectedArea) params.set('area', selectedArea);
-    if (selectedCity) params.set('city', selectedCity);
+    if (selectedAreas.length === 1) params.set('area', selectedAreas[0]);
+    if (selectedCities.length === 1) params.set('city', selectedCities[0]);
     if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
     setTopCustomersLoading(prev => new Set(prev).add(categoryId));
     try {
@@ -295,13 +276,32 @@ useEffect(() => {
     } finally {
       setTopCustomersLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
     }
-  }, [selectedPeriod, selectedArea, selectedCity, topCustomersData, topCustomersLoading, repModeOverride, currentUser.salesman_code]);
+  }, [selectedPeriod, selectedAreas, selectedCities, topCustomersData, topCustomersLoading, repModeOverride, currentUser.salesman_code]);
 
   /* ===================== PERIOD SETTER ===================== */
-  // Accepts a key string from <select onChange={e => setSelectedPeriod(e.target.value)}>
   const setSelectedPeriod = useCallback((periodKey: string) => {
     setSelectedPeriodKey(periodKey);
   }, []);
+
+  /* ===================== MULTI-SELECT TOGGLES ===================== */
+  // Toggle an area. Selecting areas always clears cities.
+  const toggleArea = useCallback((area: string) => {
+    setSelectedAreas(prev =>
+      prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
+    );
+    setSelectedCities([]);
+  }, []);
+
+  // Toggle a city. Selecting cities always clears areas.
+  const toggleCity = useCallback((city: string) => {
+    setSelectedCities(prev =>
+      prev.includes(city) ? prev.filter(c => c !== city) : [...prev, city]
+    );
+    setSelectedAreas([]);
+  }, []);
+
+  const clearAreas = useCallback(() => { setSelectedAreas([]); setSelectedCities([]); }, []);
+  const clearCities = useCallback(() => setSelectedCities([]), []);
 
   /* ===================== GEO DRILL-DOWN ===================== */
   const drillDownToArea = useCallback(async (area: string) => {
@@ -351,18 +351,18 @@ useEffect(() => {
   const geoFilteredSales = useMemo(() => scopedSales.filter(s => {
     const c = customerByTrdrId.get(String(s.customerCode));
     if (!c) return false;
-    if (selectedArea && c.area !== selectedArea) return false;
-    if (selectedCity && c.city !== selectedCity) return false;
+    if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
+    if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
     return true;
-  }), [scopedSales, customerByTrdrId, selectedArea, selectedCity]);
+  }), [scopedSales, customerByTrdrId, selectedAreas, selectedCities]);
 
   const geoFilteredCompareSales = useMemo(() => scopedCompareSales.filter(s => {
     const c = customerByTrdrId.get(String(s.customerCode));
     if (!c) return false;
-    if (selectedArea && c.area !== selectedArea) return false;
-    if (selectedCity && c.city !== selectedCity) return false;
+    if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
+    if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
     return true;
-  }), [scopedCompareSales, customerByTrdrId, selectedArea, selectedCity]);
+  }), [scopedCompareSales, customerByTrdrId, selectedAreas, selectedCities]);
 
   /* ===================== KPIs ===================== */
   const totalRevenue   = useMemo(() => geoFilteredSales.reduce((sum, s) => sum + s.netAmount, 0), [geoFilteredSales]);
@@ -372,18 +372,24 @@ useEffect(() => {
 
   /* ===================== GEO OPTIONS ===================== */
   const areas = useMemo(() => Array.from(new Set(scopedCustomers.map(c => c.area))).sort(), [scopedCustomers]);
+
+  // Cities = union of cities from all selected areas (empty if no areas selected)
   const cities = useMemo(() => {
-    if (!selectedArea) return [];
-    return Array.from(new Set(scopedCustomers.filter(c => c.area === selectedArea).map(c => c.city))).sort();
-  }, [scopedCustomers, selectedArea]);
+    if (selectedAreas.length === 0) return [];
+    return Array.from(new Set(
+      scopedCustomers
+        .filter(c => selectedAreas.includes(c.area))
+        .map(c => c.city)
+    )).sort();
+  }, [scopedCustomers, selectedAreas]);
 
   /* ===================== FILTERED CUSTOMERS (geo + search) ===================== */
   const filteredCustomers = useMemo(() => scopedCustomers.filter(c => {
-    if (selectedArea && c.area !== selectedArea) return false;
-    if (selectedCity && c.city !== selectedCity) return false;
+    if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
+    if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
     if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase()) && !c.code.includes(searchQuery)) return false;
     return true;
-  }), [scopedCustomers, selectedArea, selectedCity, searchQuery]);
+  }), [scopedCustomers, selectedAreas, selectedCities, searchQuery]);
 
   const customersWithSalesSet = useMemo(
     () => new Set(geoFilteredSales.map(s => String(s.customerCode))),
@@ -391,13 +397,7 @@ useEffect(() => {
   );
 
   /* ===================== CUSTOMERS WITH GROWTH ===================== */
-  // FIX: map over filteredCustomers (not scopedCustomers) so that area/city/search
-  // filters propagate all the way to the customer list rendered in the dashboard.
-  // Previously this mapped over scopedCustomers, meaning the exported `customers`
-  // array always contained ALL customers regardless of active filters — so
-  // displayedCustomers in DashboardFigma.tsx never shrank when filters were applied.
   const customersWithGrowth = useMemo(() => {
-    console.log('sample is_active:', customers.slice(0, 5).map(c => ({ code: c.code, is_active: c.is_active })));
     const currentRevMap = new Map<string, number>();
     const compareRevMap = new Map<string, number>();
 
@@ -430,15 +430,21 @@ useEffect(() => {
 
   /* ===================== EXPORT ===================== */
   return {
-    customers: customersWithGrowth,  // already filtered by area/city/search
+    customers: customersWithGrowth,
     customersTotal: scopedCustomers.length,
     totalRevenue, compareRevenue, revenueGrowth, customersWithSales,
     salesLoading, areaStats, cityStats, cityLoading,
     selectedGeoArea, drillDownToArea, backToAreas,
     selectedPeriod, setSelectedPeriod,
     areas, cities,
-    selectedArea, setSelectedArea,
-    selectedCity, setSelectedCity,
+    // Multi-select
+    selectedAreas, selectedCities,
+    toggleArea, toggleCity, clearAreas, clearCities,
+    // Legacy single-string compatibility (for components that still use selectedArea/selectedCity)
+    selectedArea: selectedAreas[0] ?? '',
+    selectedCity: selectedCities[0] ?? '',
+    setSelectedArea: (a: string) => a ? setSelectedAreas([a]) : setSelectedAreas([]),
+    setSelectedCity: (c: string) => c ? setSelectedCities([c]) : setSelectedCities([]),
     searchQuery, setSearchQuery,
     categoryMaster,
     filteredCustomers,

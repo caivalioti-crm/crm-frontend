@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { User, TrendingUp, TrendingDown, LogOut, MapPin, Users, UserPlus, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma, PERIODS } from '../../hooks/useDashboardFigma';
@@ -20,30 +20,123 @@ const NOT_VISITED_OPTIONS = [
 ];
 
 const DEFAULT_VISIBLE_ITEMS = 6;
+const LONG_PRESS_MS = 1500;
 
-function ExpandableFilterGroup({ label, selected, items, onSelect, onClear }: {
-  label: string; selected: string; items: string[];
-  onSelect: (val: string) => void; onClear: () => void;
+// ─── Multi-select filter group with long-press support ────────────────────────
+// Single click: select only this item (exclusive).
+// Long press (1.5s): enter multi-select mode, then subsequent clicks toggle items.
+// "All" always clears selection and exits multi-select mode.
+function MultiSelectFilterGroup({
+  label,
+  selected,       // currently selected items
+  items,
+  onToggle,       // toggle one item (multi-select aware)
+  onClear,        // clear all
+}: {
+  label: string;
+  selected: string[];
+  items: string[];
+  onToggle: (item: string, multi: boolean) => void;
+  onClear: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [multiMode, setMultiMode] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+
   const visibleItems = expanded ? items : items.slice(0, DEFAULT_VISIBLE_ITEMS);
   const hasMore = items.length > DEFAULT_VISIBLE_ITEMS;
+
+  const handlePointerDown = useCallback((item: string) => {
+    didLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      setMultiMode(true);
+      // Add this item to selection without clearing others
+      onToggle(item, true);
+    }, LONG_PRESS_MS);
+  }, [onToggle]);
+
+  const handlePointerUp = useCallback(() => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }, []);
+
+  const handleClick = useCallback((item: string) => {
+    if (didLongPress.current) return; // already handled by long press
+    if (multiMode) {
+      onToggle(item, true);
+    } else {
+      // Single click: select exclusively (clear others)
+      onToggle(item, false);
+    }
+  }, [multiMode, onToggle]);
+
+  const handleClear = useCallback(() => {
+    setMultiMode(false);
+    onClear();
+  }, [onClear]);
+
+  const selectedLabel = selected.length === 0
+    ? 'All'
+    : selected.length === 1
+    ? selected[0]
+    : `${selected.length} selected`;
+
   return (
     <div>
-      <div className="text-xs font-medium text-slate-500 mb-2">
-        {label}: <span className="text-slate-900">{selected || 'All'}</span>
+      <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-2">
+        {label}: <span className="text-slate-900">{selectedLabel}</span>
+        {multiMode && (
+          <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 text-xs rounded-full font-medium">
+            Multi-select
+          </span>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
-        <button onClick={onClear} className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${!selected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>All</button>
-        {visibleItems.map(item => (
-          <button key={item} onClick={() => onSelect(item)} className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${selected === item ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>{item}</button>
-        ))}
+        <button
+          onClick={handleClear}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+            selected.length === 0 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+          }`}
+        >
+          All
+        </button>
+        {visibleItems.map(item => {
+          const isSelected = selected.includes(item);
+          return (
+            <button
+              key={item}
+              onPointerDown={() => handlePointerDown(item)}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              onClick={() => handleClick(item)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors select-none ${
+                isSelected
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+              }`}
+            >
+              {item}
+              {isSelected && multiMode && (
+                <span className="ml-1 text-white/70">✓</span>
+              )}
+            </button>
+          );
+        })}
         {hasMore && (
-          <button onClick={() => setExpanded(v => !v)} className="px-3 py-1.5 rounded-lg text-sm font-medium border border-dashed border-slate-400 text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors">
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-dashed border-slate-400 text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+          >
             {expanded ? 'Show less' : `+${items.length - DEFAULT_VISIBLE_ITEMS} more`}
           </button>
         )}
       </div>
+      {multiMode && (
+        <p className="text-xs text-slate-400 mt-1.5">
+          Long press to add more • <button onClick={() => setMultiMode(false)} className="text-indigo-500 hover:underline">Exit multi-select</button>
+        </p>
+      )}
     </div>
   );
 }
@@ -150,7 +243,9 @@ export function DashboardFigma() {
     customers, customersTotal, totalRevenue, compareRevenue, revenueGrowth,
     customersWithSales, salesLoading, areaStats, cityStats, cityLoading,
     selectedGeoArea, drillDownToArea, backToAreas, selectedPeriod, setSelectedPeriod,
-    areas, cities, selectedArea, setSelectedArea, selectedCity, setSelectedCity,
+    areas, cities,
+    selectedAreas, selectedCities, toggleArea, toggleCity, clearAreas, clearCities,
+    setSelectedArea, setSelectedCity,
     searchQuery, setSearchQuery, filteredCustomers, getDaysSinceVisit,
     showNewVisitDialog, setShowNewVisitDialog, showNewProspectDialog, setShowNewProspectDialog,
     currentUser, categoryMaster, customersWithSalesSet,
@@ -174,7 +269,6 @@ export function DashboardFigma() {
   const [salesFilter, setSalesFilter] = useState<'all' | 'with' | 'without'>('all');
   const [customerSortMode, setCustomerSortMode] = useState<CustomerSortMode>('name');
   const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
-  // CHANGE 1: Active/Inactive filter state
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
@@ -197,14 +291,12 @@ export function DashboardFigma() {
     if (notVisitedDays) {
       result = result.filter(c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays);
     }
-
     if (salesFilter === 'with') {
       result = result.filter(c => customersWithSalesSet.has(String(c.trdr_id)));
     }
     if (salesFilter === 'without') {
       result = result.filter(c => !customersWithSalesSet.has(String(c.trdr_id)));
     }
-
     if (performanceFilter !== 'all') {
       result = result.filter(c => {
         const g = Number(c.growth_pct);
@@ -213,8 +305,6 @@ export function DashboardFigma() {
         return true;
       });
     }
-
-    // CHANGE 1: Active/Inactive filter logic
     if (activeFilter === 'active') {
       result = result.filter(c => c.is_active === true || (c.is_active as any) === 'true');
     }
@@ -234,14 +324,9 @@ export function DashboardFigma() {
     return sorted;
   }, [
     customers,
-    filteredCustomers,
-    notVisitedDays,
-    getDaysSinceVisit,
-    salesFilter,
-    customersWithSalesSet,
-    customerSortMode,
-    performanceFilter,
-    activeFilter,
+    notVisitedDays, getDaysSinceVisit,
+    salesFilter, customersWithSalesSet,
+    customerSortMode, performanceFilter, activeFilter,
   ]);
 
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
@@ -250,18 +335,43 @@ export function DashboardFigma() {
 
   const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'exec';
 
-  // CHANGE 3: Clear all filters helpers
-  const hasActiveFilters = !!(selectedArea || selectedCity || notVisitedDays || searchQuery || salesFilter !== 'all' || performanceFilter !== 'all' || activeFilter !== 'all');
+  const hasActiveFilters = !!(selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays || searchQuery || salesFilter !== 'all' || performanceFilter !== 'all' || activeFilter !== 'all');
 
   function clearAllFilters() {
-    setSelectedArea('');
-    setSelectedCity('');
+    clearAreas();
+    clearCities();
     setNotVisitedDays(null);
     setSearchQuery('');
     setSalesFilter('all');
     setPerformanceFilter('all');
     setActiveFilter('all');
   }
+
+  // Handler for area toggle — supports single and multi select
+  const handleAreaToggle = useCallback((area: string, multi: boolean) => {
+    if (multi) {
+      toggleArea(area);
+    } else {
+      // Single click: select only this area (exclusive)
+      setSelectedArea(area);
+      clearCities();
+    }
+  }, [toggleArea, setSelectedArea, clearCities]);
+
+  // Handler for city toggle — supports single and multi select
+  const handleCityToggle = useCallback((city: string, multi: boolean) => {
+    if (multi) {
+      toggleCity(city);
+    } else {
+      setSelectedCity(city);
+    }
+  }, [toggleCity, setSelectedCity]);
+
+  // Filtered area stats — only show selected areas when filter is active
+  const filteredAreaStats = useMemo(() => {
+    if (selectedAreas.length === 0) return areaStats;
+    return areaStats.filter(a => selectedAreas.includes(a.area));
+  }, [areaStats, selectedAreas]);
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -270,12 +380,7 @@ export function DashboardFigma() {
       <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white sticky top-0 z-50 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <div className="shrink-0 cursor-pointer"
-                  onClick={() => {
-                    setSelectedCustomer(null);
-                    setSelectedProspect(null);
-                  }}
-                >
+            <div className="shrink-0 cursor-pointer" onClick={() => { setSelectedCustomer(null); setSelectedProspect(null); }}>
               <h1 className="text-lg font-extrabold leading-tight">Aivaliotis CRM</h1>
               <p className="text-blue-200 text-xs">Sales Representative Dashboard</p>
             </div>
@@ -317,7 +422,6 @@ export function DashboardFigma() {
                   {icon}
                 </button>
               ))}
-            {/* CHANGE 3: Clear filters button in header nav */}
             {hasActiveFilters && (
               <button onClick={clearAllFilters}
                 className="flex items-center gap-1.5 px-3 py-2 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors text-white text-sm font-medium ml-auto">
@@ -327,7 +431,7 @@ export function DashboardFigma() {
           </div>
 
           {/* Context bar */}
-          {(selectedArea || selectedCity || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all' || activeFilter !== 'all') && (
+          {(selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all' || activeFilter !== 'all') && (
             <div className="flex items-center gap-1.5 border-t border-white/10 pt-1.5 flex-wrap">
               {selectedCustomer ? (
                 <>
@@ -344,23 +448,23 @@ export function DashboardFigma() {
                 </>
               ) : (
                 <>
-                  {(selectedArea || selectedCity || notVisitedDays || searchQuery || repModeOverride || salesFilter !== 'all' || activeFilter !== 'all') && (
-                    <span className="text-white/40 text-xs">Φίλτρα:</span>
-                  )}
+                  <span className="text-white/40 text-xs">Φίλτρα:</span>
                   {repModeOverride && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">Οι πελάτες μου</span>}
-                  {selectedArea && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">{selectedArea}{selectedCity && ` › ${selectedCity}`}</span>}
+                  {selectedAreas.length > 0 && (
+                    <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">
+                      {selectedAreas.length === 1 ? selectedAreas[0] : `${selectedAreas.length} areas`}
+                      {selectedCities.length > 0 && ` › ${selectedCities.length === 1 ? selectedCities[0] : `${selectedCities.length} cities`}`}
+                    </span>
+                  )}
+                  {selectedCities.length > 0 && selectedAreas.length === 0 && (
+                    <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">
+                      {selectedCities.length === 1 ? selectedCities[0] : `${selectedCities.length} cities`}
+                    </span>
+                  )}
                   {notVisitedDays && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">Δεν επισκέφθηκε {notVisitedDays}+ ημέρες</span>}
                   {searchQuery && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">"{searchQuery}"</span>}
-                  {salesFilter !== 'all' && (
-                    <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">
-                      {salesFilter === 'with' ? 'Με πωλήσεις' : 'Χωρίς πωλήσεις'}
-                    </span>
-                  )}
-                  {activeFilter !== 'all' && (
-                    <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">
-                      {activeFilter === 'active' ? 'Active' : 'Inactive'}
-                    </span>
-                  )}
+                  {salesFilter !== 'all' && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">{salesFilter === 'with' ? 'Με πωλήσεις' : 'Χωρίς πωλήσεις'}</span>}
+                  {activeFilter !== 'all' && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">{activeFilter === 'active' ? 'Active' : 'Inactive'}</span>}
                   <span className="text-white/40 text-xs ml-1">{selectedPeriod.shortLabel}</span>
                 </>
               )}
@@ -387,10 +491,12 @@ export function DashboardFigma() {
                     <select value={selectedPeriod.key} onChange={e => setSelectedPeriod(e.target.value)} className="text-sm font-medium text-blue-600 bg-transparent border-none outline-none cursor-pointer">
                       {PERIODS.map(p => <option key={p.key} value={p.key}>{p.shortLabel}</option>)}
                     </select>
-                    {selectedArea && (
+                    {selectedAreas.length > 0 && (
                       <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />{selectedArea}{selectedCity && ` › ${selectedCity}`}
-                        <button onClick={() => { setSelectedArea(''); setSelectedCity(''); }} className="ml-1 hover:text-indigo-900">×</button>
+                        <MapPin className="w-3 h-3" />
+                        {selectedAreas.length === 1 ? selectedAreas[0] : `${selectedAreas.length} areas`}
+                        {selectedCities.length > 0 && ` › ${selectedCities.length === 1 ? selectedCities[0] : `${selectedCities.length} cities`}`}
+                        <button onClick={clearAllFilters} className="ml-1 hover:text-indigo-900">×</button>
                       </span>
                     )}
                     {notVisitedDays && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">Not visited {notVisitedDays}+ days</span>}
@@ -428,9 +534,16 @@ export function DashboardFigma() {
               <section id="section-geo" className="bg-white rounded-xl shadow p-4">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-3 flex-wrap">
-                    {/* CHANGE 2: Removed "Filtered: AREA" label */}
                     <h2 className="text-base font-semibold text-slate-900">{selectedGeoArea ? 'Performance by City' : 'Performance by Area'}</h2>
                     {selectedGeoArea && <span className="text-sm font-medium text-indigo-600">{selectedGeoArea}</span>}
+                    {/* Filter label restored */}
+                    {selectedAreas.length > 0 && !selectedGeoArea && (
+                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {selectedAreas.length === 1 ? selectedAreas[0] : `${selectedAreas.length} areas selected`}
+                        {selectedCities.length > 0 && ` › ${selectedCities.length === 1 ? selectedCities[0] : `${selectedCities.length} cities`}`}
+                      </span>
+                    )}
                   </div>
                   {selectedGeoArea && <button onClick={handleBackToAreas} className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1">← Back to Areas</button>}
                 </div>
@@ -439,8 +552,9 @@ export function DashboardFigma() {
                 {!selectedGeoArea && (
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {(geoAreasExpanded ? areaStats : areaStats.slice(0, 6)).map(area => (
-                        <div key={area.area} onClick={() => drillDownToArea(area.area)} className="bg-slate-50 rounded-xl p-4 border border-slate-100 border-l-4 border-l-indigo-500 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all">
+                      {(geoAreasExpanded ? filteredAreaStats : filteredAreaStats.slice(0, 6)).map(area => (
+                        <div key={area.area} onClick={() => drillDownToArea(area.area)}
+                          className={`bg-slate-50 rounded-xl p-4 border border-slate-100 border-l-4 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${selectedAreas.includes(area.area) ? 'border-l-indigo-600 bg-indigo-50' : 'border-l-indigo-500'}`}>
                           <div className="text-sm font-semibold text-slate-900 mb-2">{area.area}</div>
                           <div className="flex items-baseline gap-2 mb-1">
                             <div className="text-xl font-bold text-slate-900">€{area.netAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
@@ -452,9 +566,9 @@ export function DashboardFigma() {
                         </div>
                       ))}
                     </div>
-                    {areaStats.length > 6 && (
+                    {filteredAreaStats.length > 6 && (
                       <button onClick={() => setGeoAreasExpanded(v => !v)} className="mt-3 w-full flex items-center justify-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors py-2 border border-dashed border-indigo-200 rounded-lg">
-                        {geoAreasExpanded ? 'Show less' : `Show all ${areaStats.length} areas`}
+                        {geoAreasExpanded ? 'Show less' : `Show all ${filteredAreaStats.length} areas`}
                       </button>
                     )}
                   </>
@@ -465,7 +579,8 @@ export function DashboardFigma() {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {(geoCitiesExpanded ? cityStats : cityStats.slice(0, 6)).map(city => (
-                          <div key={`${city.area}|${city.city}`} className="bg-slate-50 rounded-xl p-4 border border-slate-100 border-l-4 border-l-indigo-500">
+                          <div key={`${city.area}|${city.city}`}
+                            className={`bg-slate-50 rounded-xl p-4 border border-slate-100 border-l-4 ${selectedCities.includes(city.city) ? 'border-l-indigo-600 bg-indigo-50' : 'border-l-indigo-500'}`}>
                             <div className="flex items-start justify-between mb-2">
                               <div className="text-sm font-semibold text-slate-900">{city.city}</div>
                               <div className="text-xs text-slate-400">{city.area}</div>
@@ -503,7 +618,8 @@ export function DashboardFigma() {
                       <div className="text-base font-semibold text-slate-900">Sales by Category</div>
                       <div className="text-xs text-slate-400 mt-0.5">
                         {selectedPeriod.shortLabel} · {selectedPeriod.compareLabel}
-                        {selectedArea && ` · ${selectedArea}`}{selectedCity && ` › ${selectedCity}`}
+                        {selectedAreas.length > 0 && ` · ${selectedAreas.length === 1 ? selectedAreas[0] : `${selectedAreas.length} areas`}`}
+                        {selectedCities.length > 0 && ` › ${selectedCities.length === 1 ? selectedCities[0] : `${selectedCities.length} cities`}`}
                       </div>
                     </div>
                   </div>
@@ -545,7 +661,6 @@ export function DashboardFigma() {
                                   </div>
                                 </div>
                               </button>
-
                               {!isL1Exp && (
                                 <div className="px-3 pb-2 bg-white">
                                   <div className="w-full bg-slate-100 rounded-sm h-1.5">
@@ -553,7 +668,6 @@ export function DashboardFigma() {
                                   </div>
                                 </div>
                               )}
-
                               {isL1Exp && (
                                 <div className="divide-y divide-slate-50">
                                   {group.l2s.map((l2: any) => {
@@ -563,24 +677,10 @@ export function DashboardFigma() {
                                     const maxL2Rev = Math.max(...group.l2s.map((l: any) => l.net_revenue), 1);
                                     const hasL3 = l2.l3s && l2.l3s.length > 0;
                                     const l2Name = l2.full_name ?? categoryMaster.get(l2Key) ?? l2Key;
-
                                     return (
                                       <div key={l2Key} className="bg-white">
-                                        <button
-                                          onClick={() => {
-                                            toggleL2(l2Key);
-                                            if (!isL2Exp) {
-                                              const effectiveId = l2.category_id
-                                                ? l2IdKey
-                                                : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
-                                              if (effectiveId) {
-                                                fetchDashboardSkus(effectiveId);
-                                                fetchTopCustomers(effectiveId);
-                                              }
-                                            }
-                                          }}
-                                          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left"
-                                        >
+                                        <button onClick={() => { toggleL2(l2Key); if (!isL2Exp) { const effectiveId = l2.category_id ? l2IdKey : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null; if (effectiveId) { fetchDashboardSkus(effectiveId); fetchTopCustomers(effectiveId); } } }}
+                                          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left">
                                           <div className="flex items-center gap-2 min-w-0">
                                             <div className="w-3 shrink-0" />
                                             {isL2Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
@@ -595,39 +695,14 @@ export function DashboardFigma() {
                                                 <span className="text-xs text-slate-400">{Math.round(l2.total_qty)} τεμ.</span>
                                                 <div className="text-sm font-semibold text-slate-700">{fmtEur(l2.net_revenue)}</div>
                                               </div>
-                                              {l2.prev_qty > 0 && (
-                                                <div className="flex items-center gap-2 justify-end">
-                                                  <span className="text-xs text-slate-300">{Math.round(l2.prev_qty)} τεμ.</span>
-                                                  <div className="text-xs text-slate-400">{fmtEur(l2.prev_revenue)}</div>
-                                                </div>
-                                              )}
+                                              {l2.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l2.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l2.prev_revenue)}</div></div>}
                                             </div>
                                           </div>
                                         </button>
-
-                                        <div className="px-3 pb-1 bg-white">
-                                          <div className="ml-8 w-full bg-slate-100 rounded-sm h-1">
-                                            <div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} />
-                                          </div>
-                                        </div>
-
+                                        <div className="px-3 pb-1 bg-white"><div className="ml-8 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} /></div></div>
                                         {isL2Exp && (
                                           <div className="border-t border-slate-100">
-                                            {(() => {
-                                              const effectiveId = l2.category_id
-                                                ? l2IdKey
-                                                : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
-                                              return effectiveId ? (
-                                                <DrillContent
-                                                  catIdKey={effectiveId}
-                                                  skus={dashboardSkuData[effectiveId] ?? []}
-                                                  skusLoading={dashboardSkuLoading.has(effectiveId)}
-                                                  topCustomers={topCustomersData[effectiveId] ?? []}
-                                                  topCustomersLoading={topCustomersLoading.has(effectiveId)}
-                                                />
-                                              ) : null;
-                                            })()}
-
+                                            {(() => { const effectiveId = l2.category_id ? l2IdKey : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null; return effectiveId ? <DrillContent catIdKey={effectiveId} skus={dashboardSkuData[effectiveId] ?? []} skusLoading={dashboardSkuLoading.has(effectiveId)} topCustomers={topCustomersData[effectiveId] ?? []} topCustomersLoading={topCustomersLoading.has(effectiveId)} /> : null; })()}
                                             {hasL3 && (
                                               <div className="border-t border-slate-200 divide-y divide-slate-100">
                                                 <div className="px-4 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide bg-slate-50">Υποκατηγορίες</div>
@@ -636,19 +711,10 @@ export function DashboardFigma() {
                                                   const l3IdKey = String(l3.category_id);
                                                   const isL3Exp = expandedL3s.has(l3Key);
                                                   const maxL3Rev = Math.max(...l2.l3s.map((x: any) => x.net_revenue), 1);
-
                                                   return (
                                                     <div key={l3Key} className="bg-white">
-                                                      <button
-                                                        onClick={() => {
-                                                          toggleL3(l3Key);
-                                                          if (!isL3Exp) {
-                                                            fetchDashboardSkus(l3IdKey);
-                                                            fetchTopCustomers(l3IdKey);
-                                                          }
-                                                        }}
-                                                        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left"
-                                                      >
+                                                      <button onClick={() => { toggleL3(l3Key); if (!isL3Exp) { fetchDashboardSkus(l3IdKey); fetchTopCustomers(l3IdKey); } }}
+                                                        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
                                                         <div className="flex items-center gap-2 min-w-0">
                                                           <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
                                                           {isL3Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
@@ -658,35 +724,13 @@ export function DashboardFigma() {
                                                         <div className="flex items-center gap-2 shrink-0 ml-2">
                                                           <GrowthBadge pct={l3.growth_pct ?? null} />
                                                           <div className="text-right">
-                                                            <div className="flex items-center gap-2 justify-end">
-                                                              <span className="text-xs text-slate-400">{Math.round(l3.total_qty ?? 0)} τεμ.</span>
-                                                              <div className="text-sm font-semibold text-slate-700">{fmtEur(l3.net_revenue)}</div>
-                                                            </div>
-                                                            {l3.prev_qty > 0 && (
-                                                              <div className="flex items-center gap-2 justify-end">
-                                                                <span className="text-xs text-slate-300">{Math.round(l3.prev_qty)} τεμ.</span>
-                                                                <div className="text-xs text-slate-400">{fmtEur(l3.prev_revenue)}</div>
-                                                              </div>
-                                                            )}
+                                                            <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-400">{Math.round(l3.total_qty ?? 0)} τεμ.</span><div className="text-sm font-semibold text-slate-700">{fmtEur(l3.net_revenue)}</div></div>
+                                                            {l3.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l3.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l3.prev_revenue)}</div></div>}
                                                           </div>
                                                         </div>
                                                       </button>
-
-                                                      <div className="px-4 pb-1 bg-white">
-                                                        <div className="ml-10 w-full bg-slate-100 rounded-sm h-1">
-                                                          <div className="h-1 rounded-sm bg-indigo-200 transition-all" style={{ width: `${Math.max((l3.net_revenue / maxL3Rev) * 100, 2)}%` }} />
-                                                        </div>
-                                                      </div>
-
-                                                      {isL3Exp && (
-                                                        <DrillContent
-                                                          catIdKey={l3IdKey}
-                                                          skus={dashboardSkuData[l3IdKey] ?? []}
-                                                          skusLoading={dashboardSkuLoading.has(l3IdKey)}
-                                                          topCustomers={topCustomersData[l3IdKey] ?? []}
-                                                          topCustomersLoading={topCustomersLoading.has(l3IdKey)}
-                                                        />
-                                                      )}
+                                                      <div className="px-4 pb-1 bg-white"><div className="ml-10 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-indigo-200 transition-all" style={{ width: `${Math.max((l3.net_revenue / maxL3Rev) * 100, 2)}%` }} /></div></div>
+                                                      {isL3Exp && <DrillContent catIdKey={l3IdKey} skus={dashboardSkuData[l3IdKey] ?? []} skusLoading={dashboardSkuLoading.has(l3IdKey)} topCustomers={topCustomersData[l3IdKey] ?? []} topCustomersLoading={topCustomersLoading.has(l3IdKey)} />}
                                                     </div>
                                                   );
                                                 })}
@@ -716,7 +760,6 @@ export function DashboardFigma() {
 
             {/* ===== FILTERS ===== */}
             <section id="section-filter" className="bg-white rounded-xl shadow p-4 space-y-4">
-              {/* CHANGE 3: Clear all button in filter header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
                   <MapPin className="w-4 h-4 text-indigo-500" />Filter Customers
@@ -737,8 +780,25 @@ export function DashboardFigma() {
                 </div>
               </div>
 
-              <ExpandableFilterGroup label="Geographic Area" selected={selectedArea} items={areas} onSelect={(a) => { setSelectedArea(a); setSelectedCity(''); }} onClear={() => { setSelectedArea(''); setSelectedCity(''); }} />
-              {selectedArea && cities.length > 0 && <ExpandableFilterGroup label="City" selected={selectedCity} items={cities} onSelect={setSelectedCity} onClear={() => setSelectedCity('')} />}
+              {/* Multi-select area filter */}
+              <MultiSelectFilterGroup
+                label="Geographic Area"
+                selected={selectedAreas}
+                items={areas}
+                onToggle={handleAreaToggle}
+                onClear={clearAreas}
+              />
+
+              {/* City filter — shown when at least one area is selected */}
+              {selectedAreas.length > 0 && cities.length > 0 && (
+                <MultiSelectFilterGroup
+                  label="City"
+                  selected={selectedCities}
+                  items={cities}
+                  onToggle={handleCityToggle}
+                  onClear={clearCities}
+                />
+              )}
 
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Not Visited Since</div>
@@ -759,8 +819,7 @@ export function DashboardFigma() {
               {/* Sales Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  Πωλήσεις ({selectedPeriod.shortLabel})
+                  <TrendingUp className="w-3.5 h-3.5" />Πωλήσεις ({selectedPeriod.shortLabel})
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {([
@@ -768,22 +827,14 @@ export function DashboardFigma() {
                     { label: 'Με πωλήσεις', value: 'with' as const },
                     { label: 'Χωρίς πωλήσεις', value: 'without' as const },
                   ]).map(opt => {
-                    const count = opt.value === 'all'
-                      ? filteredCustomers.length
-                      : opt.value === 'with'
-                      ? filteredCustomers.filter(c => customersWithSalesSet.has(String(c.trdr_id))).length
+                    const count = opt.value === 'all' ? filteredCustomers.length
+                      : opt.value === 'with' ? filteredCustomers.filter(c => customersWithSalesSet.has(String(c.trdr_id))).length
                       : filteredCustomers.filter(c => !customersWithSalesSet.has(String(c.trdr_id))).length;
                     return (
                       <button key={opt.value} onClick={() => setSalesFilter(opt.value)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                          salesFilter === opt.value
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                        }`}>
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${salesFilter === opt.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
                         {opt.label}
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${salesFilter === opt.value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                          {count}
-                        </span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${salesFilter === opt.value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
                       </button>
                     );
                   })}
@@ -793,8 +844,7 @@ export function DashboardFigma() {
               {/* Performance Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  Performance ({selectedPeriod.shortLabel})
+                  <TrendingUp className="w-3.5 h-3.5" />Performance ({selectedPeriod.shortLabel})
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {([
@@ -803,23 +853,17 @@ export function DashboardFigma() {
                     { label: 'Trending Down', value: 'down' as const, icon: <TrendingDown className="w-3 h-3" /> },
                   ]).map(opt => (
                     <button key={opt.value} onClick={() => setPerformanceFilter(opt.value)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                        performanceFilter === opt.value
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                      }`}>
-                      {opt.icon}
-                      {opt.label}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${performanceFilter === opt.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                      {opt.icon}{opt.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* CHANGE 1: Active/Inactive Filter */}
+              {/* Status Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
-                  <User className="w-3.5 h-3.5" />
-                  Status
+                  <User className="w-3.5 h-3.5" />Status
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {([
@@ -828,17 +872,12 @@ export function DashboardFigma() {
                     { label: 'Inactive', value: 'inactive' as const },
                   ]).map(opt => (
                     <button key={opt.value} onClick={() => setActiveFilter(opt.value)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                        activeFilter === opt.value
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                      }`}>
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${activeFilter === opt.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
                       {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
-
             </section>
 
             {/* ===== CUSTOMERS ===== */}
@@ -856,11 +895,7 @@ export function DashboardFigma() {
               </div>
 
               <CustomerListSection
-                title={
-                  currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec'
-                    ? 'All Customers'
-                    : 'Your Customers'
-                }
+                title={currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec' ? 'All Customers' : 'Your Customers'}
                 customers={displayedCustomers}
                 currentUserRole={currentUser.role}
                 onSelectCustomer={setSelectedCustomer}
