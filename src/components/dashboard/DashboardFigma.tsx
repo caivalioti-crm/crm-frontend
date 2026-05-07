@@ -21,8 +21,6 @@ const NOT_VISITED_OPTIONS = [
 
 const DEFAULT_VISIBLE_ITEMS = 6;
 
-
-
 function ExpandableFilterGroup({ label, selected, items, onSelect, onClear }: {
   label: string; selected: string; items: string[];
   onSelect: (val: string) => void; onClear: () => void;
@@ -65,8 +63,6 @@ function GrowthBadge({ pct }: { pct: number | null }) {
   );
 }
 
-
-// ─── Reusable SKU + Top Customers tab panel ───────────────────────────────────
 function DrillContent({
   skus, skusLoading,
   topCustomers, topCustomersLoading,
@@ -147,6 +143,7 @@ function DrillContent({
 
 type CustomerSortMode = 'name' | 'area_then_name';
 type PerformanceFilter = 'all' | 'up' | 'down';
+type ActiveFilter = 'all' | 'active' | 'inactive';
 
 export function DashboardFigma() {
   const {
@@ -158,7 +155,7 @@ export function DashboardFigma() {
     showNewVisitDialog, setShowNewVisitDialog, showNewProspectDialog, setShowNewProspectDialog,
     currentUser, categoryMaster, customersWithSalesSet,
     salesByCategory, salesByCategoryLoading, salesByCategoryExpanded,
-    setSalesByCategoryExpanded, expandSalesByCategory, 
+    setSalesByCategoryExpanded, expandSalesByCategory,
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
     topCustomersData, topCustomersLoading, fetchTopCustomers,
     repModeOverride, setRepModeOverride, clearTopCustomersCache,
@@ -175,12 +172,10 @@ export function DashboardFigma() {
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
   const [expandedL3s, setExpandedL3s] = useState<Set<string>>(new Set());
   const [salesFilter, setSalesFilter] = useState<'all' | 'with' | 'without'>('all');
-  const [customerSortMode, setCustomerSortMode] =
-      useState<CustomerSortMode>('name');
-  
-const [performanceFilter, setPerformanceFilter] =
-  useState<PerformanceFilter>('all');
-
+  const [customerSortMode, setCustomerSortMode] = useState<CustomerSortMode>('name');
+  const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
+  // CHANGE 1: Active/Inactive filter state
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
@@ -196,69 +191,76 @@ const [performanceFilter, setPerformanceFilter] =
     return counts;
   }, [filteredCustomers, getDaysSinceVisit]);
 
-    const displayedCustomers = useMemo(() => {
-      let result = customers;
+  const displayedCustomers = useMemo(() => {
+    let result = customers;
 
-      // filters
-      if (notVisitedDays) {
-        result = result.filter(
-          c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays
-        );
-      }
+    if (notVisitedDays) {
+      result = result.filter(c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays);
+    }
 
-      if (salesFilter === 'with') {
-        result = result.filter(c =>
-          customersWithSalesSet.has(String(c.trdr_id))
-        );
-      }
+    if (salesFilter === 'with') {
+      result = result.filter(c => customersWithSalesSet.has(String(c.trdr_id)));
+    }
+    if (salesFilter === 'without') {
+      result = result.filter(c => !customersWithSalesSet.has(String(c.trdr_id)));
+    }
 
-      if (salesFilter === 'without') {
-        result = result.filter(c =>
-          !customersWithSalesSet.has(String(c.trdr_id))
-        );
-      }
-
-
-      if (performanceFilter !== 'all') {
-        result = result.filter(c => {
-          const g = Number(c.growth_pct);
-          if (performanceFilter === 'up') return isNaN(g) || g >= 0;
-          if (performanceFilter === 'down') return !isNaN(g) && g < 0;
-          return true;
-        });
-      }
-
-
-      // sorting (IMPORTANT: copy before sort)
-      const sorted = [...result].sort((a, b) => {
-        if (customerSortMode === 'area_then_name') {
-          const areaCompare = (a.area ?? '').localeCompare(b.area ?? '');
-          if (areaCompare !== 0) return areaCompare;
-
-          return a.name.localeCompare(b.name);
-        }
-
-        // default: name A–Z
-        return a.name.localeCompare(b.name);
+    if (performanceFilter !== 'all') {
+      result = result.filter(c => {
+        const g = Number(c.growth_pct);
+        if (performanceFilter === 'up') return isNaN(g) || g >= 0;
+        if (performanceFilter === 'down') return !isNaN(g) && g < 0;
+        return true;
       });
+    }
 
-      return sorted;
-    }, [
-      filteredCustomers,
-      notVisitedDays,
-      getDaysSinceVisit,
-      salesFilter,
-      customersWithSalesSet,
-      customerSortMode,
-      performanceFilter
-    ]);
+    // CHANGE 1: Active/Inactive filter logic
+    if (activeFilter === 'active') {
+      result = result.filter(c => c.is_active !== false);
+    }
+    if (activeFilter === 'inactive') {
+      result = result.filter(c => c.is_active === false);
+    }
 
+    const sorted = [...result].sort((a, b) => {
+      if (customerSortMode === 'area_then_name') {
+        const areaCompare = (a.area ?? '').localeCompare(b.area ?? '');
+        if (areaCompare !== 0) return areaCompare;
+        return a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return sorted;
+  }, [
+    customers,
+    notVisitedDays,
+    getDaysSinceVisit,
+    salesFilter,
+    customersWithSalesSet,
+    customerSortMode,
+    performanceFilter,
+    activeFilter,
+  ]);
 
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL2(code: string) { setExpandedL2s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL3(code: string) { setExpandedL3s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
 
   const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'exec';
+
+  // CHANGE 3: Clear all filters helpers
+  const hasActiveFilters = !!(selectedArea || selectedCity || notVisitedDays || searchQuery || salesFilter !== 'all' || performanceFilter !== 'all' || activeFilter !== 'all');
+
+  function clearAllFilters() {
+    setSelectedArea('');
+    setSelectedCity('');
+    setNotVisitedDays(null);
+    setSearchQuery('');
+    setSalesFilter('all');
+    setPerformanceFilter('all');
+    setActiveFilter('all');
+  }
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -295,16 +297,16 @@ const [performanceFilter, setPerformanceFilter] =
               </button>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2 border-t border-white/20 pt-2">
             {[
-              { icon: <TrendingUp className="w-4 h-4" />,  id: 'section-performance', roles: null },
-              { icon: <MapPin className="w-4 h-4" />,  id: 'section-geo', roles: null },
-              { icon: <BarChart2 className="w-4 h-4" />,  id: 'section-categories', roles: ['admin', 'manager', 'exec'] },
-              { icon: <ClipboardList className="w-4 h-4" />,  id: 'section-visits', roles: null },
-              { icon: <Search className="w-4 h-4" />,  id: 'section-filter', roles: null },
-              { icon: <Users className="w-4 h-4" />,  id: 'section-customers', roles: null },
-              { icon: <UserPlus className="w-4 h-4" />,  id: 'section-prospects', roles: null },
+              { icon: <TrendingUp className="w-4 h-4" />, id: 'section-performance', roles: null },
+              { icon: <MapPin className="w-4 h-4" />, id: 'section-geo', roles: null },
+              { icon: <BarChart2 className="w-4 h-4" />, id: 'section-categories', roles: ['admin', 'manager', 'exec'] },
+              { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', roles: null },
+              { icon: <Search className="w-4 h-4" />, id: 'section-filter', roles: null },
+              { icon: <Users className="w-4 h-4" />, id: 'section-customers', roles: null },
+              { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
               .map(({ icon, id }) => (
@@ -312,13 +314,19 @@ const [performanceFilter, setPerformanceFilter] =
                   onClick={() => { const el = document.getElementById(id); if (el) { const top = el.getBoundingClientRect().top + window.scrollY - 120; window.scrollTo({ top, behavior: 'smooth' }); } }}
                   className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/25 rounded-lg transition-colors text-white/90 text-sm font-medium">
                   {icon}
-                  <span className="hidden sm:block"></span>
                 </button>
               ))}
-
+            {/* CHANGE 3: Clear filters button in header nav */}
+            {hasActiveFilters && (
+              <button onClick={clearAllFilters}
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors text-white text-sm font-medium ml-auto">
+                × Clear filters
+              </button>
+            )}
           </div>
-            {/* Context bar */}
-            {(selectedArea || selectedCity || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all') && (
+
+          {/* Context bar */}
+          {(selectedArea || selectedCity || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all' || activeFilter !== 'all') && (
             <div className="flex items-center gap-1.5 border-t border-white/10 pt-1.5 flex-wrap">
               {selectedCustomer ? (
                 <>
@@ -335,7 +343,7 @@ const [performanceFilter, setPerformanceFilter] =
                 </>
               ) : (
                 <>
-                  {(selectedArea || selectedCity || notVisitedDays || searchQuery || repModeOverride || salesFilter !== 'all') && (
+                  {(selectedArea || selectedCity || notVisitedDays || searchQuery || repModeOverride || salesFilter !== 'all' || activeFilter !== 'all') && (
                     <span className="text-white/40 text-xs">Φίλτρα:</span>
                   )}
                   {repModeOverride && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">Οι πελάτες μου</span>}
@@ -347,13 +355,17 @@ const [performanceFilter, setPerformanceFilter] =
                       {salesFilter === 'with' ? 'Με πωλήσεις' : 'Χωρίς πωλήσεις'}
                     </span>
                   )}
+                  {activeFilter !== 'all' && (
+                    <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">
+                      {activeFilter === 'active' ? 'Active' : 'Inactive'}
+                    </span>
+                  )}
                   <span className="text-white/40 text-xs ml-1">{selectedPeriod.shortLabel}</span>
                 </>
               )}
             </div>
           )}
         </div>
-
       </header>
       )}
 
@@ -415,13 +427,9 @@ const [performanceFilter, setPerformanceFilter] =
               <section id="section-geo" className="bg-white rounded-xl shadow p-4">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-3 flex-wrap">
+                    {/* CHANGE 2: Removed "Filtered: AREA" label */}
                     <h2 className="text-base font-semibold text-slate-900">{selectedGeoArea ? 'Performance by City' : 'Performance by Area'}</h2>
                     {selectedGeoArea && <span className="text-sm font-medium text-indigo-600">{selectedGeoArea}</span>}
-                    {selectedArea && !selectedGeoArea && (
-                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />Filtered: {selectedArea}{selectedCity && ` › ${selectedCity}`}
-                      </span>
-                    )}
                   </div>
                   {selectedGeoArea && <button onClick={handleBackToAreas} className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1">← Back to Areas</button>}
                 </div>
@@ -520,7 +528,6 @@ const [performanceFilter, setPerformanceFilter] =
 
                           return (
                             <div key={group.l1_code} className="rounded-lg border border-slate-100 overflow-hidden">
-                              {/* L1 */}
                               <button onClick={() => toggleL1(group.l1_code)}
                                 className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors ${isL1Exp ? 'bg-blue-50 border-b border-blue-100' : 'bg-white hover:bg-slate-50'}`}>
                                 <div className="flex items-center gap-2 min-w-0">
@@ -546,7 +553,6 @@ const [performanceFilter, setPerformanceFilter] =
                                 </div>
                               )}
 
-                              {/* L2 rows */}
                               {isL1Exp && (
                                 <div className="divide-y divide-slate-50">
                                   {group.l2s.map((l2: any) => {
@@ -559,7 +565,6 @@ const [performanceFilter, setPerformanceFilter] =
 
                                     return (
                                       <div key={l2Key} className="bg-white">
-                                        {/* L2 button */}
                                         <button
                                           onClick={() => {
                                             toggleL2(l2Key);
@@ -599,17 +604,14 @@ const [performanceFilter, setPerformanceFilter] =
                                           </div>
                                         </button>
 
-                                        {/* L2 bar */}
                                         <div className="px-3 pb-1 bg-white">
                                           <div className="ml-8 w-full bg-slate-100 rounded-sm h-1">
                                             <div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} />
                                           </div>
                                         </div>
 
-                                        {/* L2 expanded */}
                                         {isL2Exp && (
                                           <div className="border-t border-slate-100">
-                                            {/* L2 SKUs + Top Customers */}
                                             {(() => {
                                               const effectiveId = l2.category_id
                                                 ? l2IdKey
@@ -625,7 +627,6 @@ const [performanceFilter, setPerformanceFilter] =
                                               ) : null;
                                             })()}
 
-                                            {/* L3 children */}
                                             {hasL3 && (
                                               <div className="border-t border-slate-200 divide-y divide-slate-100">
                                                 <div className="px-4 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide bg-slate-50">Υποκατηγορίες</div>
@@ -637,7 +638,6 @@ const [performanceFilter, setPerformanceFilter] =
 
                                                   return (
                                                     <div key={l3Key} className="bg-white">
-                                                      {/* L3 button */}
                                                       <button
                                                         onClick={() => {
                                                           toggleL3(l3Key);
@@ -671,14 +671,12 @@ const [performanceFilter, setPerformanceFilter] =
                                                         </div>
                                                       </button>
 
-                                                      {/* L3 bar */}
                                                       <div className="px-4 pb-1 bg-white">
                                                         <div className="ml-10 w-full bg-slate-100 rounded-sm h-1">
                                                           <div className="h-1 rounded-sm bg-indigo-200 transition-all" style={{ width: `${Math.max((l3.net_revenue / maxL3Rev) * 100, 2)}%` }} />
                                                         </div>
                                                       </div>
 
-                                                      {/* L3 expanded */}
                                                       {isL3Exp && (
                                                         <DrillContent
                                                           catIdKey={l3IdKey}
@@ -717,9 +715,19 @@ const [performanceFilter, setPerformanceFilter] =
 
             {/* ===== FILTERS ===== */}
             <section id="section-filter" className="bg-white rounded-xl shadow p-4 space-y-4">
-              <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                <MapPin className="w-4 h-4 text-indigo-500" />Filter Customers
+              {/* CHANGE 3: Clear all button in filter header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <MapPin className="w-4 h-4 text-indigo-500" />Filter Customers
+                </div>
+                {hasActiveFilters && (
+                  <button onClick={clearAllFilters}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
+                    × Clear all filters
+                  </button>
+                )}
               </div>
+
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2">Search Customer</div>
                 <div className="relative max-w-sm">
@@ -727,8 +735,10 @@ const [performanceFilter, setPerformanceFilter] =
                   <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Name, Code (e.g. 10234)" className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                 </div>
               </div>
+
               <ExpandableFilterGroup label="Geographic Area" selected={selectedArea} items={areas} onSelect={(a) => { setSelectedArea(a); setSelectedCity(''); }} onClear={() => { setSelectedArea(''); setSelectedCity(''); }} />
               {selectedArea && cities.length > 0 && <ExpandableFilterGroup label="City" selected={selectedCity} items={cities} onSelect={setSelectedCity} onClear={() => setSelectedCity('')} />}
+
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Not Visited Since</div>
                 <div className="flex flex-wrap gap-2">
@@ -743,131 +753,119 @@ const [performanceFilter, setPerformanceFilter] =
                     );
                   })}
                 </div>
+              </div>
 
-                {/* Sales Filter */}
-                <div>
-                  <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    Πωλήσεις ({selectedPeriod.shortLabel})
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {([
-                      { label: 'Όλοι', value: 'all' as const },
-                      { label: 'Με πωλήσεις', value: 'with' as const },
-                      { label: 'Χωρίς πωλήσεις', value: 'without' as const },
-                    ]).map(opt => {
-                      const count = opt.value === 'all'
-                        ? filteredCustomers.length
-                        : opt.value === 'with'
-                        ? filteredCustomers.filter(c => customersWithSalesSet.has(String(c.trdr_id))).length
-                        : filteredCustomers.filter(c => !customersWithSalesSet.has(String(c.trdr_id))).length;
-                      return (
-                        <button key={opt.value} onClick={() => setSalesFilter(opt.value)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
-                            salesFilter === opt.value
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                          }`}>
-                          {opt.label}
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${salesFilter === opt.value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                            {count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Sales Filter */}
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Πωλήσεις ({selectedPeriod.shortLabel})
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { label: 'Όλοι', value: 'all' as const },
+                    { label: 'Με πωλήσεις', value: 'with' as const },
+                    { label: 'Χωρίς πωλήσεις', value: 'without' as const },
+                  ]).map(opt => {
+                    const count = opt.value === 'all'
+                      ? filteredCustomers.length
+                      : opt.value === 'with'
+                      ? filteredCustomers.filter(c => customersWithSalesSet.has(String(c.trdr_id))).length
+                      : filteredCustomers.filter(c => !customersWithSalesSet.has(String(c.trdr_id))).length;
+                    return (
+                      <button key={opt.value} onClick={() => setSalesFilter(opt.value)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                          salesFilter === opt.value
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                        }`}>
+                        {opt.label}
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${salesFilter === opt.value ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-                           {/* Performance Filter */}
+
+              {/* Performance Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" />
                   Performance ({selectedPeriod.shortLabel})
                 </div>
-
                 <div className="flex flex-wrap gap-2">
                   {([
-                    {
-                      label: 'Όλοι',
-                      value: 'all' as const,
-                    },
-                    {
-                      label: 'Trending Up',
-                      value: 'up' as const,
-                      icon: <TrendingUp className="w-3 h-3" />
-                    },
-                    {
-                      label: 'Trending Down',
-                      value: 'down' as const,
-                      icon: <TrendingDown className="w-3 h-3" />
-                    }
+                    { label: 'Όλοι', value: 'all' as const, icon: undefined },
+                    { label: 'Trending Up', value: 'up' as const, icon: <TrendingUp className="w-3 h-3" /> },
+                    { label: 'Trending Down', value: 'down' as const, icon: <TrendingDown className="w-3 h-3" /> },
                   ]).map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setPerformanceFilter(opt.value)}
+                    <button key={opt.value} onClick={() => setPerformanceFilter(opt.value)}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
                         performanceFilter === opt.value
                           ? 'bg-indigo-600 text-white border-indigo-600'
                           : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                      }`}
-                    >
+                      }`}>
                       {opt.icon}
                       {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* CHANGE 1: Active/Inactive Filter */}
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" />
+                  Status
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { label: 'All', value: 'all' as const },
+                    { label: 'Active', value: 'active' as const },
+                    { label: 'Inactive', value: 'inactive' as const },
+                  ]).map(opt => (
+                    <button key={opt.value} onClick={() => setActiveFilter(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        activeFilter === opt.value
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                      }`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             </section>
 
-              
-
-              {/* ===== CUSTOMERS ===== */}
-              <div id="section-customers">
-
-                {/* ---- Customer sort toggle (NEW) ---- */}
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Order by:</span>
-
-                  <button
-                    onClick={() => setCustomerSortMode('name')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
-                      ${
-                        customerSortMode === 'name'
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                      }`}
-                  >
-                    Name A–Z
-                  </button>
-
-                  <button
-                    onClick={() => setCustomerSortMode('area_then_name')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
-                      ${
-                        customerSortMode === 'area_then_name'
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                      }`}
-                  >
-                    Area → Name
-                  </button>
-                </div>
-                {/* ---- End customer sort toggle ---- */}
-
-                <CustomerListSection
-                  title={
-                    currentUser.role === 'manager' ||
-                    currentUser.role === 'admin' ||
-                    currentUser.role === 'exec'
-                      ? 'All Customers'
-                      : 'Your Customers'
-                  }
-                  customers={displayedCustomers}
-                  currentUserRole={currentUser.role}
-                  onSelectCustomer={setSelectedCustomer}
-                  getDaysSinceVisit={getDaysSinceVisit}
-                />
+            {/* ===== CUSTOMERS ===== */}
+            <div id="section-customers">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-xs text-slate-500">Order by:</span>
+                <button onClick={() => setCustomerSortMode('name')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${customerSortMode === 'name' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                  Name A–Z
+                </button>
+                <button onClick={() => setCustomerSortMode('area_then_name')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${customerSortMode === 'area_then_name' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                  Area → Name
+                </button>
               </div>
+
+              <CustomerListSection
+                title={
+                  currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec'
+                    ? 'All Customers'
+                    : 'Your Customers'
+                }
+                customers={displayedCustomers}
+                currentUserRole={currentUser.role}
+                onSelectCustomer={setSelectedCustomer}
+                getDaysSinceVisit={getDaysSinceVisit}
+              />
+            </div>
 
             {/* ===== PROSPECTS ===== */}
             <div id="section-prospects">
@@ -875,10 +873,10 @@ const [performanceFilter, setPerformanceFilter] =
             </div>
           </>
         )}
+      </main>
 
-        </main>
-        {selectedCustomer && <CustomerView customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} />}
-        {selectedProspect && <ProspectView prospect={selectedProspect} onBack={() => setSelectedProspect(null)} />}
+      {selectedCustomer && <CustomerView customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} />}
+      {selectedProspect && <ProspectView prospect={selectedProspect} onBack={() => setSelectedProspect(null)} />}
 
       <NewVisitDialog isOpen={showNewVisitDialog} onClose={() => setShowNewVisitDialog(false)} customers={filteredCustomers}
         onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }} />
