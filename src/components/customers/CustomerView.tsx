@@ -57,16 +57,13 @@ const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; ico
 
 // ─── Date helpers — defined ONCE, used by both DOC_PERIODS and SALES_PERIODS ──
 const _now = new Date();
-// YTD ends at the last COMPLETED month (e.g. if today is May 7 → April = month 4)
-const _ytdMonth = _now.getMonth(); // 0-based: 0=Jan … 11=Dec; getMonth() gives PREVIOUS completed month when day<full month
-// e.g. in May (getMonth()=4): _ytdMonth = 4 → April (1-based: 4)
-const _ytdMonthStr = String(_ytdMonth).padStart(2, '0'); // "04"
-const _ytdLabel = new Date(_now.getFullYear(), _ytdMonth - 1, 1)
-  .toLocaleString('el-GR', { month: 'short' }); // "Απρ"
-// Last day of YTD month (handles 28/30/31 correctly)
-const _ytdDateTo   = new Date(_now.getFullYear(),     _ytdMonth, 0).toISOString().split('T')[0]; // e.g. "2026-04-30"
-const _ytdPrevTo   = new Date(_now.getFullYear() - 1, _ytdMonth, 0).toISOString().split('T')[0]; // e.g. "2025-04-30"
-const _ytdPrevMonthStr = _ytdMonthStr; // same month number, prior year
+const _ytdMonth = _now.getMonth(); // 0-based current month
+const _ytdMonthStr = String(_ytdMonth).padStart(2, '0');
+const _ytdLabel = _now.toLocaleString('el-GR', { day: 'numeric', month: 'short' }); // e.g. "8 Μαΐ"
+// YTD ends at TODAY (inclusive of current partial month), compared to same date last year
+const _ytdDateTo  = new Date(_now.getFullYear(),     _now.getMonth(), _now.getDate() + 1).toISOString().split('T')[0];
+const _ytdPrevTo  = new Date(_now.getFullYear() - 1, _now.getMonth(), _now.getDate() + 1).toISOString().split('T')[0];
+const _ytdPrevMonthStr = _ytdMonthStr;
 
 const DOC_PERIODS = [
   { label: '2026 YTD', from: '2026-01-01', to: '2026-12-31' },

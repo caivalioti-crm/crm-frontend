@@ -31,14 +31,10 @@ function toLocalDateString(d: Date): string {
 }
 
 // ─── Dynamic YTD (computed once at module load) ───────────────────────────────
-// _ytdTo is the first day of the CURRENT month (exclusive upper bound):
-//   new Date(2026, 4, 1) → 2026-05-01  ✓
 const _now = new Date();
-const _ytdMonth1 = _now.getMonth();
-const _ytdTo    = toLocalDateString(new Date(_now.getFullYear(),     _ytdMonth1, 1));
-const _ytdCmpTo = toLocalDateString(new Date(_now.getFullYear() - 1, _ytdMonth1, 1));
-const _ytdLabel  = new Date(_now.getFullYear(), _ytdMonth1 - 1, 1)
-  .toLocaleString('en-GB', { month: 'short' });
+const _ytdTo    = toLocalDateString(new Date(_now.getFullYear(),     _now.getMonth(), _now.getDate() + 1));
+const _ytdCmpTo = toLocalDateString(new Date(_now.getFullYear() - 1, _now.getMonth(), _now.getDate() + 1));
+const _ytdLabel  = _now.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
 
 export const PERIODS: Period[] = [
   {
