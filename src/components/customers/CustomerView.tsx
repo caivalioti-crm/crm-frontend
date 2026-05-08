@@ -35,7 +35,7 @@ export interface CustomerViewProps {
     contactName?: string; vatNumber?: string; createdDate?: string;
     lastVisitDate?: string; transportCompany?: string; transportMeans?: string;
     overallDiscount?: number; afm?: string; fax?: string; zip?: string;
-    shipmentName?: string; carrierName?: string; is_active?: boolean;
+    shipmentName?: string; carrierName?: string; is_active?: boolean; prccategory?: number | null;
   };
   onBack: () => void;
 }
@@ -554,6 +554,11 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             {customer.is_active === false && (
               <span className="px-2 py-0.5 bg-amber-400 text-amber-900 text-xs font-semibold rounded-full shrink-0">
                 Inactive
+              </span>
+            )}
+            {customer.prccategory === 105 && (
+              <span className="px-2 py-0.5 bg-orange-400 text-white text-xs font-semibold rounded-full shrink-0">
+                Συν/Φαν/Ηλ
               </span>
             )}
           </div>

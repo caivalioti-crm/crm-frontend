@@ -21,5 +21,6 @@ export function mapErpCustomer(raw: any): Customer {
     assignedRepId: undefined,
     salesmanCode: raw.salesman_code ?? undefined,
     is_active: raw.is_active,
+    prccategory: raw.prccategory ?? null,
   };
 }

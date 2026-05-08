@@ -86,6 +86,12 @@ export function CustomerListSection({
                   )}
                 </div>
 
+                  {customer.prccategory === 105 && (
+                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 border border-orange-300 text-xs font-medium rounded-full shrink-0">
+                      Συν/Φαν/Ηλ
+                    </span>
+                  )}
+
                   {/* Meta */}
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
                     <span className="flex items-center gap-1">
