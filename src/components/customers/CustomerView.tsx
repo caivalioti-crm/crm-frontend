@@ -496,6 +496,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               <th className="text-left px-4 py-2">Κωδ.</th>
               <th className="text-left px-4 py-2 hidden sm:table-cell">Περιγραφή</th>
               <th className="text-right px-3 py-2">Τεμ.</th>
+              <th className="text-right px-3 py-2">Έκπτ.</th>
+              <th className="text-right px-3 py-2">ΦΠΑ</th>
               <th className="text-right px-4 py-2">Αξία</th>
             </tr>
           </thead>
@@ -505,6 +507,12 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 <td className="px-4 py-2 font-mono text-slate-600 whitespace-nowrap">{line.sku_code}</td>
                 <td className="px-4 py-2 text-slate-600 hidden sm:table-cell truncate max-w-xs">{line.sku_name}</td>
                 <td className="px-3 py-2 text-right text-slate-500">{Math.round(Number(line.qty ?? 0))}</td>
+                <td className="px-3 py-2 text-right text-slate-400">
+                  {line.disc1prc ? `${line.disc1prc}%` : '—'}
+                </td>
+                <td className="px-3 py-2 text-right text-slate-400">
+                  {line.vatprc != null ? `${line.vatprc}%` : '—'}
+                </td>
                 <td className="px-4 py-2 text-right font-semibold text-slate-700">{fmtEur(Number(line.netlineval ?? 0))}</td>
               </tr>
             ))}
@@ -512,6 +520,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
           <tfoot>
             <tr className="border-t border-slate-200 bg-white">
               <td colSpan={2} className="px-4 py-2 text-slate-400 text-xs hidden sm:table-cell">{lines.length} γραμμές</td>
+              <td colSpan={2} className="px-4 py-2 text-slate-400 text-xs sm:hidden">{lines.length} γραμμές</td>
               <td className="px-3 py-2 text-right text-xs font-medium text-slate-500">Σύνολο</td>
               <td className="px-4 py-2 text-right font-bold text-slate-800">{fmtEur(netamnt)}</td>
             </tr>
@@ -1147,6 +1156,9 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                           <span className={`text-sm font-semibold ${doc.netamnt < 0 ? 'text-red-600' : 'text-slate-800'}`}>
                             {doc.netamnt < 0 ? '-' : ''}€{Math.abs(doc.netamnt).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
                           </span>
+                          {doc.disc1prc ? (
+                          <span className="text-xs text-slate-400">-{doc.disc1prc}%</span>
+                          ) : null}
                           <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </div>
                       </button>
