@@ -55,12 +55,11 @@ const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; ico
   credit:  { label: 'Πίστωση',    bg: 'bg-red-100',   text: 'text-red-700',   icon: Tag },
 };
 
-// ─── Date helpers — defined ONCE, used by both DOC_PERIODS and SALES_PERIODS ──
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 const _now = new Date();
-const _ytdMonth = _now.getMonth(); // 0-based current month
+const _ytdMonth = _now.getMonth();
 const _ytdMonthStr = String(_ytdMonth).padStart(2, '0');
-const _ytdLabel = _now.toLocaleString('el-GR', { day: 'numeric', month: 'short' }); // e.g. "8 Μαΐ"
-// YTD ends at TODAY (inclusive of current partial month), compared to same date last year
+const _ytdLabel = _now.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
 const _ytdDateTo  = new Date(_now.getFullYear(),     _now.getMonth(), _now.getDate() + 1).toISOString().split('T')[0];
 const _ytdPrevTo  = new Date(_now.getFullYear() - 1, _now.getMonth(), _now.getDate() + 1).toISOString().split('T')[0];
 const _ytdPrevMonthStr = _ytdMonthStr;
@@ -74,65 +73,56 @@ const DOC_PERIODS = [
 
 const SALES_PERIODS = [
   {
-    label: 'Q1 2026',
-    from: '2026-01', to: '2026-03',
+    label: 'Q1 2026', from: '2026-01', to: '2026-03',
     prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025',
     dateFrom: '2026-01-01', dateTo: '2026-03-31',
     prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31',
   },
   {
-    label: 'Q2 2026',
-    from: '2026-04', to: '2026-06',
+    label: 'Q2 2026', from: '2026-04', to: '2026-06',
     prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025',
     dateFrom: '2026-04-01', dateTo: '2026-06-30',
     prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30',
   },
   {
-    // FIX: both `to` and `prevTo` use identical _ytdMonthStr so the windows are symmetric
     label: `2026 YTD (έως ${_ytdLabel})`,
-    from: '2026-01',       to: `2026-${_ytdMonthStr}`,       // e.g. 2026-04
-    prevFrom: '2025-01',   prevTo: `2025-${_ytdPrevMonthStr}`, // e.g. 2025-04  ← was wrong before
+    from: '2026-01', to: `2026-${_ytdMonthStr}`,
+    prevFrom: '2025-01', prevTo: `2025-${_ytdPrevMonthStr}`,
     prevLabel: `Ιαν–${_ytdLabel} 2025`,
-    dateFrom: '2026-01-01', dateTo: _ytdDateTo,               // e.g. 2026-04-30
-    prevDateFrom: '2025-01-01', prevDateTo: _ytdPrevTo,       // e.g. 2025-04-30
+    dateFrom: '2026-01-01', dateTo: _ytdDateTo,
+    prevDateFrom: '2025-01-01', prevDateTo: _ytdPrevTo,
   },
   {
-    label: '2025 Full',
-    from: '2025-01', to: '2025-12',
+    label: '2025 Full', from: '2025-01', to: '2025-12',
     prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024',
     dateFrom: '2025-01-01', dateTo: '2025-12-31',
     prevDateFrom: '2024-01-01', prevDateTo: '2024-12-31',
   },
   {
-    label: 'Q4 2025',
-    from: '2025-10', to: '2025-12',
+    label: 'Q4 2025', from: '2025-10', to: '2025-12',
     prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024',
     dateFrom: '2025-10-01', dateTo: '2025-12-31',
     prevDateFrom: '2024-10-01', prevDateTo: '2024-12-31',
   },
   {
-    label: 'Q3 2025',
-    from: '2025-07', to: '2025-09',
+    label: 'Q3 2025', from: '2025-07', to: '2025-09',
     prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024',
     dateFrom: '2025-07-01', dateTo: '2025-09-30',
     prevDateFrom: '2024-07-01', prevDateTo: '2024-09-30',
   },
   {
-    label: 'Q2 2025',
-    from: '2025-04', to: '2025-06',
+    label: 'Q2 2025', from: '2025-04', to: '2025-06',
     prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024',
     dateFrom: '2025-04-01', dateTo: '2025-06-30',
     prevDateFrom: '2024-04-01', prevDateTo: '2024-06-30',
   },
   {
-    label: 'Q1 2025',
-    from: '2025-01', to: '2025-03',
+    label: 'Q1 2025', from: '2025-01', to: '2025-03',
     prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024',
     dateFrom: '2025-01-01', dateTo: '2025-03-31',
     prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31',
   },
 ];
-
 
 function sumPeriod(sales: any[], fromMonth: string, toMonth: string): number {
   return sales.filter(s => s.month >= fromMonth && s.month <= toMonth).reduce((sum, s) => sum + (s.netamnt ?? 0), 0);
@@ -199,18 +189,13 @@ function getL1Label(l1Code: string, items: any[]): string {
 }
 
 function CollapsibleSection({ title, icon, children, defaultCollapsed = false }: {
-  title: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-  defaultCollapsed?: boolean;
+  title: string; icon?: React.ReactNode; children: React.ReactNode; defaultCollapsed?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   return (
     <div className="bg-white rounded-xl shadow overflow-hidden">
-      <button
-        onClick={() => setCollapsed(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors"
-      >
+      <button onClick={() => setCollapsed(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors">
         <div className="flex items-center gap-2">
           {icon}
           <span className="text-base font-semibold text-slate-900">{title}</span>
@@ -229,13 +214,16 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [visitsLoading, setVisitsLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
-  const [salesPeriodIdx, setSalesPeriodIdx] = useState(2); // default to YTD (index 2)
+  const [salesPeriodIdx, setSalesPeriodIdx] = useState(2);
   const [salesByCategory, setSalesByCategory] = useState<any[]>([]);
   const [salesByCategoryLoading, setSalesByCategoryLoading] = useState(true);
   const [balance, setBalance] = useState<{ balance: number; entries: any[] } | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [discounts, setDiscounts] = useState<{ general: number | null; categories: any[]; brands: any[]; prccategory: number | null } | null>(null);
   const [discountsLoading, setDiscountsLoading] = useState(true);
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const [showAllBrands, setShowAllBrands] = useState(false);
+  const [salesExpanded, setSalesExpanded] = useState(false);
 
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
@@ -328,11 +316,11 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   }, [customer.code]);
 
   useEffect(() => {
-  setDiscountsLoading(true);
-  authedFetch(`/api/erp/customers/${customer.code}/discounts`)
-    .then(data => setDiscounts(data))
-    .catch(console.error)
-    .finally(() => setDiscountsLoading(false));
+    setDiscountsLoading(true);
+    authedFetch(`/api/erp/customers/${customer.code}/discounts`)
+      .then(data => setDiscounts(data))
+      .catch(console.error)
+      .finally(() => setDiscountsLoading(false));
   }, [customer.code]);
 
   function toggleDocExpand(findoc: number) {
@@ -533,57 +521,41 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
-      
+
       <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
 
           {/* Row 1: Back + New Visit */}
           <div className="flex items-center justify-between">
-            <button onClick={onBack}
-              className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Dashboard
+            <button onClick={onBack} className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
+              <ArrowLeft className="w-4 h-4" />Back to Dashboard
             </button>
             <button onClick={() => setShowNewVisitDialog(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
-              <Plus className="w-4 h-4" />
-              New Visit
+              <Plus className="w-4 h-4" />New Visit
             </button>
           </div>
 
-          {/* Row 2: Code + Name */}
+          {/* Row 2: Code + Name + Badges */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-sm font-bold shrink-0">
-              {customer.code}
-            </span>
+            <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-sm font-bold shrink-0">{customer.code}</span>
             <h1 className="text-lg font-extrabold leading-tight">{customer.name}</h1>
-                    {/* INACTIVE BADGE */}
             {customer.is_active === false && (
-              <span className="px-2 py-0.5 bg-amber-400 text-amber-900 text-xs font-semibold rounded-full shrink-0">
-                Inactive
-              </span>
+              <span className="px-2 py-0.5 bg-amber-400 text-amber-900 text-xs font-semibold rounded-full shrink-0">Inactive</span>
             )}
             {customer.prccategory === 105 && (
-              <span className="px-2 py-0.5 bg-orange-400 text-white text-xs font-semibold rounded-full shrink-0">
-                Συν/Φαν/Ηλ
-              </span>
+              <span className="px-2 py-0.5 bg-orange-400 text-white text-xs font-semibold rounded-full shrink-0">Συν/Φαν/Ηλ</span>
             )}
           </div>
 
           {/* Row 3: Tags */}
           <div className="flex flex-wrap gap-1.5">
-            {customer.type && (
-              <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.type}</span>
-            )}
-            {customer.group && (
-              <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.group}</span>
-            )}
-            {customer.city && (
-              <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs text-white/70">{customer.city}{customer.area ? `, ${customer.area}` : ''}</span>
-            )}
+            {customer.type && <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.type}</span>}
+            {customer.group && <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.group}</span>}
+            {customer.city && <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs text-white/70">{customer.city}{customer.area ? `, ${customer.area}` : ''}</span>}
           </div>
 
-          {/* Row 4: Jump nav + Period selector */}
+          {/* Row 4: Nav + Period */}
           <div className="flex items-center justify-between border-t border-white/10 pt-2">
             <div className="flex items-center gap-1">
               {[
@@ -594,34 +566,22 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 { icon: <Lightbulb className="w-4 h-4" />, id: 'section-categories', title: 'Κατηγορίες' },
               ].map((item, i) => (
                 <button key={i}
-                  onClick={() => {
-                    const el = document.getElementById(item.id);
-                    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' });
-                  }}
+                  onClick={() => { const el = document.getElementById(item.id); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' }); }}
                   title={item.title}
                   className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
                   {item.icon}
                 </button>
               ))}
-              <button
-                onClick={() => {
-                  if (docsRef.current) {
-                    const top = docsRef.current.getBoundingClientRect().top + window.scrollY - 170;
-                    window.scrollTo({ top, behavior: 'smooth' });
-                  }
-                }}
-                title="Έγγραφα"
-                className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+              <button onClick={() => { if (docsRef.current) window.scrollTo({ top: docsRef.current.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' }); }}
+                title="Έγγραφα" className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
                 <FileText className="w-4 h-4" />
               </button>
             </div>
-
             <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))}
               className="text-xs bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-white focus:ring-2 focus:ring-white/30">
               {SALES_PERIODS.map((p, i) => <option key={p.label} value={i} className="text-slate-800">{p.label}</option>)}
             </select>
           </div>
-
         </div>
       </header>
 
@@ -664,55 +624,59 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 </span>
               )}
             </div>
-
             {discountsLoading ? (
               <div className="text-sm text-slate-400">Φόρτωση...</div>
             ) : !discounts ? (
               <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν εκπτώσεις</div>
             ) : (
               <div className="space-y-4">
-
                 {/* General discount */}
-                {discounts.general !== null && (
+                {discounts.general !== null ? (
                   <div className="flex items-center justify-between py-2 border-b border-slate-100">
                     <span className="text-sm text-slate-600 font-medium">Γενική Έκπτωση Πελάτη</span>
                     <span className="text-lg font-bold text-green-600">{discounts.general}%</span>
                   </div>
-                )}
-                {discounts.general === null && (
+                ) : (
                   <div className="text-xs text-slate-400 italic">Δεν υπάρχει γενική έκπτωση</div>
                 )}
-
                 {/* Category discounts */}
                 {discounts.categories.length > 0 && (
                   <div>
                     <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Εκπτώσεις ανά Κατηγορία</div>
                     <div className="space-y-1">
-                      {discounts.categories.map((c: any, i: number) => (
+                      {(showAllCategories ? discounts.categories : discounts.categories.slice(0, 5)).map((c: any, i: number) => (
                         <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50">
                           <span className="text-sm text-slate-700">{c.category}</span>
                           <span className="text-sm font-bold text-indigo-600">{c.discount}%</span>
                         </div>
                       ))}
                     </div>
+                    {discounts.categories.length > 5 && (
+                      <button onClick={() => setShowAllCategories(v => !v)} className="text-xs text-indigo-500 hover:underline mt-1">
+                        {showAllCategories ? 'Show less' : `+${discounts.categories.length - 5} more`}
+                      </button>
+                    )}
                   </div>
                 )}
-
                 {/* Brand discounts */}
                 {discounts.brands.length > 0 && (
                   <div>
                     <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Εκπτώσεις ανά Μάρκα</div>
                     <div className="space-y-1">
-                      {discounts.brands.map((b: any, i: number) => (
+                      {(showAllBrands ? discounts.brands : discounts.brands.slice(0, 5)).map((b: any, i: number) => (
                         <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50">
                           <span className="text-sm text-slate-700">{b.brand}</span>
                           <span className="text-sm font-bold text-blue-600">{b.discount}%</span>
                         </div>
                       ))}
                     </div>
+                    {discounts.brands.length > 5 && (
+                      <button onClick={() => setShowAllBrands(v => !v)} className="text-xs text-indigo-500 hover:underline mt-1">
+                        {showAllBrands ? 'Show less' : `+${discounts.brands.length - 5} more`}
+                      </button>
+                    )}
                   </div>
                 )}
-
               </div>
             )}
           </section>
@@ -728,18 +692,11 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               <span>Δεν υπάρχουν στοιχεία προφίλ ή ανταγωνισμού</span>
             </div>
           ) : (
-            <CollapsibleSection
-              title="Προφίλ & Ανταγωνισμός"
-              icon={<Store className="w-5 h-5 text-blue-500" />}
-              defaultCollapsed={true}
-            >
+            <CollapsibleSection title="Προφίλ & Ανταγωνισμός" icon={<Store className="w-5 h-5 text-blue-500" />} defaultCollapsed={true}>
               <div className="space-y-4">
                 {shopProfile && (
                   <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Store className="w-4 h-4 text-blue-500" />
-                      <span className="text-sm font-semibold text-slate-700">Προφίλ Καταστήματος</span>
-                    </div>
+                    <div className="flex items-center gap-2 mb-3"><Store className="w-4 h-4 text-blue-500" /><span className="text-sm font-semibold text-slate-700">Προφίλ Καταστήματος</span></div>
                     <div className="space-y-2 text-sm text-slate-700">
                       {shopProfile.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[shopProfile.shop_type] ?? shopProfile.shop_type}</span></div>}
                       {shopProfile.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{shopProfile.number_of_employees}</span></div>}
@@ -788,7 +745,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
 
           {salesLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : (
             <>
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* KPI cards — always visible */}
+              <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                   <div className="text-xs text-indigo-500 font-medium mb-1">Τρέχουσα Περίοδος ({sp.label})</div>
                   <div className="text-2xl font-bold text-indigo-700 leading-tight">{fmtEur(currentTotal)}</div>
@@ -810,180 +768,185 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 </div>
               </div>
 
-              {(() => {
-                const months = sales.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
-                const prevMonthMap = new Map<string, number>();
-                sales.filter(s => s.month >= sp.prevFrom && s.month <= sp.prevTo).forEach(s => prevMonthMap.set(s.month, s.netamnt));
-                function toPrevMonth(curMonth: string): string {
-                  const [y, m] = curMonth.split('-').map(Number);
-                  const [py] = sp.prevFrom.split('-').map(Number);
-                  const [cy] = sp.from.split('-').map(Number);
-                  return `${py + (y - cy)}-${String(m).padStart(2, '0')}`;
-                }
-                if (months.length === 0) return null;
-                const allAmounts = [...months.map(m => m.netamnt), ...months.map(m => prevMonthMap.get(toPrevMonth(m.month)) ?? 0)];
-                const maxAmt = Math.max(...allAmounts, 1);
-                return (
-                  <div>
-                    <div className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-wide">Ανά Μήνα</div>
-                    <div className="space-y-2">
-                      {months.map(m => {
-                        const prevKey = toPrevMonth(m.month);
-                        const prevAmt = prevMonthMap.get(prevKey) ?? null;
-                        const curPct  = Math.max((m.netamnt / maxAmt) * 100, 2);
-                        const prevPct = prevAmt !== null ? Math.max((prevAmt / maxAmt) * 100, 2) : 0;
-                        const monthLabel = new Date(m.month + '-01').toLocaleString('el-GR', { month: 'short' });
-                        return (
-                          <div key={m.month} className="text-xs">
-                            <div className="flex items-center gap-2 mb-1 text-slate-500">
-                              <span className="w-7 shrink-0 font-medium">{monthLabel}</span>
-                              <span className="font-semibold text-slate-700">{fmtEur(m.netamnt)}</span>
-                              {prevAmt !== null && <span className="text-slate-400">vs {fmtEur(prevAmt)}</span>}
+              {/* Toggle button */}
+              <button onClick={() => setSalesExpanded(v => !v)}
+                className="w-full flex items-center justify-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 py-2 border-t border-slate-100 mt-2">
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${salesExpanded ? 'rotate-180' : ''}`} />
+                {salesExpanded ? 'Απόκρυψη λεπτομερειών' : 'Εμφάνιση λεπτομερειών'}
+              </button>
+
+              {/* Collapsible: monthly chart + category breakdown */}
+              {salesExpanded && <>
+                {(() => {
+                  const months = sales.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
+                  const prevMonthMap = new Map<string, number>();
+                  sales.filter(s => s.month >= sp.prevFrom && s.month <= sp.prevTo).forEach(s => prevMonthMap.set(s.month, s.netamnt));
+                  function toPrevMonth(curMonth: string): string {
+                    const [y, m] = curMonth.split('-').map(Number);
+                    const [py] = sp.prevFrom.split('-').map(Number);
+                    const [cy] = sp.from.split('-').map(Number);
+                    return `${py + (y - cy)}-${String(m).padStart(2, '0')}`;
+                  }
+                  if (months.length === 0) return null;
+                  const allAmounts = [...months.map(m => m.netamnt), ...months.map(m => prevMonthMap.get(toPrevMonth(m.month)) ?? 0)];
+                  const maxAmt = Math.max(...allAmounts, 1);
+                  return (
+                    <div className="mt-3">
+                      <div className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-wide">Ανά Μήνα</div>
+                      <div className="space-y-2">
+                        {months.map(m => {
+                          const prevKey = toPrevMonth(m.month);
+                          const prevAmt = prevMonthMap.get(prevKey) ?? null;
+                          const curPct  = Math.max((m.netamnt / maxAmt) * 100, 2);
+                          const prevPct = prevAmt !== null ? Math.max((prevAmt / maxAmt) * 100, 2) : 0;
+                          const monthLabel = new Date(m.month + '-01').toLocaleString('el-GR', { month: 'short' });
+                          return (
+                            <div key={m.month} className="text-xs">
+                              <div className="flex items-center gap-2 mb-1 text-slate-500">
+                                <span className="w-7 shrink-0 font-medium">{monthLabel}</span>
+                                <span className="font-semibold text-slate-700">{fmtEur(m.netamnt)}</span>
+                                {prevAmt !== null && <span className="text-slate-400">vs {fmtEur(prevAmt)}</span>}
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-sm h-2 mb-0.5"><div className="h-2 rounded-sm bg-indigo-400 transition-all" style={{ width: `${curPct}%` }} /></div>
+                              {prevAmt !== null && <div className="w-full bg-slate-100 rounded-sm h-1.5"><div className="h-1.5 rounded-sm bg-slate-300 transition-all" style={{ width: `${prevPct}%` }} /></div>}
                             </div>
-                            <div className="w-full bg-slate-100 rounded-sm h-2 mb-0.5"><div className="h-2 rounded-sm bg-indigo-400 transition-all" style={{ width: `${curPct}%` }} /></div>
-                            {prevAmt !== null && <div className="w-full bg-slate-100 rounded-sm h-1.5"><div className="h-1.5 rounded-sm bg-slate-300 transition-all" style={{ width: `${prevPct}%` }} /></div>}
+                          );
+                        })}
+                      </div>
+                      {months.length > 0 && prevMonthMap.size > 0 && (
+                        <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
+                          <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm bg-indigo-400 inline-block" />{sp.label}</span>
+                          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-sm bg-slate-300 inline-block" />{sp.prevLabel}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* SALES BY CATEGORY */}
+                <div className="mt-5 pt-4 border-t border-slate-100">
+                  <div className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Ανά Κατηγορία</div>
+                  {salesByCategoryLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : salesByCategory.length === 0 ? (
+                    <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν κατηγορίες για αυτή την περίοδο</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {salesByCategory.map(group => {
+                        const isL1Exp = expandedL1s.has(group.l1_code);
+                        const maxGroupRev = Math.max(...salesByCategory.map((g: any) => g.total_revenue), 1);
+                        const groupBarPct = Math.max((group.total_revenue / maxGroupRev) * 100, 2);
+                        const l1Name = categoryMaster.get(group.l1_code) ?? `Κατηγορία ${group.l1_code}`;
+                        return (
+                          <div key={group.l1_code} className="rounded-lg border border-slate-100 overflow-hidden">
+                            <button onClick={() => toggleL1(group.l1_code)}
+                              className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors ${isL1Exp ? 'bg-blue-50 border-b border-blue-100' : 'bg-white hover:bg-slate-50'}`}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isL1Exp ? <ChevronDown className="w-4 h-4 text-blue-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                                <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-mono shrink-0">{group.l1_code}</span>
+                                <span className="text-sm font-medium text-slate-700 truncate">{l1Name}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                <GrowthBadge pct={group.growth_pct ?? null} />
+                                <span className="text-xs text-slate-400 hidden sm:block">{group.invoice_count} τιμολόγια</span>
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold text-slate-700">{fmtEur(group.total_revenue)}</div>
+                                  {group.prev_revenue > 0 && <div className="text-xs text-slate-400">{fmtEur(group.prev_revenue)}</div>}
+                                </div>
+                              </div>
+                            </button>
+                            {!isL1Exp && <div className="px-3 pb-2 bg-white"><div className="w-full bg-slate-100 rounded-sm h-1.5"><div className="h-1.5 rounded-sm bg-blue-300 transition-all" style={{ width: `${groupBarPct}%` }} /></div></div>}
+                            {isL1Exp && (
+                              <div className="divide-y divide-slate-50">
+                                {group.l2s.map((l2: any) => {
+                                  const l2Key = String(l2.category_code);
+                                  const l2IdKey = String(l2.category_id);
+                                  const isL2Exp = expandedL2s.has(l2Key);
+                                  const hasL3 = l2.l3s && l2.l3s.length > 0;
+                                  const l2Name = l2.full_name ?? categoryMaster.get(l2Key) ?? l2Key;
+                                  const maxL2Rev = Math.max(...group.l2s.map((l: any) => l.net_revenue), 1);
+                                  return (
+                                    <div key={l2Key} className="bg-white">
+                                      <button onClick={() => {
+                                        toggleL2(l2Key);
+                                        if (!isL2Exp) {
+                                          const effectiveId = l2.category_id ? l2IdKey : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
+                                          if (effectiveId) handleExpandCategory(effectiveId);
+                                        }
+                                      }} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <div className="w-3 shrink-0" />
+                                          {isL2Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
+                                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-mono shrink-0">{l2.short_name ?? l2Key}</span>
+                                          <span className="text-sm font-medium text-slate-700 truncate">{l2Name}</span>
+                                          {hasL3 && <span className="text-xs text-slate-400 shrink-0">({l2.l3s.length})</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                                          <GrowthBadge pct={l2.growth_pct ?? null} />
+                                          <div className="text-right">
+                                            <div className="flex items-center gap-2 justify-end">
+                                              <span className="text-xs text-slate-400">{Math.round(l2.total_qty)} τεμ.</span>
+                                              <div className="text-sm font-semibold text-slate-700">{fmtEur(l2.net_revenue)}</div>
+                                            </div>
+                                            {l2.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l2.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l2.prev_revenue)}</div></div>}
+                                          </div>
+                                        </div>
+                                      </button>
+                                      <div className="px-3 pb-1 bg-white"><div className="ml-8 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} /></div></div>
+                                      {isL2Exp && (
+                                        <div>
+                                          {(() => {
+                                            const effectiveId = l2.category_id ? l2IdKey : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
+                                            return effectiveId ? renderCategoryExpanded(effectiveId) : null;
+                                          })()}
+                                          {hasL3 && (
+                                            <div className="border-t border-slate-200 divide-y divide-slate-100 bg-slate-50">
+                                              <div className="px-4 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide bg-white">Υποκατηγορίες</div>
+                                              {l2.l3s.map((l3: any) => {
+                                                const l3Key = String(l3.category_code);
+                                                const l3IdKey = String(l3.category_id);
+                                                const isL3Exp = expandedL3s.has(l3Key);
+                                                const maxL3Rev = Math.max(...l2.l3s.map((x: any) => x.net_revenue), 1);
+                                                return (
+                                                  <div key={l3Key} className="bg-white">
+                                                    <button onClick={() => { toggleL3(l3Key); if (!isL3Exp) handleExpandCategory(l3IdKey); }}
+                                                      className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
+                                                      <div className="flex items-center gap-2 min-w-0">
+                                                        <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
+                                                        {isL3Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
+                                                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono shrink-0 uppercase">{l3.short_name ?? l3Key}</span>
+                                                        <span className="text-sm text-slate-700 truncate">{l3.full_name}</span>
+                                                      </div>
+                                                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                                                        <GrowthBadge pct={l3.growth_pct ?? null} />
+                                                        <div className="text-right">
+                                                          <div className="flex items-center gap-2 justify-end">
+                                                            <span className="text-xs text-slate-400">{Math.round(l3.total_qty)} τεμ.</span>
+                                                            <div className="text-sm font-semibold text-slate-700">{fmtEur(l3.net_revenue)}</div>
+                                                          </div>
+                                                          {l3.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l3.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l3.prev_revenue)}</div></div>}
+                                                        </div>
+                                                      </div>
+                                                    </button>
+                                                    <div className="px-4 pb-1 bg-white"><div className="ml-10 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-indigo-300 transition-all" style={{ width: `${Math.max((l3.net_revenue / maxL3Rev) * 100, 2)}%` }} /></div></div>
+                                                    {isL3Exp && renderCategoryExpanded(l3IdKey)}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
-                    {months.length > 0 && prevMonthMap.size > 0 && (
-                      <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
-                        <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-sm bg-indigo-400 inline-block" />{sp.label}</span>
-                        <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-sm bg-slate-300 inline-block" />{sp.prevLabel}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* SALES BY CATEGORY */}
-              <div className="mt-5 pt-4 border-t border-slate-100">
-                <div className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Ανά Κατηγορία</div>
-                {salesByCategoryLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : salesByCategory.length === 0 ? (
-                  <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν κατηγορίες για αυτή την περίοδο</div>
-                ) : (
-                  <div className="space-y-1">
-                    {salesByCategory.map(group => {
-                      const isL1Exp = expandedL1s.has(group.l1_code);
-                      const maxGroupRev = Math.max(...salesByCategory.map((g: any) => g.total_revenue), 1);
-                      const groupBarPct = Math.max((group.total_revenue / maxGroupRev) * 100, 2);
-                      const l1Name = categoryMaster.get(group.l1_code) ?? `Κατηγορία ${group.l1_code}`;
-                      return (
-                        <div key={group.l1_code} className="rounded-lg border border-slate-100 overflow-hidden">
-                          <button onClick={() => toggleL1(group.l1_code)}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors ${isL1Exp ? 'bg-blue-50 border-b border-blue-100' : 'bg-white hover:bg-slate-50'}`}>
-                            <div className="flex items-center gap-2 min-w-0">
-                              {isL1Exp ? <ChevronDown className="w-4 h-4 text-blue-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-                              <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-mono shrink-0">{group.l1_code}</span>
-                              <span className="text-sm font-medium text-slate-700 truncate">{l1Name}</span>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0 ml-2">
-                              <GrowthBadge pct={group.growth_pct ?? null} />
-                              <span className="text-xs text-slate-400 hidden sm:block">{group.invoice_count} τιμολόγια</span>
-                              <div className="text-right">
-                                <div className="text-sm font-semibold text-slate-700">{fmtEur(group.total_revenue)}</div>
-                                {group.prev_revenue > 0 && <div className="text-xs text-slate-400">{fmtEur(group.prev_revenue)}</div>}
-                              </div>
-                            </div>
-                          </button>
-                          {!isL1Exp && <div className="px-3 pb-2 bg-white"><div className="w-full bg-slate-100 rounded-sm h-1.5"><div className="h-1.5 rounded-sm bg-blue-300 transition-all" style={{ width: `${groupBarPct}%` }} /></div></div>}
-                          {isL1Exp && (
-                            <div className="divide-y divide-slate-50">
-                              {group.l2s.map((l2: any) => {
-                                const l2Key = String(l2.category_code);
-                                const l2IdKey = String(l2.category_id);
-                                const isL2Exp = expandedL2s.has(l2Key);
-                                const hasL3 = l2.l3s && l2.l3s.length > 0;
-                                const l2Name = l2.full_name ?? categoryMaster.get(l2Key) ?? l2Key;
-                                const maxL2Rev = Math.max(...group.l2s.map((l: any) => l.net_revenue), 1);
-                                return (
-                                  <div key={l2Key} className="bg-white">
-                                    <button onClick={() => {
-                                      toggleL2(l2Key);
-                                      if (!isL2Exp) {
-                                        const effectiveId = l2.category_id
-                                          ? l2IdKey
-                                          : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
-                                        if (effectiveId) handleExpandCategory(effectiveId);
-                                      }
-                                    }}
-                                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 text-left">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div className="w-3 shrink-0" />
-                                        {isL2Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
-                                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-mono shrink-0">{l2.short_name ?? l2Key}</span>
-                                        <span className="text-sm font-medium text-slate-700 truncate">{l2Name}</span>
-                                        {hasL3 && <span className="text-xs text-slate-400 shrink-0">({l2.l3s.length})</span>}
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                                        <GrowthBadge pct={l2.growth_pct ?? null} />
-                                        <div className="text-right">
-                                          <div className="flex items-center gap-2 justify-end">
-                                            <span className="text-xs text-slate-400">{Math.round(l2.total_qty)} τεμ.</span>
-                                            <div className="text-sm font-semibold text-slate-700">{fmtEur(l2.net_revenue)}</div>
-                                          </div>
-                                          {l2.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l2.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l2.prev_revenue)}</div></div>}
-                                        </div>
-                                      </div>
-                                    </button>
-                                    <div className="px-3 pb-1 bg-white"><div className="ml-8 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-blue-200 transition-all" style={{ width: `${Math.max((l2.net_revenue / maxL2Rev) * 100, 2)}%` }} /></div></div>
-                                    {isL2Exp && (
-                                      <div>
-                                        {(() => {
-                                          const effectiveId = l2.category_id
-                                            ? l2IdKey
-                                            : l2.l3s?.[0]?.category_id ? String(l2.l3s[0].category_id) : null;
-                                          return effectiveId ? renderCategoryExpanded(effectiveId) : null;
-                                        })()}
-                                        {hasL3 && (
-                                          <div className="border-t border-slate-200 divide-y divide-slate-100 bg-slate-50">
-                                            <div className="px-4 py-1.5 text-xs font-medium text-slate-400 uppercase tracking-wide bg-white">Υποκατηγορίες</div>
-                                            {l2.l3s.map((l3: any) => {
-                                              const l3Key = String(l3.category_code);
-                                              const l3IdKey = String(l3.category_id);
-                                              const isL3Exp = expandedL3s.has(l3Key);
-                                              const maxL3Rev = Math.max(...l2.l3s.map((x: any) => x.net_revenue), 1);
-                                              return (
-                                                <div key={l3Key} className="bg-white">
-                                                  <button onClick={() => { toggleL3(l3Key); if (!isL3Exp) handleExpandCategory(l3IdKey); }}
-                                                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                      <div className="w-4 shrink-0 flex justify-center"><div className="w-px h-4 bg-slate-200" /></div>
-                                                      {isL3Exp ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
-                                                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono shrink-0 uppercase">{l3.short_name ?? l3Key}</span>
-                                                      <span className="text-sm text-slate-700 truncate">{l3.full_name}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                                                      <GrowthBadge pct={l3.growth_pct ?? null} />
-                                                      <div className="text-right">
-                                                        <div className="flex items-center gap-2 justify-end">
-                                                          <span className="text-xs text-slate-400">{Math.round(l3.total_qty)} τεμ.</span>
-                                                          <div className="text-sm font-semibold text-slate-700">{fmtEur(l3.net_revenue)}</div>
-                                                        </div>
-                                                        {l3.prev_qty > 0 && <div className="flex items-center gap-2 justify-end"><span className="text-xs text-slate-300">{Math.round(l3.prev_qty)} τεμ.</span><div className="text-xs text-slate-400">{fmtEur(l3.prev_revenue)}</div></div>}
-                                                      </div>
-                                                    </div>
-                                                  </button>
-                                                  <div className="px-4 pb-1 bg-white"><div className="ml-10 w-full bg-slate-100 rounded-sm h-1"><div className="h-1 rounded-sm bg-indigo-300 transition-all" style={{ width: `${Math.max((l3.net_revenue / maxL3Rev) * 100, 2)}%` }} /></div></div>
-                                                  {isL3Exp && renderCategoryExpanded(l3IdKey)}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              </>}
             </>
           )}
         </section>
