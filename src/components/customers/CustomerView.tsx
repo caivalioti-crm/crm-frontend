@@ -234,6 +234,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [salesByCategoryLoading, setSalesByCategoryLoading] = useState(true);
   const [balance, setBalance] = useState<{ balance: number; entries: any[] } | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
+  const [discounts, setDiscounts] = useState<{ general: number | null; categories: any[]; brands: any[]; prccategory: number | null } | null>(null);
+  const [discountsLoading, setDiscountsLoading] = useState(true);
 
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
@@ -323,6 +325,14 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     authedFetch(`/api/erp/customers/${customer.code}/balance`)
       .then(data => setBalance(data))
       .catch(console.error).finally(() => setBalanceLoading(false));
+  }, [customer.code]);
+
+  useEffect(() => {
+  setDiscountsLoading(true);
+  authedFetch(`/api/erp/customers/${customer.code}/discounts`)
+    .then(data => setDiscounts(data))
+    .catch(console.error)
+    .finally(() => setDiscountsLoading(false));
   }, [customer.code]);
 
   function toggleDocExpand(findoc: number) {
@@ -641,6 +651,72 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             </div>
           </div>
         </section>
+
+        {/* DISCOUNTS */}
+        {(discountsLoading || (discounts && (discounts.general !== null || discounts.categories.length > 0 || discounts.brands.length > 0))) && (
+          <section className="bg-white rounded-xl shadow p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Tag className="w-5 h-5 text-green-600" />
+              <h2 className="text-base font-semibold">Πολιτική Εκπτώσεων</h2>
+              {discounts?.prccategory === 105 && (
+                <span className="px-2 py-0.5 bg-orange-100 text-orange-700 border border-orange-200 text-xs font-semibold rounded-full">
+                  Συν/Φαν/Ηλ — Ειδική Τιμολόγηση
+                </span>
+              )}
+            </div>
+
+            {discountsLoading ? (
+              <div className="text-sm text-slate-400">Φόρτωση...</div>
+            ) : !discounts ? (
+              <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν εκπτώσεις</div>
+            ) : (
+              <div className="space-y-4">
+
+                {/* General discount */}
+                {discounts.general !== null && (
+                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                    <span className="text-sm text-slate-600 font-medium">Γενική Έκπτωση Πελάτη</span>
+                    <span className="text-lg font-bold text-green-600">{discounts.general}%</span>
+                  </div>
+                )}
+                {discounts.general === null && (
+                  <div className="text-xs text-slate-400 italic">Δεν υπάρχει γενική έκπτωση</div>
+                )}
+
+                {/* Category discounts */}
+                {discounts.categories.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Εκπτώσεις ανά Κατηγορία</div>
+                    <div className="space-y-1">
+                      {discounts.categories.map((c: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50">
+                          <span className="text-sm text-slate-700">{c.category}</span>
+                          <span className="text-sm font-bold text-indigo-600">{c.discount}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Brand discounts */}
+                {discounts.brands.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Εκπτώσεις ανά Μάρκα</div>
+                    <div className="space-y-1">
+                      {discounts.brands.map((b: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50">
+                          <span className="text-sm text-slate-700">{b.brand}</span>
+                          <span className="text-sm font-bold text-blue-600">{b.discount}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            )}
+          </section>
+        )}
 
         {/* SHOP PROFILE + COMPETITOR INFO */}
         <section id="section-comp" className="bg-white rounded-xl shadow overflow-hidden">
