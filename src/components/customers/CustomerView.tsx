@@ -513,7 +513,9 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 <td className="px-3 py-2 text-right text-slate-400">
                   {line.vatprc != null ? `${line.vatprc}%` : '—'}
                 </td>
-                <td className="px-4 py-2 text-right font-semibold text-slate-700">{fmtEur(Number(line.netlineval ?? 0))}</td>
+                <td className="px-4 py-2 text-right font-semibold text-slate-700">
+                  {line.price != null ? fmtEur(line.price) : fmtEur(Number(line.netlineval ?? 0))}
+                </td>
               </tr>
             ))}
           </tbody>
