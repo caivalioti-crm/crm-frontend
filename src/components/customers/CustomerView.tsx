@@ -7,7 +7,7 @@ import {
 
 import { formatDate } from '../../utils/dateFormat';
 import { NewVisitDialog } from '../visits/NewVisitDialog';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import type { CommercialEntityBase } from '../../types/commercialEntity';
 
@@ -57,73 +57,11 @@ const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; ico
   credit:  { label: 'Πίστωση',    bg: 'bg-red-100',   text: 'text-red-700',   icon: Tag },
 };
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
-const _now = new Date();
-const _ytdMonth = _now.getMonth();
-const _ytdMonthStr = String(_ytdMonth).padStart(2, '0');
-const _ytdLabel = _now.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
-const _ytdDateTo  = new Date(_now.getFullYear(),     _now.getMonth(), _now.getDate() + 1).toISOString().split('T')[0];
-const _ytdPrevTo  = new Date(_now.getFullYear() - 1, _now.getMonth(), _now.getDate() + 1).toISOString().split('T')[0];
-const _ytdPrevMonthStr = _ytdMonthStr;
-
 const DOC_PERIODS = [
   { label: '2026 YTD', from: '2026-01-01', to: '2026-12-31' },
   { label: '2025',     from: '2025-01-01', to: '2025-12-31' },
   { label: '2024',     from: '2024-01-01', to: '2024-12-31' },
   { label: 'Όλα',      from: '2022-01-01', to: '2026-12-31' },
-];
-
-const SALES_PERIODS = [
-  {
-    label: 'Q1 2026', from: '2026-01', to: '2026-03',
-    prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025',
-    dateFrom: '2026-01-01', dateTo: '2026-03-31',
-    prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31',
-  },
-  {
-    label: 'Q2 2026', from: '2026-04', to: '2026-06',
-    prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025',
-    dateFrom: '2026-04-01', dateTo: '2026-06-30',
-    prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30',
-  },
-  {
-    label: `2026 YTD (έως ${_ytdLabel})`,
-    from: '2026-01', to: `2026-${_ytdMonthStr}`,
-    prevFrom: '2025-01', prevTo: `2025-${_ytdPrevMonthStr}`,
-    prevLabel: `Ιαν–${_ytdLabel} 2025`,
-    dateFrom: '2026-01-01', dateTo: _ytdDateTo,
-    prevDateFrom: '2025-01-01', prevDateTo: _ytdPrevTo,
-  },
-  {
-    label: '2025 Full', from: '2025-01', to: '2025-12',
-    prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024',
-    dateFrom: '2025-01-01', dateTo: '2025-12-31',
-    prevDateFrom: '2024-01-01', prevDateTo: '2024-12-31',
-  },
-  {
-    label: 'Q4 2025', from: '2025-10', to: '2025-12',
-    prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024',
-    dateFrom: '2025-10-01', dateTo: '2025-12-31',
-    prevDateFrom: '2024-10-01', prevDateTo: '2024-12-31',
-  },
-  {
-    label: 'Q3 2025', from: '2025-07', to: '2025-09',
-    prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024',
-    dateFrom: '2025-07-01', dateTo: '2025-09-30',
-    prevDateFrom: '2024-07-01', prevDateTo: '2024-09-30',
-  },
-  {
-    label: 'Q2 2025', from: '2025-04', to: '2025-06',
-    prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024',
-    dateFrom: '2025-04-01', dateTo: '2025-06-30',
-    prevDateFrom: '2024-04-01', prevDateTo: '2024-06-30',
-  },
-  {
-    label: 'Q1 2025', from: '2025-01', to: '2025-03',
-    prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024',
-    dateFrom: '2025-01-01', dateTo: '2025-03-31',
-    prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31',
-  },
 ];
 
 function sumPeriod(sales: any[], fromMonth: string, toMonth: string): number {
@@ -226,6 +164,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllBrands, setShowAllBrands] = useState(false);
   const [salesExpanded, setSalesExpanded] = useState(false);
+  const [lastSyncDate, setLastSyncDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
@@ -256,6 +195,74 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
   const docsRef = useRef<HTMLDivElement>(null);
+
+  const SALES_PERIODS = useMemo(() => {
+    const d = new Date(lastSyncDate);
+    const ytdMonth = d.getMonth();
+    const ytdMonthStr = String(ytdMonth).padStart(2, '0');
+    const ytdLabel = d.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
+    const ytdDateTo  = new Date(d.getFullYear(),     d.getMonth(), d.getDate() + 1).toISOString().split('T')[0];
+    const ytdPrevTo  = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate() + 1).toISOString().split('T')[0];
+
+    return [
+      {
+        label: 'Q1 2026', from: '2026-01', to: '2026-03',
+        prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025',
+        dateFrom: '2026-01-01', dateTo: '2026-03-31',
+        prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31',
+      },
+      {
+        label: 'Q2 2026', from: '2026-04', to: '2026-06',
+        prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025',
+        dateFrom: '2026-04-01', dateTo: '2026-06-30',
+        prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30',
+      },
+      {
+        label: `2026 YTD (έως ${ytdLabel})`,
+        from: '2026-01', to: `2026-${ytdMonthStr}`,
+        prevFrom: '2025-01', prevTo: `2025-${ytdMonthStr}`,
+        prevLabel: `Ιαν–${ytdLabel} 2025`,
+        dateFrom: '2026-01-01', dateTo: ytdDateTo,
+        prevDateFrom: '2025-01-01', prevDateTo: ytdPrevTo,
+      },
+      {
+        label: '2025 Full', from: '2025-01', to: '2025-12',
+        prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024',
+        dateFrom: '2025-01-01', dateTo: '2025-12-31',
+        prevDateFrom: '2024-01-01', prevDateTo: '2024-12-31',
+      },
+      {
+        label: 'Q4 2025', from: '2025-10', to: '2025-12',
+        prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024',
+        dateFrom: '2025-10-01', dateTo: '2025-12-31',
+        prevDateFrom: '2024-10-01', prevDateTo: '2024-12-31',
+      },
+      {
+        label: 'Q3 2025', from: '2025-07', to: '2025-09',
+        prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024',
+        dateFrom: '2025-07-01', dateTo: '2025-09-30',
+        prevDateFrom: '2024-07-01', prevDateTo: '2024-09-30',
+      },
+      {
+        label: 'Q2 2025', from: '2025-04', to: '2025-06',
+        prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024',
+        dateFrom: '2025-04-01', dateTo: '2025-06-30',
+        prevDateFrom: '2024-04-01', prevDateTo: '2024-06-30',
+      },
+      {
+        label: 'Q1 2025', from: '2025-01', to: '2025-03',
+        prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024',
+        dateFrom: '2025-01-01', dateTo: '2025-03-31',
+        prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31',
+      },
+    ];
+  }, [lastSyncDate]);
+
+  useEffect(() => {
+    authedFetch('/api/erp/last-sync-date')
+      .then(res => { if (res.date) setLastSyncDate(res.date); })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     authedFetch('/api/categories')
@@ -293,7 +300,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     authedFetch(`/api/erp/customers/${customer.code}/sales-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}`)
       .then(data => setSalesByCategory(data.grouped ?? []))
       .catch(console.error).finally(() => setSalesByCategoryLoading(false));
-  }, [customer.code, salesPeriodIdx]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
 
   useEffect(() => {
     setDocsLoading(true);
@@ -507,12 +514,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 <td className="px-4 py-2 font-mono text-slate-600 whitespace-nowrap">{line.sku_code}</td>
                 <td className="px-4 py-2 text-slate-600 hidden sm:table-cell truncate max-w-xs">{line.sku_name}</td>
                 <td className="px-3 py-2 text-right text-slate-500">{Math.round(Number(line.qty ?? 0))}</td>
-                <td className="px-3 py-2 text-right text-slate-400">
-                  {line.disc1prc ? `${line.disc1prc}%` : '—'}
-                </td>
-                <td className="px-3 py-2 text-right text-slate-400">
-                  {line.vatprc != null ? `${line.vatprc}%` : '—'}
-                </td>
+                <td className="px-3 py-2 text-right text-slate-400">{line.disc1prc ? `${line.disc1prc}%` : '—'}</td>
+                <td className="px-3 py-2 text-right text-slate-400">{line.vatprc != null ? `${line.vatprc}%` : '—'}</td>
                 <td className="px-4 py-2 text-right font-semibold text-slate-700">
                   {line.price != null ? fmtEur(line.price) : fmtEur(Number(line.netlineval ?? 0))}
                 </td>
@@ -538,7 +541,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
       <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
 
-          {/* Row 1: Back + New Visit */}
           <div className="flex items-center justify-between">
             <button onClick={onBack} className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
               <ArrowLeft className="w-4 h-4" />Back to Dashboard
@@ -549,7 +551,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             </button>
           </div>
 
-          {/* Row 2: Code + Name + Badges */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2 py-0.5 bg-white/20 rounded font-mono text-sm font-bold shrink-0">{customer.code}</span>
             <h1 className="text-lg font-extrabold leading-tight">{customer.name}</h1>
@@ -561,14 +562,12 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             )}
           </div>
 
-          {/* Row 3: Tags */}
           <div className="flex flex-wrap gap-1.5">
             {customer.type && <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.type}</span>}
             {customer.group && <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-medium">{customer.group}</span>}
             {customer.city && <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs text-white/70">{customer.city}{customer.area ? `, ${customer.area}` : ''}</span>}
           </div>
 
-          {/* Row 4: Nav + Period */}
           <div className="flex items-center justify-between border-t border-white/10 pt-2">
             <div className="flex items-center gap-1">
               {[
@@ -621,12 +620,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               <div className="font-medium text-slate-400 text-xs uppercase tracking-wide">Πληροφορίες</div>
               {customer.area && <div>Περιοχή: <span className="font-medium">{customer.area}</span></div>}
               {customer.lastVisitDate ? <div>Τελευταία επίσκεψη: <span className="font-medium">{formatDate(customer.lastVisitDate)}</span></div> : <div className="text-slate-400 text-xs italic">Καμία επίσκεψη ακόμα</div>}
-              {customer.inserted_date && (
-                <div>Πελάτης από: <span className="font-medium">{formatDate(customer.inserted_date)}</span></div>
-              )}
-              {customer.updated_date && (
-                <div className="text-xs text-slate-400">Ενημέρωση ERP: {formatDate(customer.updated_date)}</div>
-              )}
+              {customer.inserted_date && <div>Πελάτης από: <span className="font-medium">{formatDate(customer.inserted_date)}</span></div>}
+              {customer.updated_date && <div className="text-xs text-slate-400">Ενημέρωση ERP: {formatDate(customer.updated_date)}</div>}
             </div>
           </div>
         </section>
@@ -649,7 +644,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               <div className="text-sm text-slate-400 italic">Δεν βρέθηκαν εκπτώσεις</div>
             ) : (
               <div className="space-y-4">
-                {/* General discount */}
                 {discounts.general !== null ? (
                   <div className="flex items-center justify-between py-2 border-b border-slate-100">
                     <span className="text-sm text-slate-600 font-medium">Γενική Έκπτωση Πελάτη</span>
@@ -658,7 +652,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 ) : (
                   <div className="text-xs text-slate-400 italic">Δεν υπάρχει γενική έκπτωση</div>
                 )}
-                {/* Category discounts */}
                 {discounts.categories.length > 0 && (
                   <div>
                     <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Εκπτώσεις ανά Κατηγορία</div>
@@ -677,7 +670,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                     )}
                   </div>
                 )}
-                {/* Brand discounts */}
                 {discounts.brands.length > 0 && (
                   <div>
                     <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Εκπτώσεις ανά Μάρκα</div>
@@ -764,7 +756,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
 
           {salesLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : (
             <>
-              {/* KPI cards — always visible */}
               <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                   <div className="text-xs text-indigo-500 font-medium mb-1">Τρέχουσα Περίοδος ({sp.label})</div>
@@ -787,14 +778,12 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 </div>
               </div>
 
-              {/* Toggle button */}
               <button onClick={() => setSalesExpanded(v => !v)}
                 className="w-full flex items-center justify-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 py-2 border-t border-slate-100 mt-2">
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${salesExpanded ? 'rotate-180' : ''}`} />
                 {salesExpanded ? 'Απόκρυψη λεπτομερειών' : 'Εμφάνιση λεπτομερειών'}
               </button>
 
-              {/* Collapsible: monthly chart + category breakdown */}
               {salesExpanded && <>
                 {(() => {
                   const months = sales.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
@@ -842,7 +831,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                   );
                 })()}
 
-                {/* SALES BY CATEGORY */}
                 <div className="mt-5 pt-4 border-t border-slate-100">
                   <div className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Ανά Κατηγορία</div>
                   {salesByCategoryLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : salesByCategory.length === 0 ? (
@@ -1158,9 +1146,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                           <span className={`text-sm font-semibold ${doc.netamnt < 0 ? 'text-red-600' : 'text-slate-800'}`}>
                             {doc.netamnt < 0 ? '-' : ''}€{Math.abs(doc.netamnt).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
                           </span>
-                          {doc.disc1prc ? (
-                          <span className="text-xs text-slate-400">-{doc.disc1prc}%</span>
-                          ) : null}
+                          {doc.disc1prc ? <span className="text-xs text-slate-400">-{doc.disc1prc}%</span> : null}
                           <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </div>
                       </button>
