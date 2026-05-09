@@ -232,20 +232,28 @@ type CustomerSortMode = 'name' | 'area_then_name';
 type PerformanceFilter = 'all' | 'up' | 'down';
 type ActiveFilter = 'all' | 'active' | 'inactive';
 type JoinedFilterDirection = 'before' | 'after';
-type JoinedFilterPeriod =
-  | '2026-04-01' | '2026-01-01'
-  | '2025-10-01' | '2025-07-01' | '2025-04-01' | '2025-01-01'
-  | '2024-01-01';
 
-const JOINED_PERIOD_OPTIONS: { label: string; value: JoinedFilterPeriod }[] = [
-  { label: 'Q2 2026',  value: '2026-04-01' },
-  { label: 'Q1 2026',  value: '2026-01-01' },
-  { label: 'Q4 2025',  value: '2025-10-01' },
-  { label: 'Q3 2025',  value: '2025-07-01' },
-  { label: 'Q2 2025',  value: '2025-04-01' },
-  { label: 'Q1 2025',  value: '2025-01-01' },
-  { label: '2024',     value: '2024-01-01' },
-];
+
+function generateJoinedPeriodOptions(): { label: string; value: string }[] {
+  const options: { label: string; value: string }[] = [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentQuarter = Math.floor(now.getMonth() / 3);
+
+  for (let year = currentYear; year >= 2024; year--) {
+    const maxQ = year === currentYear ? currentQuarter : 3;
+    for (let q = maxQ; q >= 0; q--) {
+      const month = String(q * 3 + 1).padStart(2, '0');
+      options.push({
+        label: `Q${q + 1} ${year}`,
+        value: `${year}-${month}-01`,
+      });
+    }
+  }
+  return options;
+}
+
+const JOINED_PERIOD_OPTIONS = generateJoinedPeriodOptions();
 
 export function DashboardFigma() {
   const {
@@ -280,7 +288,7 @@ export function DashboardFigma() {
   const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [joinedDirection, setJoinedDirection] = useState<JoinedFilterDirection>('after');
-  const [joinedPeriod, setJoinedPeriod] = useState<JoinedFilterPeriod | null>(null);
+  const [joinedPeriod, setJoinedPeriod] = useState<string | null>(null);
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
