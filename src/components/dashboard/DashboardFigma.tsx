@@ -22,16 +22,12 @@ const NOT_VISITED_OPTIONS = [
 const DEFAULT_VISIBLE_ITEMS = 6;
 const LONG_PRESS_MS = 1500;
 
-// ─── Multi-select filter group with long-press support ────────────────────────
-// Single click: select only this item (exclusive).
-// Long press (1.5s): enter multi-select mode, then subsequent clicks toggle items.
-// "All" always clears selection and exits multi-select mode.
 function MultiSelectFilterGroup({
   label,
-  selected,       // currently selected items
+  selected,
   items,
-  onToggle,       // toggle one item (multi-select aware)
-  onClear,        // clear all
+  onToggle,
+  onClear,
 }: {
   label: string;
   selected: string[];
@@ -52,7 +48,6 @@ function MultiSelectFilterGroup({
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
       setMultiMode(true);
-      // Add this item to selection without clearing others
       onToggle(item, true);
     }, LONG_PRESS_MS);
   }, [onToggle]);
@@ -62,11 +57,10 @@ function MultiSelectFilterGroup({
   }, []);
 
   const handleClick = useCallback((item: string) => {
-    if (didLongPress.current) return; // already handled by long press
+    if (didLongPress.current) return;
     if (multiMode) {
       onToggle(item, true);
     } else {
-      // Single click: select exclusively (clear others)
       onToggle(item, false);
     }
   }, [multiMode, onToggle]);
@@ -237,6 +231,21 @@ function DrillContent({
 type CustomerSortMode = 'name' | 'area_then_name';
 type PerformanceFilter = 'all' | 'up' | 'down';
 type ActiveFilter = 'all' | 'active' | 'inactive';
+type JoinedFilterDirection = 'before' | 'after';
+type JoinedFilterPeriod =
+  | '2026-04-01' | '2026-01-01'
+  | '2025-10-01' | '2025-07-01' | '2025-04-01' | '2025-01-01'
+  | '2024-01-01';
+
+const JOINED_PERIOD_OPTIONS: { label: string; value: JoinedFilterPeriod }[] = [
+  { label: 'Q2 2026',  value: '2026-04-01' },
+  { label: 'Q1 2026',  value: '2026-01-01' },
+  { label: 'Q4 2025',  value: '2025-10-01' },
+  { label: 'Q3 2025',  value: '2025-07-01' },
+  { label: 'Q2 2025',  value: '2025-04-01' },
+  { label: 'Q1 2025',  value: '2025-01-01' },
+  { label: '2024',     value: '2024-01-01' },
+];
 
 export function DashboardFigma() {
   const {
@@ -270,6 +279,8 @@ export function DashboardFigma() {
   const [customerSortMode, setCustomerSortMode] = useState<CustomerSortMode>('name');
   const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
+  const [joinedDirection, setJoinedDirection] = useState<JoinedFilterDirection>('after');
+  const [joinedPeriod, setJoinedPeriod] = useState<JoinedFilterPeriod | null>(null);
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
@@ -311,6 +322,14 @@ export function DashboardFigma() {
     if (activeFilter === 'inactive') {
       result = result.filter(c => c.is_active === false || (c.is_active as any) === 'false');
     }
+    if (joinedPeriod) {
+      result = result.filter(c => {
+        if (!c.inserted_date) return true;
+        if (joinedDirection === 'after')  return c.inserted_date >= joinedPeriod;
+        if (joinedDirection === 'before') return c.inserted_date < joinedPeriod;
+        return true;
+      });
+    }
 
     const sorted = [...result].sort((a, b) => {
       if (customerSortMode === 'area_then_name') {
@@ -327,6 +346,7 @@ export function DashboardFigma() {
     notVisitedDays, getDaysSinceVisit,
     salesFilter, customersWithSalesSet,
     customerSortMode, performanceFilter, activeFilter,
+    joinedDirection, joinedPeriod,
   ]);
 
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
@@ -335,7 +355,11 @@ export function DashboardFigma() {
 
   const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'exec';
 
-  const hasActiveFilters = !!(selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays || searchQuery || salesFilter !== 'all' || performanceFilter !== 'all' || activeFilter !== 'all');
+  const hasActiveFilters = !!(
+    selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays ||
+    searchQuery || salesFilter !== 'all' || performanceFilter !== 'all' ||
+    activeFilter !== 'all' || joinedPeriod !== null
+  );
 
   function clearAllFilters() {
     clearAreas();
@@ -345,20 +369,18 @@ export function DashboardFigma() {
     setSalesFilter('all');
     setPerformanceFilter('all');
     setActiveFilter('all');
+    setJoinedPeriod(null);
   }
 
-  // Handler for area toggle — supports single and multi select
   const handleAreaToggle = useCallback((area: string, multi: boolean) => {
     if (multi) {
       toggleArea(area);
     } else {
-      // Single click: select only this area (exclusive)
       setSelectedArea(area);
       clearCities();
     }
   }, [toggleArea, setSelectedArea, clearCities]);
 
-  // Handler for city toggle — supports single and multi select
   const handleCityToggle = useCallback((city: string, multi: boolean) => {
     if (multi) {
       toggleCity(city);
@@ -367,7 +389,6 @@ export function DashboardFigma() {
     }
   }, [toggleCity, setSelectedCity]);
 
-  // Filtered area stats — only show selected areas when filter is active
   const filteredAreaStats = useMemo(() => {
     if (selectedAreas.length === 0) return areaStats;
     return areaStats.filter(a => selectedAreas.includes(a.area));
@@ -431,7 +452,7 @@ export function DashboardFigma() {
           </div>
 
           {/* Context bar */}
-          {(selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all' || activeFilter !== 'all') && (
+          {(selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all' || activeFilter !== 'all' || joinedPeriod !== null) && (
             <div className="flex items-center gap-1.5 border-t border-white/10 pt-1.5 flex-wrap">
               {selectedCustomer ? (
                 <>
@@ -465,6 +486,11 @@ export function DashboardFigma() {
                   {searchQuery && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">"{searchQuery}"</span>}
                   {salesFilter !== 'all' && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">{salesFilter === 'with' ? 'Με πωλήσεις' : 'Χωρίς πωλήσεις'}</span>}
                   {activeFilter !== 'all' && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">{activeFilter === 'active' ? 'Active' : 'Inactive'}</span>}
+                  {joinedPeriod && (
+                    <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">
+                      Joined {joinedDirection} {JOINED_PERIOD_OPTIONS.find(o => o.value === joinedPeriod)?.label}
+                    </span>
+                  )}
                   <span className="text-white/40 text-xs ml-1">{selectedPeriod.shortLabel}</span>
                 </>
               )}
@@ -536,7 +562,6 @@ export function DashboardFigma() {
                   <div className="flex items-center gap-3 flex-wrap">
                     <h2 className="text-base font-semibold text-slate-900">{selectedGeoArea ? 'Performance by City' : 'Performance by Area'}</h2>
                     {selectedGeoArea && <span className="text-sm font-medium text-indigo-600">{selectedGeoArea}</span>}
-                    {/* Filter label restored */}
                     {selectedAreas.length > 0 && !selectedGeoArea && (
                       <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
@@ -780,7 +805,6 @@ export function DashboardFigma() {
                 </div>
               </div>
 
-              {/* Multi-select area filter */}
               <MultiSelectFilterGroup
                 label="Geographic Area"
                 selected={selectedAreas}
@@ -789,7 +813,6 @@ export function DashboardFigma() {
                 onClear={clearAreas}
               />
 
-              {/* City filter — shown when at least one area is selected */}
               {selectedAreas.length > 0 && cities.length > 0 && (
                 <MultiSelectFilterGroup
                   label="City"
@@ -816,7 +839,6 @@ export function DashboardFigma() {
                 </div>
               </div>
 
-              {/* Sales Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" />Πωλήσεις ({selectedPeriod.shortLabel})
@@ -841,7 +863,6 @@ export function DashboardFigma() {
                 </div>
               </div>
 
-              {/* Performance Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" />Performance ({selectedPeriod.shortLabel})
@@ -860,7 +881,6 @@ export function DashboardFigma() {
                 </div>
               </div>
 
-              {/* Status Filter */}
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
                   <User className="w-3.5 h-3.5" />Status
@@ -873,6 +893,35 @@ export function DashboardFigma() {
                   ]).map(opt => (
                     <button key={opt.value} onClick={() => setActiveFilter(opt.value)}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${activeFilter === opt.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Customer Since Filter */}
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
+                  <UserPlus className="w-3.5 h-3.5" />Customer Since
+                </div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <button onClick={() => setJoinedDirection('after')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${joinedDirection === 'after' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                    Joined after
+                  </button>
+                  <button onClick={() => setJoinedDirection('before')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${joinedDirection === 'before' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                    Joined before
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setJoinedPeriod(null)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${joinedPeriod === null ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                    All
+                  </button>
+                  {JOINED_PERIOD_OPTIONS.map(opt => (
+                    <button key={opt.value} onClick={() => setJoinedPeriod(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${joinedPeriod === opt.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
                       {opt.label}
                     </button>
                   ))}
