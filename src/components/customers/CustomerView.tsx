@@ -35,7 +35,9 @@ export interface CustomerViewProps {
     contactName?: string; vatNumber?: string; createdDate?: string;
     lastVisitDate?: string; transportCompany?: string; transportMeans?: string;
     overallDiscount?: number; afm?: string; fax?: string; zip?: string;
-    shipmentName?: string; carrierName?: string; is_active?: boolean; prccategory?: number | null;
+    shipmentName?: string; carrierName?: string; is_active?: boolean; prccategory?: number | null;  
+    inserted_date?: string | null; 
+    updated_date?: string | null;
   };
   onBack: () => void;
 }
@@ -608,6 +610,12 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               <div className="font-medium text-slate-400 text-xs uppercase tracking-wide">Πληροφορίες</div>
               {customer.area && <div>Περιοχή: <span className="font-medium">{customer.area}</span></div>}
               {customer.lastVisitDate ? <div>Τελευταία επίσκεψη: <span className="font-medium">{formatDate(customer.lastVisitDate)}</span></div> : <div className="text-slate-400 text-xs italic">Καμία επίσκεψη ακόμα</div>}
+              {customer.inserted_date && (
+                <div>Πελάτης από: <span className="font-medium">{formatDate(customer.inserted_date)}</span></div>
+              )}
+              {customer.updated_date && (
+                <div className="text-xs text-slate-400">Ενημέρωση ERP: {formatDate(customer.updated_date)}</div>
+              )}
             </div>
           </div>
         </section>

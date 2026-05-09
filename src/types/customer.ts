@@ -21,4 +21,6 @@ export type Customer = {
   growth_pct?: number | null;
   is_active?: boolean;
   prccategory?: number | null;
+  inserted_date?: string | null; 
+  updated_date?: string | null; 
 };

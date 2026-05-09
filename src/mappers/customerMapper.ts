@@ -22,5 +22,7 @@ export function mapErpCustomer(raw: any): Customer {
     salesmanCode: raw.salesman_code ?? undefined,
     is_active: raw.is_active,
     prccategory: raw.prccategory ?? null,
+    inserted_date: raw.inserted_date ?? undefined, 
+    updated_date: raw.updated_date ?? undefined,
   };
 }
