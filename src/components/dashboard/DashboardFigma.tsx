@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { User, TrendingUp, TrendingDown, LogOut, MapPin, Users, UserPlus, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import { useDashboardFigma, PERIODS } from '../../hooks/useDashboardFigma';
+import { useDashboardFigma } from '../../hooks/useDashboardFigma';
 
 import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { VisitsLog } from '../visits/VisitsLog';
@@ -270,7 +270,7 @@ export function DashboardFigma() {
     setSalesByCategoryExpanded, expandSalesByCategory,
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
     topCustomersData, topCustomersLoading, fetchTopCustomers,
-    repModeOverride, setRepModeOverride, clearTopCustomersCache,
+    repModeOverride, setRepModeOverride, clearTopCustomersCache, PERIODS,
   } = useDashboardFigma();
 
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);

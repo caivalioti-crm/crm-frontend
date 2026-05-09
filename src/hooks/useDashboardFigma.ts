@@ -30,62 +30,66 @@ function toLocalDateString(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ─── Dynamic YTD (computed once at module load) ───────────────────────────────
 const _now = new Date();
-const _ytdTo    = toLocalDateString(new Date(_now.getFullYear(),     _now.getMonth(), _now.getDate() + 1));
-const _ytdCmpTo = toLocalDateString(new Date(_now.getFullYear() - 1, _now.getMonth(), _now.getDate() + 1));
-const _ytdLabel  = _now.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
 
-export const PERIODS: Period[] = [
-  {
-    key: '2026-YTD',
-    label: `2026 Year to Date (Jan–${_ytdLabel})`,
-    shortLabel: `2026 YTD (έως ${_ytdLabel})`,
-    from: '2026-01-01', to: _ytdTo,
-    compareFrom: '2025-01-01', compareTo: _ytdCmpTo,
-    compareLabel: `vs Jan–${_ytdLabel} 2025`,
-  },
-  {
-    key: '2026-Q1', label: 'Q1 2026 (Jan–Mar)', shortLabel: 'Q1 2026',
-    from: '2026-01-01', to: '2026-03-31',
-    compareFrom: '2025-01-01', compareTo: '2025-03-31', compareLabel: 'vs Q1 2025',
-  },
-  {
-    key: '2026-Q2', label: 'Q2 2026 (Apr–Jun)', shortLabel: 'Q2 2026',
-    from: '2026-04-01', to: '2026-06-30',
-    compareFrom: '2025-04-01', compareTo: '2025-06-30', compareLabel: 'vs Q2 2025',
-  },
-  {
-    key: '2025-FULL', label: '2025 Full Year', shortLabel: '2025 Full Year',
-    from: '2025-01-01', to: '2025-12-31',
-    compareFrom: '2024-01-01', compareTo: '2024-12-31', compareLabel: 'vs 2024',
-  },
-  {
-    key: '2025-Q4', label: 'Q4 2025 (Oct–Dec)', shortLabel: 'Q4 2025',
-    from: '2025-10-01', to: '2025-12-31',
-    compareFrom: '2024-10-01', compareTo: '2024-12-31', compareLabel: 'vs Q4 2024',
-  },
-  {
-    key: '2025-Q3', label: 'Q3 2025 (Jul–Sep)', shortLabel: 'Q3 2025',
-    from: '2025-07-01', to: '2025-09-30',
-    compareFrom: '2024-07-01', compareTo: '2024-09-30', compareLabel: 'vs Q3 2024',
-  },
-  {
-    key: '2025-Q2', label: 'Q2 2025 (Apr–Jun)', shortLabel: 'Q2 2025',
-    from: '2025-04-01', to: '2025-06-30',
-    compareFrom: '2024-04-01', compareTo: '2024-06-30', compareLabel: 'vs Q2 2024',
-  },
-  {
-    key: '2025-Q1', label: 'Q1 2025 (Jan–Mar)', shortLabel: 'Q1 2025',
-    from: '2025-01-01', to: '2025-03-31',
-    compareFrom: '2024-01-01', compareTo: '2024-03-31', compareLabel: 'vs Q1 2024',
-  },
-  {
-    key: '2024-FULL', label: '2024 Full Year', shortLabel: '2024 Full Year',
-    from: '2024-01-01', to: '2024-12-31',
-    compareFrom: '2023-01-01', compareTo: '2023-12-31', compareLabel: 'vs 2023',
-  },
-];
+export function buildPeriods(syncDate: string): Period[] {
+  const d = new Date(syncDate);
+  const ytdTo    = toLocalDateString(new Date(d.getFullYear(),     d.getMonth(), d.getDate() + 1));
+  const ytdCmpTo = toLocalDateString(new Date(d.getFullYear() - 1, d.getMonth(), d.getDate() + 1));
+  const ytdLabel = d.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
+  return [
+    {
+      key: '2026-YTD',
+      label: `2026 Year to Date (Jan–${ytdLabel})`,
+      shortLabel: `2026 YTD (έως ${ytdLabel})`,
+      from: '2026-01-01', to: ytdTo,
+      compareFrom: '2025-01-01', compareTo: ytdCmpTo,
+      compareLabel: `vs Jan–${ytdLabel} 2025`,
+    },
+    {
+      key: '2026-Q1', label: 'Q1 2026 (Jan–Mar)', shortLabel: 'Q1 2026',
+      from: '2026-01-01', to: '2026-03-31',
+      compareFrom: '2025-01-01', compareTo: '2025-03-31', compareLabel: 'vs Q1 2025',
+    },
+    {
+      key: '2026-Q2', label: 'Q2 2026 (Apr–Jun)', shortLabel: 'Q2 2026',
+      from: '2026-04-01', to: '2026-06-30',
+      compareFrom: '2025-04-01', compareTo: '2025-06-30', compareLabel: 'vs Q2 2025',
+    },
+    {
+      key: '2025-FULL', label: '2025 Full Year', shortLabel: '2025 Full Year',
+      from: '2025-01-01', to: '2025-12-31',
+      compareFrom: '2024-01-01', compareTo: '2024-12-31', compareLabel: 'vs 2024',
+    },
+    {
+      key: '2025-Q4', label: 'Q4 2025 (Oct–Dec)', shortLabel: 'Q4 2025',
+      from: '2025-10-01', to: '2025-12-31',
+      compareFrom: '2024-10-01', compareTo: '2024-12-31', compareLabel: 'vs Q4 2024',
+    },
+    {
+      key: '2025-Q3', label: 'Q3 2025 (Jul–Sep)', shortLabel: 'Q3 2025',
+      from: '2025-07-01', to: '2025-09-30',
+      compareFrom: '2024-07-01', compareTo: '2024-09-30', compareLabel: 'vs Q3 2024',
+    },
+    {
+      key: '2025-Q2', label: 'Q2 2025 (Apr–Jun)', shortLabel: 'Q2 2025',
+      from: '2025-04-01', to: '2025-06-30',
+      compareFrom: '2024-04-01', compareTo: '2024-06-30', compareLabel: 'vs Q2 2024',
+    },
+    {
+      key: '2025-Q1', label: 'Q1 2025 (Jan–Mar)', shortLabel: 'Q1 2025',
+      from: '2025-01-01', to: '2025-03-31',
+      compareFrom: '2024-01-01', compareTo: '2024-03-31', compareLabel: 'vs Q1 2024',
+    },
+    {
+      key: '2024-FULL', label: '2024 Full Year', shortLabel: '2024 Full Year',
+      from: '2024-01-01', to: '2024-12-31',
+      compareFrom: '2023-01-01', compareTo: '2023-12-31', compareLabel: 'vs 2023',
+    },
+  ];
+}
+
+export const PERIODS = buildPeriods(toLocalDateString(_now)); // fallback for static imports
 
 async function authedFetch(url: string) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -121,29 +125,28 @@ export function useDashboardFigma() {
   const [topCustomersLoading, setTopCustomersLoading] = useState<Set<string>>(new Set());
 
   /* ===================== UI STATE ===================== */
-  const [selectedPeriodKey, setSelectedPeriodKey] = useState<string>(PERIODS[0].key);
-  const selectedPeriod: Period = useMemo(
-    () => PERIODS.find(p => p.key === selectedPeriodKey) ?? PERIODS[0],
-    [selectedPeriodKey]
-  );
-
+  const [lastSyncDate, setLastSyncDate] = useState<string>(toLocalDateString(_now));
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState<string>('2026-YTD');
   const [selectedGeoArea, setSelectedGeoArea] = useState<string | null>(null);
-
-  // MULTI-SELECT: areas and cities are string arrays
-  // Invariant: selectedAreas and selectedCities are mutually exclusive —
-  // selecting areas clears cities and vice versa.
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
-
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [showNewProspectDialog, setShowNewProspectDialog] = useState(false);
-
   const [currentUser, setCurrentUser] = useState<SalesRep>({
     id: '', role: 'rep', name: 'Loading...', salesman_code: null,
   });
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
+  /* ===================== DYNAMIC PERIODS ===================== */
+  const periods = useMemo(() => buildPeriods(lastSyncDate), [lastSyncDate]);
+
+  const selectedPeriod: Period = useMemo(
+    () => periods.find(p => p.key === selectedPeriodKey) ?? periods[0],
+    [selectedPeriodKey, periods]
+  );
+
+  /* ===================== EFFECTS ===================== */
   useEffect(() => {
     authedFetch('/api/categories')
       .then((data: any[]) => {
@@ -153,6 +156,12 @@ export function useDashboardFigma() {
         }
         setCategoryMaster(map);
       })
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    authedFetch('/api/erp/last-sync-date')
+      .then(res => { if (res.date) setLastSyncDate(res.date); })
       .catch(console.error);
   }, []);
 
@@ -207,7 +216,6 @@ export function useDashboardFigma() {
         from: period.from, to: period.to,
         prevFrom: period.compareFrom, prevTo: period.compareTo,
       });
-      // Backend supports single area/city — pass first selected only
       if (areas.length === 1) params.set('area', areas[0]);
       if (cities.length === 1) params.set('city', cities[0]);
       if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
@@ -280,7 +288,6 @@ export function useDashboardFigma() {
   }, []);
 
   /* ===================== MULTI-SELECT TOGGLES ===================== */
-  // Toggle an area. Selecting areas always clears cities.
   const toggleArea = useCallback((area: string) => {
     setSelectedAreas(prev =>
       prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
@@ -288,7 +295,6 @@ export function useDashboardFigma() {
     setSelectedCities([]);
   }, []);
 
-  // Toggle a city. Selecting cities always clears areas.
   const toggleCity = useCallback((city: string) => {
     setSelectedCities(prev =>
       prev.includes(city) ? prev.filter(c => c !== city) : [...prev, city]
@@ -369,7 +375,6 @@ export function useDashboardFigma() {
   /* ===================== GEO OPTIONS ===================== */
   const areas = useMemo(() => Array.from(new Set(scopedCustomers.map(c => c.area))).sort(), [scopedCustomers]);
 
-  // Cities = union of cities from all selected areas (empty if no areas selected)
   const cities = useMemo(() => {
     if (selectedAreas.length === 0) return [];
     return Array.from(new Set(
@@ -379,7 +384,7 @@ export function useDashboardFigma() {
     )).sort();
   }, [scopedCustomers, selectedAreas]);
 
-  /* ===================== FILTERED CUSTOMERS (geo + search) ===================== */
+  /* ===================== FILTERED CUSTOMERS ===================== */
   const filteredCustomers = useMemo(() => scopedCustomers.filter(c => {
     if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
     if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
@@ -433,10 +438,8 @@ export function useDashboardFigma() {
     selectedGeoArea, drillDownToArea, backToAreas,
     selectedPeriod, setSelectedPeriod,
     areas, cities,
-    // Multi-select
     selectedAreas, selectedCities,
     toggleArea, toggleCity, clearAreas, clearCities,
-    // Legacy single-string compatibility (for components that still use selectedArea/selectedCity)
     selectedArea: selectedAreas[0] ?? '',
     selectedCity: selectedCities[0] ?? '',
     setSelectedArea: (a: string) => a ? setSelectedAreas([a]) : setSelectedAreas([]),
@@ -456,5 +459,6 @@ export function useDashboardFigma() {
     setSalesByCategoryExpanded, expandSalesByCategory,
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
     topCustomersData, topCustomersLoading, fetchTopCustomers,
+    PERIODS: periods,
   };
 }
