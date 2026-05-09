@@ -906,11 +906,19 @@ export function DashboardFigma() {
                 </div>
                 <div className="flex flex-wrap gap-2 mb-2">
                   <button onClick={() => setJoinedDirection('after')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${joinedDirection === 'after' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-colors ${
+                      joinedDirection === 'after'
+                        ? 'border-indigo-600 text-indigo-600 bg-indigo-50'
+                        : 'border-slate-300 text-slate-700 bg-white hover:border-indigo-400'
+                    }`}>
                     Joined after
                   </button>
                   <button onClick={() => setJoinedDirection('before')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${joinedDirection === 'before' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-colors ${
+                      joinedDirection === 'before'
+                        ? 'border-indigo-600 text-indigo-600 bg-indigo-50'
+                        : 'border-slate-300 text-slate-700 bg-white hover:border-indigo-400'
+                    }`}>
                     Joined before
                   </button>
                 </div>
