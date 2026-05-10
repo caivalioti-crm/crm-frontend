@@ -166,6 +166,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [salesExpanded, setSalesExpanded] = useState(false);
   const [lastSyncDate, setLastSyncDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [lastInvoiceDate, setLastInvoiceDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [salesByBranch, setSalesByBranch] = useState<any[]>([]);
+  const [salesByBranchLoading, setSalesByBranchLoading] = useState(false);
 
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
@@ -308,6 +310,15 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     authedFetch(`/api/erp/customers/${customer.code}/sales-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}`)
       .then(data => setSalesByCategory(data.grouped ?? []))
       .catch(console.error).finally(() => setSalesByCategoryLoading(false));
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
+
+useEffect(() => {
+    setSalesByBranchLoading(true);
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
+    authedFetch(`/api/erp/customers/${customer.code}/sales-by-branch?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}`)
+      .then(data => setSalesByBranch(Array.isArray(data) ? data : []))
+      .catch(console.error)
+      .finally(() => setSalesByBranchLoading(false));
   }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
 
   useEffect(() => {
@@ -855,6 +866,31 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                     </div>
                   );
                 })()}
+
+                {salesByBranch.length > 1 && (
+                  <div className="mt-5 pt-4 border-t border-slate-100">
+                    <div className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Ανά Υποκατάστημα</div>
+                    {salesByBranchLoading ? (
+                      <div className="text-xs text-slate-400">Φόρτωση...</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {salesByBranch.map(b => {
+                          const growth = b.prev > 0 ? ((b.current - b.prev) / b.prev) * 100 : null;
+                          return (
+                            <div key={b.trdbranch ?? 'hq'} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50">
+                              <span className="text-sm font-medium text-slate-700">{b.label}</span>
+                              <div className="flex items-center gap-3">
+                                {growth !== null && <GrowthBadge pct={growth} />}
+                                <span className="text-sm font-semibold text-slate-800">{fmtEur(b.current)}</span>
+                                {b.prev > 0 && <span className="text-xs text-slate-400">vs {fmtEur(b.prev)}</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-5 pt-4 border-t border-slate-100">
                   <div className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Ανά Κατηγορία</div>
