@@ -498,7 +498,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     );
   }
 
-  function renderDocLines(findoc: number) {
+  function renderDocLines(findoc: number, sumamnt: number | null) {
     const lines = docLines[findoc];
     const loading = docLinesLoading.has(findoc);
     if (loading) return <div className="px-4 py-3 text-xs text-slate-400">Φόρτωση γραμμών...</div>;
@@ -548,16 +548,9 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                   })()}
                 </div>
                 <div className="font-bold text-slate-600">
-                  {(() => {
-                    const gross = lines.reduce((sum: number, l: any) => {
-                      const qty = Number(l.qty ?? 1);
-                      const unitPrice = l.price != null ? Number(l.price) : 0;
-                      const disc = l.disc1prc != null ? (1 - Number(l.disc1prc) / 100) : 1;
-                      const vatMultiplier = l.vatprc != null ? 1 + Number(l.vatprc) / 100 : 1;
-                      return sum + unitPrice * qty * disc * vatMultiplier;
-                    }, 0);
-                    return '€' + gross.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                  })()}
+                  {sumamnt != null
+                    ? '€' + Number(sumamnt).toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : '—'}
                 </div>
               </td>
             </tr>
@@ -1182,7 +1175,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                           <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </div>
                       </button>
-                      {isExpanded && renderDocLines(doc.findoc)}
+                      {isExpanded && renderDocLines(doc.findoc, doc.sumamnt ?? null)}
                     </div>
                   );
                 })}
