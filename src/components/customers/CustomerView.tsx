@@ -511,9 +511,9 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               <th className="text-left px-4 py-2">Κωδ.</th>
               <th className="text-left px-4 py-2 hidden sm:table-cell">Περιγραφή</th>
               <th className="text-right px-3 py-2">Τεμ.</th>
+              <th className="text-right px-4 py-2">Τιμή</th>
               <th className="text-right px-3 py-2">Έκπτ.</th>
               <th className="text-right px-3 py-2">ΦΠΑ</th>
-              <th className="text-right px-4 py-2">Τιμή</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -522,13 +522,13 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 <td className="px-4 py-2 font-mono text-slate-600 whitespace-nowrap">{line.sku_code}</td>
                 <td className="px-4 py-2 text-slate-600 hidden sm:table-cell truncate max-w-xs">{line.sku_name}</td>
                 <td className="px-3 py-2 text-right text-slate-500">{Math.round(Number(line.qty ?? 0))}</td>
-                <td className="px-3 py-2 text-right text-slate-400">{line.disc1prc ? `${line.disc1prc}%` : '—'}</td>
-                <td className="px-3 py-2 text-right text-slate-400">{line.vatprc != null ? `${line.vatprc}%` : '—'}</td>
                 <td className="px-4 py-2 text-right font-semibold text-slate-700">
                   {line.price != null
                     ? '€' + Number(line.price).toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     : '€' + Number(line.netlineval ?? 0).toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
+                <td className="px-3 py-2 text-right text-slate-400">{line.disc1prc ? `${line.disc1prc}%` : '—'}</td>
+                <td className="px-3 py-2 text-right text-slate-400">{line.vatprc != null ? `${line.vatprc}%` : '—'}</td>
               </tr>
             ))}
           </tbody>
