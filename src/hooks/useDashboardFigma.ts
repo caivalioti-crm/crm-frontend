@@ -32,11 +32,12 @@ function toLocalDateString(d: Date): string {
 
 const _now = new Date();
 
-export function buildPeriods(syncDate: string): Period[] {
-  const d = new Date(syncDate);
-  const ytdTo    = toLocalDateString(new Date(d.getFullYear(),     d.getMonth(), d.getDate() + 1));
-  const ytdCmpTo = toLocalDateString(new Date(d.getFullYear() - 1, d.getMonth(), d.getDate() + 1));
-  const ytdLabel = d.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
+export function buildPeriods(syncDate: string, invoiceDate?: string): Period[] {
+  const labelDate = new Date(syncDate);
+  const cutoffDate = new Date(invoiceDate ?? syncDate);
+  const ytdTo    = toLocalDateString(new Date(cutoffDate.getFullYear(), cutoffDate.getMonth(), cutoffDate.getDate() + 1));
+  const ytdCmpTo = toLocalDateString(new Date(cutoffDate.getFullYear() - 1, cutoffDate.getMonth(), cutoffDate.getDate() + 1));
+  const ytdLabel = labelDate.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
   return [
     {
       key: '2026-YTD',
@@ -126,6 +127,7 @@ export function useDashboardFigma() {
 
   /* ===================== UI STATE ===================== */
   const [lastSyncDate, setLastSyncDate] = useState<string>(toLocalDateString(_now));
+  const [lastInvoiceDate, setLastInvoiceDate] = useState<string>(toLocalDateString(_now));
   const [selectedPeriodKey, setSelectedPeriodKey] = useState<string>('2026-YTD');
   const [selectedGeoArea, setSelectedGeoArea] = useState<string | null>(null);
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
@@ -139,7 +141,7 @@ export function useDashboardFigma() {
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
   /* ===================== DYNAMIC PERIODS ===================== */
-  const periods = useMemo(() => buildPeriods(lastSyncDate), [lastSyncDate]);
+  const periods = useMemo(() => buildPeriods(lastSyncDate, lastInvoiceDate), [lastSyncDate, lastInvoiceDate]);
 
   const selectedPeriod: Period = useMemo(
     () => periods.find(p => p.key === selectedPeriodKey) ?? periods[0],
@@ -162,6 +164,12 @@ export function useDashboardFigma() {
   useEffect(() => {
     authedFetch('/api/erp/last-sync-date')
       .then(res => { if (res.date) setLastSyncDate(res.date); })
+      .catch(console.error);
+  }, []);
+
+    useEffect(() => {
+    authedFetch('/api/erp/last-invoice-date')
+      .then(res => { if (res.date) setLastInvoiceDate(res.date); })
       .catch(console.error);
   }, []);
 

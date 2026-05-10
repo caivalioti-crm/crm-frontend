@@ -165,6 +165,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [showAllBrands, setShowAllBrands] = useState(false);
   const [salesExpanded, setSalesExpanded] = useState(false);
   const [lastSyncDate, setLastSyncDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [lastInvoiceDate, setLastInvoiceDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
@@ -197,12 +198,13 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const docsRef = useRef<HTMLDivElement>(null);
 
   const SALES_PERIODS = useMemo(() => {
-    const d = new Date(lastSyncDate);
-    const ytdMonth = d.getMonth();
-    const ytdMonthStr = String(ytdMonth).padStart(2, '0');
-    const ytdLabel = d.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
-    const ytdDateTo  = new Date(d.getFullYear(),     d.getMonth(), d.getDate() + 1).toISOString().split('T')[0];
-    const ytdPrevTo  = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate() + 1).toISOString().split('T')[0];
+  const labelD = new Date(lastSyncDate);
+  const cutoffD = new Date(lastInvoiceDate);
+  const ytdMonth = cutoffD.getMonth();
+  const ytdMonthStr = String(ytdMonth).padStart(2, '0');
+  const ytdLabel = labelD.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
+  const ytdDateTo  = new Date(cutoffD.getFullYear(), cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
+  const ytdPrevTo  = new Date(cutoffD.getFullYear() - 1, cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
 
     return [
       {
@@ -256,11 +258,17 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
         prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31',
       },
     ];
-  }, [lastSyncDate]);
+  }, [lastSyncDate, lastInvoiceDate]);
 
   useEffect(() => {
     authedFetch('/api/erp/last-sync-date')
       .then(res => { if (res.date) setLastSyncDate(res.date); })
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    authedFetch('/api/erp/last-invoice-date')
+      .then(res => { if (res.date) setLastInvoiceDate(res.date); })
       .catch(console.error);
   }, []);
 
