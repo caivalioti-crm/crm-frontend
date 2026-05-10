@@ -4,7 +4,9 @@ import { supabase } from '../../lib/supabaseClient';
 import { SmartDateInput, dateToISO } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
 import { VoiceMemo } from '../ui/VoiceMemo';
+import { EntityProfileForm, EMPTY_SHOP_PROFILE, EMPTY_COMPETITION_INFO } from '../ui/EntityProfileForm';
 import type { SelectedCategory, CategoryItem } from '../ui/CategorySelector';
+import type { ShopProfile, CompetitionInfo } from '../../types/commercialEntity';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'import.meta.env.VITE_API_URL';
 
@@ -40,7 +42,6 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
-
 const todayDisplay = () => {
   const now = new Date();
   return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -70,6 +71,10 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
   const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<SelectedCategory[]>([]);
   const [voiceMemoBlob, setVoiceMemoBlob] = useState<Blob | null>(null);
+
+  const [shopProfile, setShopProfile] = useState<ShopProfile>(EMPTY_SHOP_PROFILE);
+  const [competitionInfo, setCompetitionInfo] = useState<CompetitionInfo>(EMPTY_COMPETITION_INFO);
+  const [shopType, setShopType] = useState('');
 
   useEffect(() => {
     if (isOpen && allCategories.length === 0) {
@@ -107,11 +112,9 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
 
   const handleAddTask = () => {
     if (!newTaskDescription.trim()) return;
-
     const task: Task = { description: newTaskDescription };
-
     if (newTaskReminderType === 'custom') {
-      const reminderISO = dateToISO(newTaskCustomDate);
+      const reminderISO = newTaskCustomDate.match(/^\d{4}-\d{2}-\d{2}$/) ? newTaskCustomDate : dateToISO(newTaskCustomDate);
       const visitISO = dateToISO(visitDate);
       if (reminderISO && visitISO && reminderISO < visitISO) {
         setError(`Reminder date cannot be before the visit date (${visitDate})`);
@@ -122,7 +125,6 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     } else if (newTaskReminderType) {
       task.reminderDate = getReminderDate(newTaskReminderType);
     }
-
     setError(null);
     setTasks([...tasks, task]);
     setNewTaskDescription('');
@@ -155,6 +157,8 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
       formData.append('notes', notes);
       formData.append('tasks', JSON.stringify(tasks));
       formData.append('categories', JSON.stringify(selectedCategories));
+      formData.append('shop_profile', JSON.stringify({ ...shopProfile, shop_type: shopType || undefined }));
+      formData.append('competition_info', JSON.stringify(competitionInfo));
       if (voiceMemoBlob) {
         formData.append('voice_memo', voiceMemoBlob, 'memo.webm');
       }
@@ -192,6 +196,9 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     setNewTaskCustomDate('');
     setVisitDate(todayDisplay());
     setError(null);
+    setShopProfile(EMPTY_SHOP_PROFILE);
+    setCompetitionInfo(EMPTY_COMPETITION_INFO);
+    setShopType('');
     onClose();
     setVoiceMemoBlob(null);
   };
@@ -213,7 +220,6 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     >
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
 
-        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-6 py-4 flex items-center justify-between sticky top-0 z-10">
           <h2 className="text-xl font-bold">New Visit</h2>
           <button onClick={handleClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
@@ -320,6 +326,16 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
             <VoiceMemo onRecordingComplete={(blob) => setVoiceMemoBlob(blob)} />
           </div>
 
+          {/* Entity Profile */}
+          <EntityProfileForm
+            shopProfile={shopProfile}
+            competitionInfo={competitionInfo}
+            onShopProfileChange={setShopProfile}
+            onCompetitionInfoChange={setCompetitionInfo}
+            shopType={shopType}
+            onShopTypeChange={setShopType}
+          />
+
           {/* Tasks */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Follow-up Tasks</label>
@@ -358,7 +374,13 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
                 </div>
                 {newTaskReminderType === 'custom' && (
                   <div className="mt-2">
-                    <SmartDateInput value={newTaskCustomDate} onChange={setNewTaskCustomDate} hint={true} minDate={visitDate} />
+                    <input
+                      type="date"
+                      value={newTaskCustomDate}
+                      onChange={e => setNewTaskCustomDate(e.target.value)}
+                      min={dateToISO(visitDate) ?? undefined}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 )}
               </div>
@@ -373,7 +395,6 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
           {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 flex items-center justify-end gap-3 sticky bottom-0">
           <button onClick={handleClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors">
             Cancel
