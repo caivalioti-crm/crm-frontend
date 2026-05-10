@@ -6,6 +6,7 @@ export function mapErpSale(raw: any): Sale {
     trnDate: raw.trnDate ?? raw.trndate ?? null,
     netAmount: Number(raw.netAmount ?? raw.netamnt ?? 0),
     invoiceCount: Number(raw.invoiceCount ?? 0),
+    qty: Number(raw.qty ?? 0),
     series: Number(raw.series ?? 0),
     salesRepId: String(raw.salesRepId ?? 'demo'),
   };

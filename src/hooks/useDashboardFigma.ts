@@ -249,6 +249,8 @@ export function useDashboardFigma() {
     if (monthlySalesExpanded) fetchMonthlySales(selectedPeriod);
   }, [selectedPeriod, monthlySalesExpanded, fetchMonthlySales]);
 
+
+
   /* ===================== FETCH SALES BY CATEGORY ===================== */
   const fetchSalesByCategory = useCallback(async (period: Period, areas: string[], cities: string[]) => {
     setSalesByCategoryLoading(true);
@@ -510,6 +512,16 @@ export function useDashboardFigma() {
   const customersWithSales = useMemo(() => new Set(geoFilteredSales.map(s => s.customerCode)).size, [geoFilteredSales]);
   const customersWithSalesSet = useMemo(() => new Set(geoFilteredSales.map(s => String(s.customerCode))), [geoFilteredSales]);
 
+    const totalQty = useMemo(() => 
+      geoFilteredSales.reduce((sum, s) => sum + (s.qty ?? 0), 0), 
+      [geoFilteredSales]
+    );
+
+    const compareQty = useMemo(() => 
+      geoFilteredCompareSales.reduce((sum, s) => sum + (s.qty ?? 0), 0), 
+      [geoFilteredCompareSales]
+    );
+
 /* ===================== CLIENT-SIDE AREA STATS ===================== */
 const areaStats = useMemo(() => {
   const currentMap = new Map<string, { revenue: number; customers: Set<string> }>();
@@ -614,6 +626,6 @@ const areaStats = useMemo(() => {
     joinedPeriod, setJoinedPeriod,
     customerSortMode, setCustomerSortMode,
     fullyFilteredCustomerIds, monthlySales, monthlySalesCompare, monthlySalesLoading,
-    monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, 
+    monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, geoFilteredCompareSales, geoFilteredSales, totalQty, compareQty
   };
 }
