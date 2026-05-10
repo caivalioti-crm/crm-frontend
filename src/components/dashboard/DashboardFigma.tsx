@@ -272,7 +272,7 @@ export function DashboardFigma() {
     joinedDirection, setJoinedDirection,
     joinedPeriod, setJoinedPeriod,
     customerSortMode, setCustomerSortMode, monthlySales, monthlySalesCompare, monthlySalesLoading,
-    monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, totalQty, compareQty,
+    monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, 
 
   } = useDashboardFigma();
 
@@ -654,7 +654,7 @@ export function DashboardFigma() {
                   {salesLoading ? <div className="text-slate-400 text-sm">Loading...</div> : (
                     <>
                       <div className="text-2xl font-bold text-slate-900">€{totalRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">{Math.round(totalQty).toLocaleString('el-GR')} τεμ.</div>
+                      
                       {revenueGrowth !== null && (
                         <div className={`flex items-center gap-1 mt-1 text-sm font-medium ${revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {revenueGrowth >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -662,7 +662,7 @@ export function DashboardFigma() {
                           <span className="text-slate-400 font-normal text-xs ml-1">{selectedPeriod.compareLabel}</span>
                         </div>
                       )}
-                      {compareRevenue > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{compareRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {Math.round(compareQty).toLocaleString('el-GR')} τεμ.</div>}
+                      
                     </>
                   )}
                 </div>
@@ -758,7 +758,7 @@ export function DashboardFigma() {
                             <div className="text-xl font-bold text-slate-900">€{area.netAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                             {area.growth !== null && <div className={`text-xs font-medium flex items-center gap-0.5 ${area.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>{area.growth >= 0 ? '↑' : '↓'}{Math.abs(area.growth).toFixed(1)}%</div>}
                           </div>
-                          <div className="text-xs text-slate-400">{area.qty.toLocaleString('el-GR')} τεμ.</div>
+                          
                           <div className="text-xs text-slate-400">{area.customerCount} customers with sales</div>
                           {area.compareAmount > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{area.compareAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>}
                           <div className="text-xs text-indigo-400 mt-2">Click to view cities →</div>
@@ -789,7 +789,7 @@ export function DashboardFigma() {
                               <div className="text-xl font-bold text-slate-900">€{city.netAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                               {city.growth !== null && <div className={`text-xs font-medium flex items-center gap-0.5 ${city.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>{city.growth >= 0 ? '↑' : '↓'}{Math.abs(city.growth).toFixed(1)}%</div>}
                             </div>
-                            <div className="text-xs text-slate-400">{city.qty.toLocaleString('el-GR')} τεμ.</div>
+                            
                             <div className="text-xs text-slate-400">{city.customerCount} customer{city.customerCount !== 1 ? 's' : ''} with sales</div>
                             {city.compareAmount > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{city.compareAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>}
                           </div>

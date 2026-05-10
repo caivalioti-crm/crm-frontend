@@ -512,16 +512,7 @@ export function useDashboardFigma() {
   const customersWithSales = useMemo(() => new Set(geoFilteredSales.map(s => s.customerCode)).size, [geoFilteredSales]);
   const customersWithSalesSet = useMemo(() => new Set(geoFilteredSales.map(s => String(s.customerCode))), [geoFilteredSales]);
 
-    const totalQty = useMemo(() => 
-      geoFilteredSales.reduce((sum, s) => sum + (s.qty ?? 0), 0), 
-      [geoFilteredSales]
-    );
-
-    const compareQty = useMemo(() => 
-      geoFilteredCompareSales.reduce((sum, s) => sum + (s.qty ?? 0), 0), 
-      [geoFilteredCompareSales]
-    );
-
+  
 /* ===================== CLIENT-SIDE AREA STATS ===================== */
 const areaStats = useMemo(() => {
   const currentMap = new Map<string, { revenue: number; customers: Set<string>; qty: number }>();
@@ -533,7 +524,7 @@ const areaStats = useMemo(() => {
     if (!currentMap.has(c.area)) currentMap.set(c.area, { revenue: 0, customers: new Set(), qty: 0 });
     const entry = currentMap.get(c.area)!;
     entry.revenue += s.netAmount;
-    entry.qty += s.qty ?? 0;
+
     entry.customers.add(String(s.customerCode));
   }
 
@@ -543,7 +534,7 @@ const areaStats = useMemo(() => {
     if (!compareMap.has(c.area)) compareMap.set(c.area, { revenue: 0, customers: new Set(), qty: 0 });
     const entry = compareMap.get(c.area)!;
     entry.revenue += s.netAmount;
-    entry.qty += s.qty ?? 0;
+    
     entry.customers.add(String(s.customerCode));
   }
 
@@ -629,6 +620,6 @@ const areaStats = useMemo(() => {
     joinedPeriod, setJoinedPeriod,
     customerSortMode, setCustomerSortMode,
     fullyFilteredCustomerIds, monthlySales, monthlySalesCompare, monthlySalesLoading,
-    monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, geoFilteredCompareSales, geoFilteredSales, totalQty, compareQty
-  };
-}
+    monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, geoFilteredCompareSales, geoFilteredSales, 
+    };
+  }
