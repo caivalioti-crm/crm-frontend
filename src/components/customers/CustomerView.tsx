@@ -505,7 +505,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               <th className="text-right px-3 py-2">Τεμ.</th>
               <th className="text-right px-3 py-2">Έκπτ.</th>
               <th className="text-right px-3 py-2">ΦΠΑ</th>
-              <th className="text-right px-4 py-2">Αξία</th>
+              <th className="text-right px-4 py-2">Τιμή</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -517,7 +517,9 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
                 <td className="px-3 py-2 text-right text-slate-400">{line.disc1prc ? `${line.disc1prc}%` : '—'}</td>
                 <td className="px-3 py-2 text-right text-slate-400">{line.vatprc != null ? `${line.vatprc}%` : '—'}</td>
                 <td className="px-4 py-2 text-right font-semibold text-slate-700">
-                  {line.price != null ? fmtEur(line.price) : fmtEur(Number(line.netlineval ?? 0))}
+                  {line.price != null
+                    ? '€' + Number(line.price).toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : '€' + Number(line.netlineval ?? 0).toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             ))}
@@ -526,8 +528,25 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             <tr className="border-t border-slate-200 bg-white">
               <td colSpan={2} className="px-4 py-2 text-slate-400 text-xs hidden sm:table-cell">{lines.length} γραμμές</td>
               <td colSpan={2} className="px-4 py-2 text-slate-400 text-xs sm:hidden">{lines.length} γραμμές</td>
-              <td className="px-3 py-2 text-right text-xs font-medium text-slate-500">Σύνολο</td>
-              <td className="px-4 py-2 text-right font-bold text-slate-800">{fmtEur(netamnt)}</td>
+              <td className="px-3 py-2 text-right text-xs text-slate-400">
+                <div>χωρίς ΦΠΑ</div>
+                <div>με ΦΠΑ</div>
+              </td>
+              <td className="px-4 py-2 text-right">
+                <div className="font-bold text-slate-800">
+                  {'€' + Number(netamnt).toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="font-bold text-slate-600">
+                  {(() => {
+                    const gross = lines.reduce((sum: number, l: any) => {
+                      const price = l.price != null ? Number(l.price) : Number(l.netlineval ?? 0);
+                      const vatMultiplier = l.vatprc != null ? 1 + Number(l.vatprc) / 100 : 1;
+                      return sum + price * vatMultiplier;
+                    }, 0);
+                    return '€' + gross.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  })()}
+                </div>
+              </td>
             </tr>
           </tfoot>
         </table>
