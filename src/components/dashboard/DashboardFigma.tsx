@@ -228,12 +228,6 @@ function DrillContent({
   );
 }
 
-type CustomerSortMode = 'name' | 'area_then_name';
-type PerformanceFilter = 'all' | 'up' | 'down';
-type ActiveFilter = 'all' | 'active' | 'inactive';
-type JoinedFilterDirection = 'before' | 'after';
-
-
 function generateJoinedPeriodOptions(): { label: string; value: string }[] {
   const options: { label: string; value: string }[] = [];
   const now = new Date();
@@ -270,25 +264,27 @@ export function DashboardFigma() {
     setSalesByCategoryExpanded, expandSalesByCategory,
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
     topCustomersData, topCustomersLoading, fetchTopCustomers,
-    repModeOverride, setRepModeOverride, clearTopCustomersCache, PERIODS,
+    repModeOverride, setRepModeOverride, clearTopCustomersCache, PERIODS, displayedCustomers,
+    notVisitedDays, setNotVisitedDays,
+    salesFilter, setSalesFilter,
+    performanceFilter, setPerformanceFilter,
+    activeFilter, setActiveFilter,
+    joinedDirection, setJoinedDirection,
+    joinedPeriod, setJoinedPeriod,
+    customerSortMode, setCustomerSortMode,
+
   } = useDashboardFigma();
 
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
-  const [notVisitedDays, setNotVisitedDays] = useState<number | null>(null);
+  
   const [prospectsRefreshKey, setProspectsRefreshKey] = useState(0);
   const [geoAreasExpanded, setGeoAreasExpanded] = useState(false);
   const [geoCitiesExpanded, setGeoCitiesExpanded] = useState(false);
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
   const [expandedL3s, setExpandedL3s] = useState<Set<string>>(new Set());
-  const [salesFilter, setSalesFilter] = useState<'all' | 'with' | 'without'>('all');
-  const [customerSortMode, setCustomerSortMode] = useState<CustomerSortMode>('name');
-  const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
-  const [joinedDirection, setJoinedDirection] = useState<JoinedFilterDirection>('after');
-  const [joinedPeriod, setJoinedPeriod] = useState<string | null>(null);
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
@@ -304,58 +300,7 @@ export function DashboardFigma() {
     return counts;
   }, [filteredCustomers, getDaysSinceVisit]);
 
-  const displayedCustomers = useMemo(() => {
-    let result = customers;
-
-    if (notVisitedDays) {
-      result = result.filter(c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays);
-    }
-    if (salesFilter === 'with') {
-      result = result.filter(c => customersWithSalesSet.has(String(c.trdr_id)));
-    }
-    if (salesFilter === 'without') {
-      result = result.filter(c => !customersWithSalesSet.has(String(c.trdr_id)));
-    }
-    if (performanceFilter !== 'all') {
-      result = result.filter(c => {
-        const g = Number(c.growth_pct);
-        if (performanceFilter === 'up') return isNaN(g) || g >= 0;
-        if (performanceFilter === 'down') return !isNaN(g) && g < 0;
-        return true;
-      });
-    }
-    if (activeFilter === 'active') {
-      result = result.filter(c => c.is_active === true || (c.is_active as any) === 'true');
-    }
-    if (activeFilter === 'inactive') {
-      result = result.filter(c => c.is_active === false || (c.is_active as any) === 'false');
-    }
-    if (joinedPeriod) {
-      result = result.filter(c => {
-        if (!c.inserted_date) return true;
-        if (joinedDirection === 'after')  return c.inserted_date >= joinedPeriod;
-        if (joinedDirection === 'before') return c.inserted_date < joinedPeriod;
-        return true;
-      });
-    }
-
-    const sorted = [...result].sort((a, b) => {
-      if (customerSortMode === 'area_then_name') {
-        const areaCompare = (a.area ?? '').localeCompare(b.area ?? '');
-        if (areaCompare !== 0) return areaCompare;
-        return a.name.localeCompare(b.name);
-      }
-      return a.name.localeCompare(b.name);
-    });
-
-    return sorted;
-  }, [
-    customers,
-    notVisitedDays, getDaysSinceVisit,
-    salesFilter, customersWithSalesSet,
-    customerSortMode, performanceFilter, activeFilter,
-    joinedDirection, joinedPeriod,
-  ]);
+  
 
   function toggleL1(code: string) { setExpandedL1s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }
   function toggleL2(code: string) { setExpandedL2s(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; }); }

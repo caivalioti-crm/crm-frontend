@@ -90,7 +90,7 @@ export function buildPeriods(syncDate: string, invoiceDate?: string): Period[] {
   ];
 }
 
-export const PERIODS = buildPeriods(toLocalDateString(_now)); // fallback for static imports
+export const PERIODS = buildPeriods(toLocalDateString(_now));
 
 async function authedFetch(url: string) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -140,6 +140,15 @@ export function useDashboardFigma() {
   });
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
+  /* ===================== FILTER STATE (moved from DashboardFigma) ===================== */
+  const [notVisitedDays, setNotVisitedDays] = useState<number | null>(null);
+  const [salesFilter, setSalesFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [performanceFilter, setPerformanceFilter] = useState<'all' | 'up' | 'down'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [joinedDirection, setJoinedDirection] = useState<'before' | 'after'>('after');
+  const [joinedPeriod, setJoinedPeriod] = useState<string | null>(null);
+  const [customerSortMode, setCustomerSortMode] = useState<'name' | 'area_then_name'>('name');
+
   /* ===================== DYNAMIC PERIODS ===================== */
   const periods = useMemo(() => buildPeriods(lastSyncDate, lastInvoiceDate), [lastSyncDate, lastInvoiceDate]);
 
@@ -167,7 +176,7 @@ export function useDashboardFigma() {
       .catch(console.error);
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     authedFetch('/api/erp/last-invoice-date')
       .then(res => { if (res.date) setLastInvoiceDate(res.date); })
       .catch(console.error);
@@ -333,6 +342,15 @@ export function useDashboardFigma() {
 
   const backToAreas = useCallback(() => { setSelectedGeoArea(null); setCityStats([]); }, []);
 
+  /* ===================== VISIT INTELLIGENCE ===================== */
+  const getDaysSinceVisit = (lastVisitDate: string | undefined | null): number => {
+    if (!lastVisitDate) return 99999;
+    const now = new Date();
+    const lastVisit = new Date(lastVisitDate);
+    if (isNaN(lastVisit.getTime())) return 99999;
+    return Math.ceil(Math.abs(now.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
   /* ===================== CUSTOMER SCOPING ===================== */
   const scopedCustomers = useMemo(() => {
     if (repModeOverride && currentUser.salesman_code) {
@@ -358,28 +376,6 @@ export function useDashboardFigma() {
     return compareSales.filter(s => ids.has(String(s.customerCode)));
   }, [compareSales, scopedCustomers]);
 
-  const geoFilteredSales = useMemo(() => scopedSales.filter(s => {
-    const c = customerByTrdrId.get(String(s.customerCode));
-    if (!c) return false;
-    if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
-    if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
-    return true;
-  }), [scopedSales, customerByTrdrId, selectedAreas, selectedCities]);
-
-  const geoFilteredCompareSales = useMemo(() => scopedCompareSales.filter(s => {
-    const c = customerByTrdrId.get(String(s.customerCode));
-    if (!c) return false;
-    if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
-    if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
-    return true;
-  }), [scopedCompareSales, customerByTrdrId, selectedAreas, selectedCities]);
-
-  /* ===================== KPIs ===================== */
-  const totalRevenue   = useMemo(() => geoFilteredSales.reduce((sum, s) => sum + s.netAmount, 0), [geoFilteredSales]);
-  const compareRevenue = useMemo(() => geoFilteredCompareSales.reduce((sum, s) => sum + s.netAmount, 0), [geoFilteredCompareSales]);
-  const revenueGrowth  = useMemo(() => compareRevenue === 0 ? null : ((totalRevenue - compareRevenue) / compareRevenue) * 100, [totalRevenue, compareRevenue]);
-  const customersWithSales = useMemo(() => new Set(geoFilteredSales.map(s => s.customerCode)).size, [geoFilteredSales]);
-
   /* ===================== GEO OPTIONS ===================== */
   const areas = useMemo(() => Array.from(new Set(scopedCustomers.map(c => c.area))).sort(), [scopedCustomers]);
 
@@ -392,7 +388,7 @@ export function useDashboardFigma() {
     )).sort();
   }, [scopedCustomers, selectedAreas]);
 
-  /* ===================== FILTERED CUSTOMERS ===================== */
+  /* ===================== FILTERED CUSTOMERS (area/city/search) ===================== */
   const filteredCustomers = useMemo(() => scopedCustomers.filter(c => {
     if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
     if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
@@ -400,25 +396,93 @@ export function useDashboardFigma() {
     return true;
   }), [scopedCustomers, selectedAreas, selectedCities, searchQuery]);
 
-  const customersWithSalesSet = useMemo(
-    () => new Set(geoFilteredSales.map(s => String(s.customerCode))),
-    [geoFilteredSales]
+  /* ===================== REVENUE MAPS (for performance filter) ===================== */
+  const currentRevMap = useMemo(() => {
+    const map = new Map<string, number>();
+    scopedSales.forEach(s => {
+      const key = String(s.customerCode);
+      map.set(key, (map.get(key) ?? 0) + s.netAmount);
+    });
+    return map;
+  }, [scopedSales]);
+
+  const compareRevMap = useMemo(() => {
+    const map = new Map<string, number>();
+    scopedCompareSales.forEach(s => {
+      const key = String(s.customerCode);
+      map.set(key, (map.get(key) ?? 0) + s.netAmount);
+    });
+    return map;
+  }, [scopedCompareSales]);
+
+  const hasSalesSet = useMemo(() => new Set(scopedSales.map(s => String(s.customerCode))), [scopedSales]);
+
+  /* ===================== FULLY FILTERED CUSTOMER IDs ===================== */
+  const fullyFilteredCustomerIds = useMemo(() => {
+    let result = filteredCustomers;
+
+    if (notVisitedDays) {
+      result = result.filter(c => getDaysSinceVisit(c.lastVisitDate) > notVisitedDays);
+    }
+    if (salesFilter === 'with') {
+      result = result.filter(c => hasSalesSet.has(String(c.trdr_id)));
+    }
+    if (salesFilter === 'without') {
+      result = result.filter(c => !hasSalesSet.has(String(c.trdr_id)));
+    }
+    if (performanceFilter !== 'all') {
+      result = result.filter(c => {
+        const key = String(c.trdr_id);
+        const curr = currentRevMap.get(key) ?? 0;
+        const prev = compareRevMap.get(key) ?? 0;
+        const g = prev === 0 ? null : ((curr - prev) / prev) * 100;
+        if (performanceFilter === 'up') return g === null || g >= 0;
+        if (performanceFilter === 'down') return g !== null && g < 0;
+        return true;
+      });
+    }
+    if (activeFilter === 'active') {
+      result = result.filter(c => c.is_active === true || (c.is_active as any) === 'true');
+    }
+    if (activeFilter === 'inactive') {
+      result = result.filter(c => c.is_active === false || (c.is_active as any) === 'false');
+    }
+    if (joinedPeriod) {
+      result = result.filter(c => {
+        if (!c.inserted_date) return true;
+        if (joinedDirection === 'after') return c.inserted_date >= joinedPeriod;
+        if (joinedDirection === 'before') return c.inserted_date < joinedPeriod;
+        return true;
+      });
+    }
+    return new Set(result.map(c => String(c.trdr_id)));
+  }, [
+    filteredCustomers, notVisitedDays, getDaysSinceVisit,
+    salesFilter, hasSalesSet,
+    performanceFilter, currentRevMap, compareRevMap,
+    activeFilter, joinedDirection, joinedPeriod,
+  ]);
+
+  /* ===================== GEO+ALL FILTERED SALES ===================== */
+  const geoFilteredSales = useMemo(() =>
+    scopedSales.filter(s => fullyFilteredCustomerIds.has(String(s.customerCode))),
+    [scopedSales, fullyFilteredCustomerIds]
   );
+
+  const geoFilteredCompareSales = useMemo(() =>
+    scopedCompareSales.filter(s => fullyFilteredCustomerIds.has(String(s.customerCode))),
+    [scopedCompareSales, fullyFilteredCustomerIds]
+  );
+
+  /* ===================== KPIs ===================== */
+  const totalRevenue   = useMemo(() => geoFilteredSales.reduce((sum, s) => sum + s.netAmount, 0), [geoFilteredSales]);
+  const compareRevenue = useMemo(() => geoFilteredCompareSales.reduce((sum, s) => sum + s.netAmount, 0), [geoFilteredCompareSales]);
+  const revenueGrowth  = useMemo(() => compareRevenue === 0 ? null : ((totalRevenue - compareRevenue) / compareRevenue) * 100, [totalRevenue, compareRevenue]);
+  const customersWithSales = useMemo(() => new Set(geoFilteredSales.map(s => s.customerCode)).size, [geoFilteredSales]);
+  const customersWithSalesSet = useMemo(() => new Set(geoFilteredSales.map(s => String(s.customerCode))), [geoFilteredSales]);
 
   /* ===================== CUSTOMERS WITH GROWTH ===================== */
   const customersWithGrowth = useMemo(() => {
-    const currentRevMap = new Map<string, number>();
-    const compareRevMap = new Map<string, number>();
-
-    scopedSales.forEach(s => {
-      const key = String(s.customerCode);
-      currentRevMap.set(key, (currentRevMap.get(key) ?? 0) + s.netAmount);
-    });
-    scopedCompareSales.forEach(s => {
-      const key = String(s.customerCode);
-      compareRevMap.set(key, (compareRevMap.get(key) ?? 0) + s.netAmount);
-    });
-
     return filteredCustomers.map(c => {
       const key = String(c.trdr_id);
       const curr = currentRevMap.get(key) ?? 0;
@@ -426,20 +490,25 @@ export function useDashboardFigma() {
       const growth_pct = prev === 0 ? null : ((curr - prev) / prev) * 100;
       return { ...c, growth_pct, current_revenue: curr, prev_revenue: prev };
     });
-  }, [filteredCustomers, scopedSales, scopedCompareSales]);
+  }, [filteredCustomers, currentRevMap, compareRevMap]);
 
-  /* ===================== VISIT INTELLIGENCE ===================== */
-  const getDaysSinceVisit = (lastVisitDate: string | undefined | null): number => {
-    if (!lastVisitDate) return 99999;
-    const now = new Date();
-    const lastVisit = new Date(lastVisitDate);
-    if (isNaN(lastVisit.getTime())) return 99999;
-    return Math.ceil(Math.abs(now.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
-  };
+  /* ===================== DISPLAYED CUSTOMERS (sorted, all filters) ===================== */
+  const displayedCustomers = useMemo(() => {
+    const filtered = customersWithGrowth.filter(c => fullyFilteredCustomerIds.has(String(c.trdr_id)));
+    return [...filtered].sort((a, b) => {
+      if (customerSortMode === 'area_then_name') {
+        const areaCompare = (a.area ?? '').localeCompare(b.area ?? '');
+        if (areaCompare !== 0) return areaCompare;
+        return a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [customersWithGrowth, fullyFilteredCustomerIds, customerSortMode]);
 
   /* ===================== EXPORT ===================== */
   return {
     customers: customersWithGrowth,
+    displayedCustomers,
     customersTotal: scopedCustomers.length,
     totalRevenue, compareRevenue, revenueGrowth, customersWithSales,
     salesLoading, areaStats, cityStats, cityLoading,
@@ -468,5 +537,13 @@ export function useDashboardFigma() {
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
     topCustomersData, topCustomersLoading, fetchTopCustomers,
     PERIODS: periods,
+    notVisitedDays, setNotVisitedDays,
+    salesFilter, setSalesFilter,
+    performanceFilter, setPerformanceFilter,
+    activeFilter, setActiveFilter,
+    joinedDirection, setJoinedDirection,
+    joinedPeriod, setJoinedPeriod,
+    customerSortMode, setCustomerSortMode,
+    fullyFilteredCustomerIds,
   };
 }
