@@ -64,9 +64,12 @@ const DOC_PERIODS = [
   { label: 'Όλα',      from: '2022-01-01', to: '2026-12-31' },
 ];
 
+function sumPeriod(sales: any[], fromMonth: string, toMonth: string): number {
+  return sales.filter(s => s.month >= fromMonth && s.month <= toMonth).reduce((sum, s) => sum + (s.netamnt ?? 0), 0);
+}
+
 function sumQtyPeriod(sales: any[], fromMonth: string, toMonth: string): number {
-  return sales.filter(s => s.month >= fromMonth && s.month <= toMonth)
-    .reduce((sum, s) => sum + (s.qty ?? 0), 0);
+  return sales.filter(s => s.month >= fromMonth && s.month <= toMonth).reduce((sum, s) => sum + (s.qty ?? 0), 0);
 }
 
 function fmtEur(n: number): string {
@@ -205,8 +208,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const cutoffD = new Date(lastInvoiceDate);
   const ytdMonth = cutoffD.getMonth() + 1;
   const ytdMonthStr = String(ytdMonth).padStart(2, '0');
-  const currentQty = sumQtyPeriod(sales, sp.from, sp.to);
-  const prevQty    = sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
   const ytdLabel = labelD.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
   const ytdDateTo  = new Date(cutoffD.getFullYear(), cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
   const ytdPrevTo  = new Date(cutoffD.getFullYear() - 1, cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
@@ -414,6 +415,8 @@ useEffect(() => {
   const sp = SALES_PERIODS[salesPeriodIdx];
   const currentTotal = sumPeriod(sales, sp.from, sp.to);
   const prevTotal    = sumPeriod(sales, sp.prevFrom, sp.prevTo);
+  const currentQty = sumQtyPeriod(sales, sp.from, sp.to);
+  const prevQty    = sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
   const growthPct    = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
   const isUp         = growthPct !== null && growthPct >= 0;
   const diffAbs      = currentTotal - prevTotal;
@@ -799,6 +802,7 @@ useEffect(() => {
                 <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                   <div className="text-xs text-indigo-500 font-medium mb-1">Τρέχουσα Περίοδος ({sp.label})</div>
                   <div className="text-2xl font-bold text-indigo-700 leading-tight">{fmtEur(currentTotal)}</div>
+                  <div className="text-xs text-indigo-400 mt-0.5">{currentQty.toLocaleString('el-GR')} τεμ.</div>
                   {growthPct !== null && (
                     <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-green-600' : 'text-red-500'}`}>
                       {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -809,6 +813,7 @@ useEffect(() => {
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                   <div className="text-xs text-slate-500 font-medium mb-1">Ίδια Περίοδος Πέρσι ({sp.prevLabel})</div>
                   <div className="text-2xl font-bold text-slate-600 leading-tight">{fmtEur(prevTotal)}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{prevQty.toLocaleString('el-GR')} τεμ.</div>
                   {growthPct !== null && (
                     <div className={`text-xs mt-2 font-medium ${isUp ? 'text-green-600' : 'text-red-500'}`}>
                       {isUp ? '+' : ''}{fmtEur(Math.abs(diffAbs))} {isUp ? 'αύξηση' : 'μείωση'}
