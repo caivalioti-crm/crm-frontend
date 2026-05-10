@@ -524,24 +524,26 @@ export function useDashboardFigma() {
 
 /* ===================== CLIENT-SIDE AREA STATS ===================== */
 const areaStats = useMemo(() => {
-  const currentMap = new Map<string, { revenue: number; customers: Set<string> }>();
-  const compareMap = new Map<string, { revenue: number; customers: Set<string> }>();
+  const currentMap = new Map<string, { revenue: number; customers: Set<string>; qty: number }>();
+  const compareMap = new Map<string, { revenue: number; customers: Set<string>; qty: number }>();
 
   for (const s of geoFilteredSales) {
     const c = customerByTrdrId.get(String(s.customerCode));
     if (!c?.area) continue;
-    if (!currentMap.has(c.area)) currentMap.set(c.area, { revenue: 0, customers: new Set() });
+    if (!currentMap.has(c.area)) currentMap.set(c.area, { revenue: 0, customers: new Set(), qty: 0 });
     const entry = currentMap.get(c.area)!;
     entry.revenue += s.netAmount;
+    entry.qty += s.qty ?? 0;
     entry.customers.add(String(s.customerCode));
   }
 
   for (const s of geoFilteredCompareSales) {
     const c = customerByTrdrId.get(String(s.customerCode));
     if (!c?.area) continue;
-    if (!compareMap.has(c.area)) compareMap.set(c.area, { revenue: 0, customers: new Set() });
+    if (!compareMap.has(c.area)) compareMap.set(c.area, { revenue: 0, customers: new Set(), qty: 0 });
     const entry = compareMap.get(c.area)!;
     entry.revenue += s.netAmount;
+    entry.qty += s.qty ?? 0;
     entry.customers.add(String(s.customerCode));
   }
 
@@ -556,6 +558,7 @@ const areaStats = useMemo(() => {
       area,
       netAmount,
       compareAmount,
+      qty: Math.round(curr?.qty ?? 0),
       customerCount: curr?.customers.size ?? 0,
       growth,
     };

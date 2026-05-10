@@ -662,7 +662,7 @@ export function DashboardFigma() {
                           <span className="text-slate-400 font-normal text-xs ml-1">{selectedPeriod.compareLabel}</span>
                         </div>
                       )}
-                      {compareRevenue > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{compareRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
+                      {compareRevenue > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{compareRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {Math.round(compareQty).toLocaleString('el-GR')} τεμ.</div>}
                     </>
                   )}
                 </div>
@@ -762,6 +762,7 @@ export function DashboardFigma() {
                           <div className="text-xs text-slate-400">{area.customerCount} customers with sales</div>
                           {area.compareAmount > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{area.compareAmount.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>}
                           <div className="text-xs text-indigo-400 mt-2">Click to view cities →</div>
+                          
                         </div>
                       ))}
                     </div>
