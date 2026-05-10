@@ -139,6 +139,10 @@ export function useDashboardFigma() {
     id: '', role: 'rep', name: 'Loading...', salesman_code: null,
   });
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
+  const [monthlySales, setMonthlySales] = useState<{month: string; netamnt: number}[]>([]);
+  const [monthlySalesCompare, setMonthlySalesCompare] = useState<{month: string; netamnt: number}[]>([]);
+  const [monthlySalesLoading, setMonthlySalesLoading] = useState(false);
+  const [monthlySalesExpanded, setMonthlySalesExpanded] = useState(false);
 
   /* ===================== FILTER STATE (moved from DashboardFigma) ===================== */
   const [notVisitedDays, setNotVisitedDays] = useState<number | null>(null);
@@ -197,6 +201,7 @@ export function useDashboardFigma() {
       .catch(console.error);
   }, []);
 
+
   /* ===================== FETCH SALES ===================== */
   const fetchSales = useCallback(async (period: Period) => {
     setSalesLoading(true);
@@ -221,6 +226,28 @@ export function useDashboardFigma() {
   }, [repModeOverride, currentUser.salesman_code]);
 
   useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
+
+  const fetchMonthlySales = useCallback(async (period: Period) => {
+  setMonthlySalesLoading(true);
+  try {
+    const salesmanParam = repModeOverride && currentUser.salesman_code
+      ? `&salesmanCode=${currentUser.salesman_code}` : '';
+    const [current, compare] = await Promise.all([
+      authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}`),
+      authedFetch(`/api/erp/sales/monthly?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
+    ]);
+    setMonthlySales(Array.isArray(current) ? current : []);
+    setMonthlySalesCompare(Array.isArray(compare) ? compare : []);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setMonthlySalesLoading(false);
+  }
+}, [repModeOverride, currentUser.salesman_code]);
+
+  useEffect(() => {
+    if (monthlySalesExpanded) fetchMonthlySales(selectedPeriod);
+  }, [selectedPeriod, monthlySalesExpanded, fetchMonthlySales]);
 
   /* ===================== FETCH SALES BY CATEGORY ===================== */
   const fetchSalesByCategory = useCallback(async (period: Period, areas: string[], cities: string[]) => {
@@ -258,6 +285,8 @@ export function useDashboardFigma() {
       fetchSalesByCategory(selectedPeriod, selectedAreas, selectedCities);
     }
   }, [currentUser.role, salesByCategory.length, selectedPeriod, selectedAreas, selectedCities, fetchSalesByCategory]);
+
+
 
   /* ===================== FETCH SKUs ===================== */
   const fetchDashboardSkus = useCallback(async (categoryId: string) => {
@@ -584,6 +613,7 @@ const areaStats = useMemo(() => {
     joinedDirection, setJoinedDirection,
     joinedPeriod, setJoinedPeriod,
     customerSortMode, setCustomerSortMode,
-    fullyFilteredCustomerIds,
+    fullyFilteredCustomerIds, monthlySales, monthlySalesCompare, monthlySalesLoading,
+    monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, 
   };
 }

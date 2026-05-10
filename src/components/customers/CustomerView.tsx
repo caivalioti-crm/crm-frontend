@@ -64,8 +64,9 @@ const DOC_PERIODS = [
   { label: 'Όλα',      from: '2022-01-01', to: '2026-12-31' },
 ];
 
-function sumPeriod(sales: any[], fromMonth: string, toMonth: string): number {
-  return sales.filter(s => s.month >= fromMonth && s.month <= toMonth).reduce((sum, s) => sum + (s.netamnt ?? 0), 0);
+function sumQtyPeriod(sales: any[], fromMonth: string, toMonth: string): number {
+  return sales.filter(s => s.month >= fromMonth && s.month <= toMonth)
+    .reduce((sum, s) => sum + (s.qty ?? 0), 0);
 }
 
 function fmtEur(n: number): string {
@@ -204,6 +205,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const cutoffD = new Date(lastInvoiceDate);
   const ytdMonth = cutoffD.getMonth() + 1;
   const ytdMonthStr = String(ytdMonth).padStart(2, '0');
+  const currentQty = sumQtyPeriod(sales, sp.from, sp.to);
+  const prevQty    = sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
   const ytdLabel = labelD.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
   const ytdDateTo  = new Date(cutoffD.getFullYear(), cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
   const ytdPrevTo  = new Date(cutoffD.getFullYear() - 1, cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
