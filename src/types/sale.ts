@@ -5,5 +5,5 @@ export type Sale = {
   invoiceCount: number;
   series: number;
   salesRepId: string;
-  qty: number;
+  
 };

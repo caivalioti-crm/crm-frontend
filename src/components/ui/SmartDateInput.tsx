@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 'ontouchstart' in window;
 
 function parseAndFormatDate(input: string): string {
   const cleaned = input.trim().replace(/[.\-]/g, '/');
