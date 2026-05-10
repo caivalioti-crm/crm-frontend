@@ -285,6 +285,7 @@ export function DashboardFigma() {
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
   const [expandedL3s, setExpandedL3s] = useState<Set<string>>(new Set());
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
@@ -464,13 +465,22 @@ export function DashboardFigma() {
 {/* ===== FILTERS ===== */}
             <section id="section-filter" className="bg-white rounded-xl shadow p-4 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                  <MapPin className="w-4 h-4 text-indigo-500" />Filter Customers
-                </div>
+                <button
+                  onClick={() => setFiltersExpanded(v => !v)}
+                  className="flex items-center gap-2 text-base font-semibold text-slate-900 hover:text-indigo-600 transition-colors">
+                  <MapPin className="w-4 h-4 text-indigo-500" />
+                  Filter Customers
+                  {!filtersExpanded && hasActiveFilters && (
+                    <span className="px-1.5 py-0.5 bg-indigo-600 text-white text-xs rounded-full font-medium">
+                      Active
+                    </span>
+                  )}
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`} />
+                </button>
                 {hasActiveFilters && (
                   <button onClick={clearAllFilters}
                     className="px-3 py-1.5 rounded-lg text-sm font-medium border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
-                    × Clear all filters
+                    × Clear all
                   </button>
                 )}
               </div>
@@ -483,6 +493,7 @@ export function DashboardFigma() {
                 </div>
               </div>
 
+              {filtersExpanded && <>
               <MultiSelectFilterGroup
                 label="Geographic Area"
                 selected={selectedAreas}
@@ -613,6 +624,7 @@ export function DashboardFigma() {
                   ))}
                 </div>
               </div>
+            </>}
             </section>
 
 

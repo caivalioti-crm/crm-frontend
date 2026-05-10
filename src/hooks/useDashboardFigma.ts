@@ -110,7 +110,7 @@ export function useDashboardFigma() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [compareSales, setCompareSales] = useState<Sale[]>([]);
-  const [areaStats, setAreaStats] = useState<any[]>([]);
+  const [_areaStatsRpc, setAreaStatsRpc] = useState<any[]>([]);
   const [cityStats, setCityStats] = useState<any[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
   const [cityLoading, setCityLoading] = useState(false);
@@ -210,7 +210,7 @@ export function useDashboardFigma() {
       ]);
       setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
       setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
-      setAreaStats(Array.isArray(areas) ? areas : []);
+      setAreaStatsRpc(Array.isArray(areas) ? areas : []);
       setCityStats([]);
       setSelectedGeoArea(null);
     } catch (err) {
@@ -480,6 +480,46 @@ export function useDashboardFigma() {
   const revenueGrowth  = useMemo(() => compareRevenue === 0 ? null : ((totalRevenue - compareRevenue) / compareRevenue) * 100, [totalRevenue, compareRevenue]);
   const customersWithSales = useMemo(() => new Set(geoFilteredSales.map(s => s.customerCode)).size, [geoFilteredSales]);
   const customersWithSalesSet = useMemo(() => new Set(geoFilteredSales.map(s => String(s.customerCode))), [geoFilteredSales]);
+
+/* ===================== CLIENT-SIDE AREA STATS ===================== */
+const areaStats = useMemo(() => {
+  const currentMap = new Map<string, { revenue: number; customers: Set<string> }>();
+  const compareMap = new Map<string, { revenue: number; customers: Set<string> }>();
+
+  for (const s of geoFilteredSales) {
+    const c = customerByTrdrId.get(String(s.customerCode));
+    if (!c?.area) continue;
+    if (!currentMap.has(c.area)) currentMap.set(c.area, { revenue: 0, customers: new Set() });
+    const entry = currentMap.get(c.area)!;
+    entry.revenue += s.netAmount;
+    entry.customers.add(String(s.customerCode));
+  }
+
+  for (const s of geoFilteredCompareSales) {
+    const c = customerByTrdrId.get(String(s.customerCode));
+    if (!c?.area) continue;
+    if (!compareMap.has(c.area)) compareMap.set(c.area, { revenue: 0, customers: new Set() });
+    const entry = compareMap.get(c.area)!;
+    entry.revenue += s.netAmount;
+    entry.customers.add(String(s.customerCode));
+  }
+
+  const allAreas = new Set([...currentMap.keys(), ...compareMap.keys()]);
+  return Array.from(allAreas).map(area => {
+    const curr = currentMap.get(area);
+    const comp = compareMap.get(area);
+    const netAmount = curr?.revenue ?? 0;
+    const compareAmount = comp?.revenue ?? 0;
+    const growth = compareAmount > 0 ? ((netAmount - compareAmount) / compareAmount) * 100 : null;
+    return {
+      area,
+      netAmount,
+      compareAmount,
+      customerCount: curr?.customers.size ?? 0,
+      growth,
+    };
+  }).sort((a, b) => b.netAmount - a.netAmount);
+}, [geoFilteredSales, geoFilteredCompareSales, customerByTrdrId]);
 
   /* ===================== CUSTOMERS WITH GROWTH ===================== */
   const customersWithGrowth = useMemo(() => {
