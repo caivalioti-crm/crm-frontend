@@ -662,7 +662,7 @@ export function DashboardFigma() {
                           <span className="text-slate-400 font-normal text-xs ml-1">{selectedPeriod.compareLabel}</span>
                         </div>
                       )}
-                      
+                      {compareRevenue > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{compareRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                     </>
                   )}
                 </div>
