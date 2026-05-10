@@ -202,7 +202,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const SALES_PERIODS = useMemo(() => {
   const labelD = new Date(lastSyncDate);
   const cutoffD = new Date(lastInvoiceDate);
-  const ytdMonth = cutoffD.getMonth();
+  const ytdMonth = cutoffD.getMonth() + 1;
   const ytdMonthStr = String(ytdMonth).padStart(2, '0');
   const ytdLabel = labelD.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
   const ytdDateTo  = new Date(cutoffD.getFullYear(), cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
