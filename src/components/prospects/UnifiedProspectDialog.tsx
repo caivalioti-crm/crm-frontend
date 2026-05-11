@@ -69,7 +69,7 @@ export function UnifiedProspectDialog({
   prospectId: initialProspectId,
   prospectName: initialProspectName,
   areas, cities,
-  onViewCustomer, onViewProspect, onSaved,
+  onViewCustomer,  onSaved,
 }: UnifiedProspectDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
