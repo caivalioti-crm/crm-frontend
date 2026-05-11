@@ -259,7 +259,7 @@ export function DashboardFigma() {
     setSelectedArea, setSelectedCity,
     searchQuery, setSearchQuery, filteredCustomers, getDaysSinceVisit,
     showNewVisitDialog, setShowNewVisitDialog, showUnifiedProspectDialog, setShowUnifiedProspectDialog,
-    currentUser, categoryMaster, customersWithSalesSet,
+    currentUser, categoryMaster, hasSalesSet,
     salesByCategory, salesByCategoryLoading, salesByCategoryExpanded,
     setSalesByCategoryExpanded, expandSalesByCategory,
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
@@ -464,7 +464,7 @@ export function DashboardFigma() {
               You have access to <span className="font-semibold text-slate-900">{customersTotal}</span> customers across <span className="font-semibold text-slate-900">{areas.length}</span> areas
             </div>
 
-{/* ===== FILTERS ===== */}
+        {/* ===== FILTERS ===== */}
             <section id="section-filter" className="bg-white rounded-xl shadow p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <button
@@ -541,8 +541,8 @@ export function DashboardFigma() {
                     { label: 'Χωρίς πωλήσεις', value: 'without' as const },
                   ]).map(opt => {
                     const count = opt.value === 'all' ? filteredCustomers.length
-                      : opt.value === 'with' ? filteredCustomers.filter(c => customersWithSalesSet.has(String(c.trdr_id))).length
-                      : filteredCustomers.filter(c => !customersWithSalesSet.has(String(c.trdr_id))).length;
+                      : opt.value === 'with' ? filteredCustomers.filter(c => hasSalesSet.has(String(c.trdr_id))).length
+                      : filteredCustomers.filter(c => !hasSalesSet.has(String(c.trdr_id))).length;
                     return (
                       <button key={opt.value} onClick={() => setSalesFilter(opt.value)}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${salesFilter === opt.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
@@ -629,6 +629,31 @@ export function DashboardFigma() {
             </>}
             </section>
 
+           {/* ===== CUSTOMERS ===== */}
+            <div id="section-customers">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-xs text-slate-500">Order by:</span>
+                <button onClick={() => setCustomerSortMode('name')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${customerSortMode === 'name' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                  Name A–Z
+                </button>
+                <button onClick={() => setCustomerSortMode('area_then_name')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${customerSortMode === 'area_then_name' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
+                  Area → Name
+                </button>
+              </div>
+
+              <CustomerListSection
+                title={currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec' ? 'All Customers' : 'Your Customers'}
+                customers={displayedCustomers}
+                currentUserRole={currentUser.role}
+                onSelectCustomer={(customer) => {
+                  scrollPositionRef.current = window.scrollY;
+                  setSelectedCustomer(customer);
+                }}
+                getDaysSinceVisit={getDaysSinceVisit}
+              />
+            </div>
 
             {/* ===== PERFORMANCE ===== */}
             <section id="section-performance" className="bg-white rounded-xl shadow p-4">
@@ -728,6 +753,8 @@ export function DashboardFigma() {
                 </div>
               )}
             </section>
+
+ 
 
             {/* ===== GEO PERFORMANCE ===== */}
             {areaStats.length > 0 && (
@@ -961,33 +988,6 @@ export function DashboardFigma() {
             </div>
 
             
-
-            {/* ===== CUSTOMERS ===== */}
-            <div id="section-customers">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-xs text-slate-500">Order by:</span>
-                <button onClick={() => setCustomerSortMode('name')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${customerSortMode === 'name' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
-                  Name A–Z
-                </button>
-                <button onClick={() => setCustomerSortMode('area_then_name')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${customerSortMode === 'area_then_name' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'}`}>
-                  Area → Name
-                </button>
-              </div>
-
-              <CustomerListSection
-                title={currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec' ? 'All Customers' : 'Your Customers'}
-                customers={displayedCustomers}
-                currentUserRole={currentUser.role}
-                onSelectCustomer={(customer) => {
-                  scrollPositionRef.current = window.scrollY;
-                  setSelectedCustomer(customer);
-                }}
-                getDaysSinceVisit={getDaysSinceVisit}
-              />
-            </div>
-
             {/* ===== PROSPECTS ===== */}
             <div id="section-prospects">
               <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser} onNewProspect={() => setShowUnifiedProspectDialog(true)} onSelectProspect={(prospect) => {

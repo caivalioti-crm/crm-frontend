@@ -604,7 +604,7 @@ const areaStats = useMemo(() => {
     showNewVisitDialog, setShowNewVisitDialog,
     showUnifiedProspectDialog, setShowUnifiedProspectDialog,
     currentUser, setCurrentUser,
-    customerByTrdrId, scopedSales, customersWithSalesSet,
+    customerByTrdrId, scopedSales, customersWithSalesSet, hasSalesSet,
     repModeOverride, setRepModeOverride,
     clearTopCustomersCache: () => { setTopCustomersData({}); setDashboardSkuData({}); },
     salesByCategory, salesByCategoryLoading, salesByCategoryExpanded,
