@@ -1,7 +1,7 @@
 import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
   Lightbulb, FileText, Tag, ChevronDown, ChevronRight, 
-  TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt, User, 
+  TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt, User, RotateCcw,
   ClipboardList, Mic, Pause, Pencil,
 } from 'lucide-react';
 
@@ -649,10 +649,16 @@ const playCvMemo = async (visitId: string) => {
             <button onClick={onBack} className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
               <ArrowLeft className="w-4 h-4" />Back to Dashboard
             </button>
-            <button onClick={() => setShowNewVisitDialog(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
-              <Plus className="w-4 h-4" />New Visit
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => window.location.reload()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowNewVisitDialog(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
+                <Plus className="w-4 h-4" />New Visit
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">

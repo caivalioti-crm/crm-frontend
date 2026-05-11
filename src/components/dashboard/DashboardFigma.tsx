@@ -279,6 +279,7 @@ export function DashboardFigma() {
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
+  const scrollPositionRef = useRef<number>(0);
   
   const [prospectsRefreshKey, setProspectsRefreshKey] = useState(0);
   const [geoAreasExpanded, setGeoAreasExpanded] = useState(false);
@@ -979,21 +980,47 @@ export function DashboardFigma() {
                 title={currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec' ? 'All Customers' : 'Your Customers'}
                 customers={displayedCustomers}
                 currentUserRole={currentUser.role}
-                onSelectCustomer={setSelectedCustomer}
+                onSelectCustomer={(customer) => {
+                  scrollPositionRef.current = window.scrollY;
+                  setSelectedCustomer(customer);
+                }}
                 getDaysSinceVisit={getDaysSinceVisit}
               />
             </div>
 
             {/* ===== PROSPECTS ===== */}
             <div id="section-prospects">
-              <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser} onNewProspect={() => setShowUnifiedProspectDialog(true)} onSelectProspect={setSelectedProspect} />
+              <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser} onNewProspect={() => setShowUnifiedProspectDialog(true)} onSelectProspect={(prospect) => {
+                scrollPositionRef.current = window.scrollY;
+                setSelectedProspect(prospect);
+              }} />
             </div>
           </>
         )}
       </main>
 
-      {selectedCustomer && <CustomerView customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} />}
-      {selectedProspect && <ProspectView prospect={selectedProspect} onBack={() => setSelectedProspect(null)} />}
+      {selectedCustomer && (
+        <CustomerView
+          customer={selectedCustomer}
+          onBack={() => {
+            setSelectedCustomer(null);
+            requestAnimationFrame(() => {
+              window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
+            });
+          }}
+        />
+      )}
+      {selectedProspect && (
+        <ProspectView
+          prospect={selectedProspect}
+          onBack={() => {
+            setSelectedProspect(null);
+            requestAnimationFrame(() => {
+              window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
+            });
+          }}
+        />
+      )}
 
       <NewVisitDialog 
         isOpen={showNewVisitDialog} 
