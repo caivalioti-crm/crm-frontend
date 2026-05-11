@@ -2,7 +2,7 @@ import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
   Lightbulb, FileText, Tag, ChevronDown, ChevronRight, 
   TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt, User, 
-  ClipboardList,
+  ClipboardList, Mic, Pause, Pencil,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
@@ -10,6 +10,7 @@ import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { ProfileEditor } from '../ui/ProfileEditor';
+import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategoryIntelligence } from './CategoryIntelligence';
 
 
@@ -178,6 +179,21 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
   const docsRef = useRef<HTMLDivElement>(null);
+
+  // Visit expand/edit state
+  const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
+  const [showAllVisits, setShowAllVisits] = useState(false);
+  const [editingVisitInCustomer, setEditingVisitInCustomer] = useState<string | null>(null);
+  const [cvEditNotes, setCvEditNotes] = useState('');
+  const [cvEditType, setCvEditType] = useState('');
+  const [cvEditDate, setCvEditDate] = useState('');
+  const [cvEditSaving, setCvEditSaving] = useState(false);
+
+  // Voice memo state
+  const [cvPlayingMemoId, setCvPlayingMemoId] = useState<string | null>(null);
+  const [cvMemoUrls, setCvMemoUrls] = useState<Record<string, string>>({});
+  const [cvMemoLoading, setCvMemoLoading] = useState<Record<string, boolean>>({});
+  const cvAudioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
 
   const SALES_PERIODS = useMemo(() => {
   const labelD = new Date(lastSyncDate);
@@ -553,6 +569,75 @@ useEffect(() => {
       </div>
     );
   }
+
+// Visit edit helpers
+const startEditVisitInCustomer = (v: any) => {
+  setEditingVisitInCustomer(v.id);
+  setCvEditNotes(v.notes ?? '');
+  setCvEditType(v.visit_type ?? 'in-person');
+  setCvEditDate(isoToDisplay(v.visit_date));
+};
+
+const saveEditVisitInCustomer = async (visitId: string) => {
+  setCvEditSaving(true);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const res = await fetch(`${BASE_URL}/api/visits/${visitId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        notes: cvEditNotes,
+        visit_type: cvEditType,
+        visit_date: dateToISO(cvEditDate),
+      }),
+    });
+    if (!res.ok) throw new Error('Failed');
+    const updated = await res.json();
+    setVisits((prev: any[]) => prev.map(v => v.id === visitId ? { ...v, ...updated } : v));
+    setEditingVisitInCustomer(null);
+  } catch {
+    alert('Αποτυχία αποθήκευσης');
+  } finally {
+    setCvEditSaving(false);
+  }
+};
+
+// Voice memo helper
+const playCvMemo = async (visitId: string) => {
+  if (cvPlayingMemoId && cvPlayingMemoId !== visitId) {
+    cvAudioRefs.current[cvPlayingMemoId]?.pause();
+    setCvPlayingMemoId(null);
+  }
+  if (cvPlayingMemoId === visitId) {
+    cvAudioRefs.current[visitId]?.pause();
+    setCvPlayingMemoId(null);
+    return;
+  }
+  if (!cvMemoUrls[visitId]) {
+    setCvMemoLoading(prev => ({ ...prev, [visitId]: true }));
+    try {
+      const data = await authedFetch(`/api/visits/${visitId}/voice-memo`);
+      setCvMemoUrls(prev => ({ ...prev, [visitId]: data.url }));
+    } catch {
+      alert('Failed to load memo');
+      return;
+    } finally {
+      setCvMemoLoading(prev => ({ ...prev, [visitId]: false }));
+    }
+  }
+  setTimeout(() => {
+    const audio = cvAudioRefs.current[visitId];
+    if (audio) {
+      audio.play();
+      setCvPlayingMemoId(visitId);
+      audio.onended = () => setCvPlayingMemoId(null);
+    }
+  }, 50);
+};
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -976,24 +1061,156 @@ useEffect(() => {
         {/* VISITS */}
         <section id="section-visits" className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2"><Calendar className="w-5 h-5 text-purple-600" /><h2 className="text-base font-semibold">Επισκέψεις</h2></div>
-            {visits.length > 0 && <span className="text-xs text-slate-500">{visits.length} σύνολο</span>}
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-purple-600" />
+              <h2 className="text-base font-semibold">Επισκέψεις</h2>
+            </div>
+            {visits.length > 0 && (
+              <span className="text-xs text-slate-500">{visits.length} σύνολο</span>
+            )}
           </div>
-          {visitsLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : visits.length === 0 ? (
+
+          {visitsLoading ? (
+            <div className="text-sm text-slate-400">Φόρτωση...</div>
+          ) : visits.length === 0 ? (
             <div className="text-sm text-slate-400 italic">Καμία επίσκεψη ακόμα</div>
           ) : (
             <div className="space-y-2">
-              {visits.slice(0, 5).map((v: any) => (
-                <div key={v.id} className="flex items-start justify-between py-2 border-b border-slate-50 last:border-0">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">{formatDate(v.visit_date)}</div>
-                    {v.notes && <div className="text-xs text-slate-500 mt-0.5">{v.notes}</div>}
-                    {v.visit_type && <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded mt-1 inline-block">{v.visit_type}</span>}
+              {visits.slice(0, showAllVisits ? undefined : 5).map((v: any) => {
+                const isExpanded = expandedVisitId === v.id;
+                const isEditing = editingVisitInCustomer === v.id;
+                const isPlaying = cvPlayingMemoId === v.id;
+
+                return (
+                  <div key={v.id} className="border border-slate-100 rounded-lg overflow-hidden">
+
+                    {/* Visit row header — click to expand */}
+                    <button
+                      onClick={() => setExpandedVisitId(isExpanded ? null : v.id)}
+                      className="w-full flex items-start justify-between py-2.5 px-3 hover:bg-slate-50 transition-colors text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-slate-700">{formatDate(v.visit_date)}</div>
+                        {v.notes && (
+                          <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</div>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          {v.visit_type && (
+                            <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
+                              {v.visit_type}
+                            </span>
+                          )}
+                          {v.voice_memo_path && (
+                            <span className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-500 rounded flex items-center gap-1">
+                              <Mic className="w-3 h-3" /> Memo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        {v.owner_name && (
+                          <span className="text-xs text-slate-400">{v.owner_name}</span>
+                        )}
+                        <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                      </div>
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 pt-2 bg-slate-50 border-t border-slate-100 space-y-3">
+
+                        {/* Action buttons */}
+                        {!isEditing && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={() => startEditVisitInCustomer(v)}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 text-slate-600 rounded-lg text-xs hover:bg-slate-50"
+                            >
+                              <Pencil className="w-3 h-3" /> Επεξεργασία
+                            </button>
+                            {v.voice_memo_path && (
+                              <>
+                                <button
+                                  onClick={() => playCvMemo(v.id)}
+                                  disabled={cvMemoLoading[v.id]}
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-purple-300 text-purple-600 rounded-lg text-xs hover:bg-purple-50 disabled:opacity-50"
+                                >
+                                  {cvMemoLoading[v.id] ? (
+                                    <span className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                                  ) : isPlaying ? (
+                                    <Pause className="w-3 h-3" />
+                                  ) : (
+                                    <Mic className="w-3 h-3" />
+                                  )}
+                                  {cvMemoLoading[v.id] ? 'Loading...' : isPlaying ? 'Pause' : 'Play Memo'}
+                                </button>
+                                {cvMemoUrls[v.id] && (
+                                  <audio
+                                    ref={el => { cvAudioRefs.current[v.id] = el; }}
+                                    src={cvMemoUrls[v.id]}
+                                    className="hidden"
+                                  />
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Edit form */}
+                        {isEditing && (
+                          <div className="bg-white rounded-lg p-3 border border-slate-200 space-y-3">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Επεξεργασία Επίσκεψης</div>
+                            <SmartDateInput label="Ημερομηνία" value={cvEditDate} onChange={setCvEditDate} hint={false} />
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Τύπος</label>
+                              <select value={cvEditType} onChange={e => setCvEditType(e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
+                                {['in-person', 'phone', 'video', 'other'].map(t => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Σημειώσεις</label>
+                              <textarea value={cvEditNotes} onChange={e => setCvEditNotes(e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 min-h-[80px]" />
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => saveEditVisitInCustomer(v.id)}
+                                disabled={cvEditSaving}
+                                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+                                {cvEditSaving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+                              </button>
+                              <button onClick={() => setEditingVisitInCustomer(null)}
+                                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm">
+                                Ακύρωση
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notes display */}
+                        {!isEditing && v.notes && (
+                          <div>
+                            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Σημειώσεις</div>
+                            <p className="text-sm text-slate-600">{v.notes}</p>
+                          </div>
+                        )}
+
+                      </div>
+                    )}
                   </div>
-                  {v.owner_name && <span className="text-xs text-slate-400">{v.owner_name}</span>}
-                </div>
-              ))}
-              {visits.length > 5 && <div className="text-xs text-indigo-500 pt-1">+{visits.length - 5} ακόμα επισκέψεις</div>}
+                );
+              })}
+
+              {visits.length > 5 && (
+                <button
+                  onClick={() => setShowAllVisits(prev => !prev)}
+                  className="text-xs text-indigo-500 hover:text-indigo-700 pt-1"
+                >
+                  {showAllVisits ? 'Εμφάνιση λιγότερων' : `+${visits.length - 5} ακόμα επισκέψεις`}
+                </button>
+              )}
             </div>
           )}
         </section>

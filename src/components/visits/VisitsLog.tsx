@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag, MessageSquare, Bell, Trash2, Pencil} from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag, MessageSquare, Bell, Trash2, Pencil, Mic, Pause } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
@@ -35,6 +35,7 @@ type VisitComment = {
 
 type Visit = {
   id: string;
+  voice_memo_path: string | null;
   owner_name: string;
   customer_code: string;
   salesman_code: string;
@@ -119,6 +120,44 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
   const [replySaving, setReplySaving] = useState(false);
 
   const isFullAccess = ['admin', 'manager', 'exec'].includes(currentUser.role);
+
+// Voice memo playback
+const [playingMemoId, setPlayingMemoId] = useState<string | null>(null);
+const [memoUrls, setMemoUrls] = useState<Record<string, string>>({});
+const [memoLoading, setMemoLoading] = useState<Record<string, boolean>>({});
+const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+
+const playMemo = async (visitId: string) => {
+  if (playingMemoId && playingMemoId !== visitId) {
+    audioRefs.current[playingMemoId]?.pause();
+    setPlayingMemoId(null);
+  }
+  if (playingMemoId === visitId) {
+    audioRefs.current[visitId]?.pause();
+    setPlayingMemoId(null);
+    return;
+  }
+  if (!memoUrls[visitId]) {
+    setMemoLoading(prev => ({ ...prev, [visitId]: true }));
+    try {
+      const data = await authedFetch(`/api/visits/${visitId}/voice-memo`);
+      setMemoUrls(prev => ({ ...prev, [visitId]: data.url }));
+    } catch {
+      alert('Failed to load voice memo');
+      return;
+    } finally {
+      setMemoLoading(prev => ({ ...prev, [visitId]: false }));
+    }
+  }
+  setTimeout(() => {
+    const audio = audioRefs.current[visitId];
+    if (audio) {
+      audio.play();
+      setPlayingMemoId(visitId);
+      audio.onended = () => setPlayingMemoId(null);
+    }
+  }, 50);
+};
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
@@ -332,6 +371,9 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
   );
 
   const visitTypeOptions = ['in-person', 'phone', 'video', 'other'];
+
+
+
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -569,6 +611,37 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLog
                             <p className="text-sm text-gray-700 leading-relaxed">{visit.notes || '—'}</p>
                           </div>
                         )}
+
+                        {/* Voice Memo Playback */}
+                        {!isEditing && visit.voice_memo_path && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Voice Memo</div>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => playMemo(visit.id)}
+                                disabled={memoLoading[visit.id]}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-purple-300 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-50 transition-colors disabled:opacity-50"
+                              >
+                                {memoLoading[visit.id] ? (
+                                  <span className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                                ) : playingMemoId === visit.id ? (
+                                  <Pause className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Mic className="w-3.5 h-3.5" />
+                                )}
+                                {memoLoading[visit.id] ? 'Loading...' : playingMemoId === visit.id ? 'Pause' : 'Play Memo'}
+                              </button>
+                              {memoUrls[visit.id] && (
+                                <audio
+                                  ref={el => { audioRefs.current[visit.id] = el; }}
+                                  src={memoUrls[visit.id]}
+                                  className="hidden"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+
 
                         {/* Categories Discussed */}
                         {!isEditing && categoryGroups.size > 0 && (

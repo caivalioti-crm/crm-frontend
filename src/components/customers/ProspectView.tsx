@@ -1,14 +1,15 @@
 import {
-  ArrowLeft, Plus, MapPin,  Calendar, 
-  Lightbulb,  ChevronDown, ChevronRight, User, Info, Pencil
+  ArrowLeft, Plus, MapPin, Calendar,
+  Lightbulb, ChevronDown, ChevronRight, User, Info, Pencil, Mic, Pause
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
 import { UnifiedProspectDialog } from '../prospects/UnifiedProspectDialog';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import type { CommercialEntityBase } from '../../types/commercialEntity';
 import { ProfileEditor } from '../ui/ProfileEditor';
+import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -93,6 +94,20 @@ export function ProspectView({ prospect: initialProspect, onBack }: ProspectView
   const [catFilter, setCatFilter] = useState<CatFilterType>('all');
   const [expandedDiscL1s, setExpandedDiscL1s] = useState<Set<string>>(new Set());
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
+
+// Visit expand/edit state
+  const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
+  const [editingProspectVisitId, setEditingProspectVisitId] = useState<string | null>(null);
+  const [pvEditNotes, setPvEditNotes] = useState('');
+  const [pvEditType, setPvEditType] = useState('');
+  const [pvEditDate, setPvEditDate] = useState('');
+  const [pvEditSaving, setPvEditSaving] = useState(false);
+
+  // Voice memo state
+  const [pvPlayingMemoId, setPvPlayingMemoId] = useState<string | null>(null);
+  const [pvMemoUrls, setPvMemoUrls] = useState<Record<string, string>>({});
+  const [pvMemoLoading, setPvMemoLoading] = useState<Record<string, boolean>>({});
+  const pvAudioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
 
   const currentStatusIndex = STATUS_FLOW.findIndex(s => s.key === initialProspect.status);
   const [editing, setEditing] = useState(false);
@@ -202,6 +217,75 @@ const handleSaveDetails = async () => {
     setSaving(false);
   }
 };
+
+// Prospect visit edit helpers
+  const startEditProspectVisit = (v: any) => {
+    setEditingProspectVisitId(v.id);
+    setPvEditNotes(v.notes ?? '');
+    setPvEditType(v.visit_type ?? 'in-person');
+    setPvEditDate(isoToDisplay(v.visit_date));
+  };
+
+  const saveEditProspectVisit = async (visitId: string) => {
+    setPvEditSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`${BASE_URL}/api/prospect-visits/${visitId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          notes: pvEditNotes,
+          visit_type: pvEditType,
+          visit_date: dateToISO(pvEditDate),
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const updated = await res.json();
+      setVisits(prev => prev.map(v => v.id === visitId ? { ...v, ...updated } : v));
+      setEditingProspectVisitId(null);
+    } catch {
+      alert('Αποτυχία αποθήκευσης');
+    } finally {
+      setPvEditSaving(false);
+    }
+  };
+
+  // Voice memo helper
+  const playPvMemo = async (visitId: string) => {
+    if (pvPlayingMemoId && pvPlayingMemoId !== visitId) {
+      pvAudioRefs.current[pvPlayingMemoId]?.pause();
+      setPvPlayingMemoId(null);
+    }
+    if (pvPlayingMemoId === visitId) {
+      pvAudioRefs.current[visitId]?.pause();
+      setPvPlayingMemoId(null);
+      return;
+    }
+    if (!pvMemoUrls[visitId]) {
+      setPvMemoLoading(prev => ({ ...prev, [visitId]: true }));
+      try {
+        const data = await authedFetch(`/api/prospect-visits/${visitId}/voice-memo`);
+        setPvMemoUrls(prev => ({ ...prev, [visitId]: data.url }));
+      } catch {
+        alert('Failed to load memo');
+        return;
+      } finally {
+        setPvMemoLoading(prev => ({ ...prev, [visitId]: false }));
+      }
+    }
+    setTimeout(() => {
+      const audio = pvAudioRefs.current[visitId];
+      if (audio) {
+        audio.play();
+        setPvPlayingMemoId(visitId);
+        audio.onended = () => setPvPlayingMemoId(null);
+      }
+    }, 50);
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -348,31 +432,161 @@ const handleSaveDetails = async () => {
         {/* VISITS */}
         <section className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2"><Calendar className="w-5 h-5 text-purple-600" /><h2 className="text-base font-semibold">Επισκέψεις</h2></div>
-            {visits.length > 0 && <span className="text-xs text-slate-500">{visits.length} σύνολο</span>}
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-purple-600" />
+              <h2 className="text-base font-semibold">Επισκέψεις</h2>
+            </div>
+            {visits.length > 0 && (
+              <span className="text-xs text-slate-500">{visits.length} σύνολο</span>
+            )}
           </div>
-          {visitsLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : visits.length === 0 ? (
+
+          {visitsLoading ? (
+            <div className="text-sm text-slate-400">Φόρτωση...</div>
+          ) : visits.length === 0 ? (
             <div className="text-sm text-slate-400 italic">Καμία επίσκεψη ακόμα</div>
           ) : (
             <div className="space-y-2">
-              {visits.map((v: any) => (
-                <div key={v.id} className="flex items-start justify-between py-2 border-b border-slate-50 last:border-0">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">{formatDate(v.visit_date)}</div>
-                    {v.notes && <div className="text-xs text-slate-500 mt-0.5">{v.notes}</div>}
-                    {v.visit_type && <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded mt-1 inline-block">{v.visit_type}</span>}
-                    {(v.crm_prospect_visit_categories ?? []).length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {v.crm_prospect_visit_categories.map((c: any, i: number) => (
-                          <span key={i} className="text-xs px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded font-mono">
-                            {categoryMaster.get(c.subcategory_code ?? c.category_code) ?? c.subcategory_code ?? c.category_code}
-                          </span>
-                        ))}
+              {visits.map((v: any) => {
+                const isExpanded = expandedVisitId === v.id;
+                const isEditing = editingProspectVisitId === v.id;
+                const isPlaying = pvPlayingMemoId === v.id;
+
+                return (
+                  <div key={v.id} className="border border-slate-100 rounded-lg overflow-hidden">
+
+                    {/* Visit row header */}
+                    <button
+                      onClick={() => setExpandedVisitId(isExpanded ? null : v.id)}
+                      className="w-full flex items-start justify-between py-2.5 px-3 hover:bg-slate-50 transition-colors text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-slate-700">{formatDate(v.visit_date)}</div>
+                        {v.notes && (
+                          <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</div>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          {v.visit_type && (
+                            <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
+                              {v.visit_type}
+                            </span>
+                          )}
+                          {(v.crm_prospect_visit_categories ?? []).length > 0 && (
+                            <span className="text-xs px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">
+                              {v.crm_prospect_visit_categories.length} κατηγορίες
+                            </span>
+                          )}
+                          {v.voice_memo_path && (
+                            <span className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-500 rounded flex items-center gap-1">
+                              <Mic className="w-3 h-3" /> Memo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className={`w-4 h-4 text-slate-300 shrink-0 ml-2 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 pt-2 bg-slate-50 border-t border-slate-100 space-y-3">
+
+                        {/* Action buttons */}
+                        {!isEditing && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={() => startEditProspectVisit(v)}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 text-slate-600 rounded-lg text-xs hover:bg-slate-50"
+                            >
+                              <Pencil className="w-3 h-3" /> Επεξεργασία
+                            </button>
+                            {v.voice_memo_path && (
+                              <>
+                                <button
+                                  onClick={() => playPvMemo(v.id)}
+                                  disabled={pvMemoLoading[v.id]}
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-purple-300 text-purple-600 rounded-lg text-xs hover:bg-purple-50 disabled:opacity-50"
+                                >
+                                  {pvMemoLoading[v.id] ? (
+                                    <span className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                                  ) : isPlaying ? (
+                                    <Pause className="w-3 h-3" />
+                                  ) : (
+                                    <Mic className="w-3 h-3" />
+                                  )}
+                                  {pvMemoLoading[v.id] ? 'Loading...' : isPlaying ? 'Pause' : 'Play Memo'}
+                                </button>
+                                {pvMemoUrls[v.id] && (
+                                  <audio
+                                    ref={el => { pvAudioRefs.current[v.id] = el; }}
+                                    src={pvMemoUrls[v.id]}
+                                    className="hidden"
+                                  />
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Edit form */}
+                        {isEditing && (
+                          <div className="bg-white rounded-lg p-3 border border-slate-200 space-y-3">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Επεξεργασία Επίσκεψης</div>
+                            <SmartDateInput label="Ημερομηνία" value={pvEditDate} onChange={setPvEditDate} hint={false} />
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Τύπος</label>
+                              <select value={pvEditType} onChange={e => setPvEditType(e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
+                                {['in-person', 'phone', 'video', 'other'].map(t => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600 mb-1">Σημειώσεις</label>
+                              <textarea value={pvEditNotes} onChange={e => setPvEditNotes(e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 min-h-[80px]" />
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => saveEditProspectVisit(v.id)}
+                                disabled={pvEditSaving}
+                                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+                                {pvEditSaving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+                              </button>
+                              <button onClick={() => setEditingProspectVisitId(null)}
+                                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm">
+                                Ακύρωση
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notes display */}
+                        {!isEditing && v.notes && (
+                          <div>
+                            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Σημειώσεις</div>
+                            <p className="text-sm text-slate-600">{v.notes}</p>
+                          </div>
+                        )}
+
+                        {/* Categories */}
+                        {!isEditing && (v.crm_prospect_visit_categories ?? []).length > 0 && (
+                          <div>
+                            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Κατηγορίες</div>
+                            <div className="flex flex-wrap gap-1">
+                              {v.crm_prospect_visit_categories.map((c: any, i: number) => (
+                                <span key={i} className="text-xs px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded font-mono">
+                                  {categoryMaster.get(c.subcategory_code ?? c.category_code) ?? c.subcategory_code ?? c.category_code}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                       </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
