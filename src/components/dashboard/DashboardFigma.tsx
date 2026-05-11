@@ -384,11 +384,11 @@ export function DashboardFigma() {
           <div className="flex items-center gap-2 border-t border-white/20 pt-2">
             {[
               { icon: <Search className="w-4 h-4" />, id: 'section-filter', roles: null },
+              { icon: <Users className="w-4 h-4" />, id: 'section-customers', roles: null },
               { icon: <TrendingUp className="w-4 h-4" />, id: 'section-performance', roles: null },
               { icon: <MapPin className="w-4 h-4" />, id: 'section-geo', roles: null },
               { icon: <BarChart2 className="w-4 h-4" />, id: 'section-categories', roles: ['admin', 'manager', 'exec'] },
               { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', roles: null },
-              { icon: <Users className="w-4 h-4" />, id: 'section-customers', roles: null },
               { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
