@@ -82,6 +82,14 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     }
   }, [isOpen]);
 
+  const [competitors, setCompetitors] = useState<{id: string; name: string}[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      authedFetch('/api/competitors').then(setCompetitors).catch(console.error);
+    }
+  }, [isOpen]);
+
   const areas = useMemo(() =>
     [...new Set(customers.map(c => c.area).filter(Boolean))].sort() as string[], [customers]);
 
@@ -334,6 +342,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
             onCompetitionInfoChange={setCompetitionInfo}
             shopType={shopType}
             onShopTypeChange={setShopType}
+            competitors={competitors}
           />
 
           {/* Tasks */}

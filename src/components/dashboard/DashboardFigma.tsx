@@ -995,8 +995,12 @@ export function DashboardFigma() {
       {selectedCustomer && <CustomerView customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} />}
       {selectedProspect && <ProspectView prospect={selectedProspect} onBack={() => setSelectedProspect(null)} />}
 
-      <NewVisitDialog isOpen={showNewVisitDialog} onClose={() => setShowNewVisitDialog(false)} customers={filteredCustomers}
-        onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }} />
+      <NewVisitDialog 
+        isOpen={showNewVisitDialog} 
+        onClose={() => setShowNewVisitDialog(false)} 
+        customers={filteredCustomers.filter(c => c.is_active !== false)}
+        onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }} 
+      />
       <NewProspectDialog isOpen={showNewProspectDialog} onClose={() => setShowNewProspectDialog(false)} currentUser={currentUser}
         onSave={() => { setShowNewProspectDialog(false); setProspectsRefreshKey(k => k + 1); }}
         areas={areas}

@@ -39,12 +39,14 @@ type Props = {
   onCompetitionInfoChange: (c: CompetitionInfo) => void;
   shopType?: string;
   onShopTypeChange?: (t: string) => void;
+  competitors?: { id: string; name: string }[];
 };
 
 export function EntityProfileForm({
   shopProfile, competitionInfo,
   onShopProfileChange, onCompetitionInfoChange,
   shopType = '', onShopTypeChange,
+  competitors,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
 
@@ -61,6 +63,7 @@ export function EntityProfileForm({
 
       {expanded && (
         <div className="p-4 space-y-4">
+          {/* Shop Profile */}
           <div>
             <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Προφίλ Καταστήματος</div>
             <div className="space-y-3">
@@ -94,26 +97,42 @@ export function EntityProfileForm({
               </div>
               <div>
                 <label className="block text-xs text-slate-600 mb-1">Απόθεμα</label>
-                <select
-                  value={shopProfile.stockBehavior ?? ''}
-                  onChange={e => onShopProfileChange({ ...shopProfile, stockBehavior: e.target.value as ShopProfile['stockBehavior'] || undefined })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-                  <option value="">Επιλέξτε...</option>
-                  {STOCK_BEHAVIOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <div className="flex gap-2 flex-wrap">
+                  {STOCK_BEHAVIOR_OPTIONS.map(o => (
+                    <button key={o.value} type="button"
+                      onClick={() => onShopProfileChange({ ...shopProfile, stockBehavior: o.value as ShopProfile['stockBehavior'] })}
+                      className={`px-3 py-2 rounded-lg border-2 text-sm transition-colors ${
+                        shopProfile.stockBehavior === o.value
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                      }`}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Competitor Info */}
           <div>
             <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Ανταγωνισμός</div>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-slate-600 mb-1">Κύριος Ανταγωνιστής</label>
-                <input type="text" value={competitionInfo.mainCompetitor ?? ''}
-                  onChange={e => onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  placeholder="π.χ. Γιώργης Ανταλλακτικά" />
+                {competitors && competitors.length > 0 ? (
+                  <select value={competitionInfo.mainCompetitor ?? ''}
+                    onChange={e => onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="">Επιλέξτε...</option>
+                    {competitors.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" value={competitionInfo.mainCompetitor ?? ''}
+                    onChange={e => onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    placeholder="π.χ. Γιώργης Ανταλλακτικά" />
+                )}
               </div>
               <div>
                 <label className="block text-xs text-slate-600 mb-1">Άλλοι Ανταγωνιστές</label>

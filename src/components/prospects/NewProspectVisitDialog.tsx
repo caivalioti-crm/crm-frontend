@@ -72,6 +72,14 @@ export function NewProspectVisitDialog({
     }
   }, [isOpen]);
 
+  const [competitors, setCompetitors] = useState<{id: string; name: string}[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      authedFetch('/api/competitors').then(setCompetitors).catch(console.error);
+    }
+  }, [isOpen]);
+
   const getReminderDate = (type: string): string => {
     const base = new Date();
     if (type === '1week') base.setDate(base.getDate() + 7);
@@ -227,6 +235,7 @@ export function NewProspectVisitDialog({
             onCompetitionInfoChange={setCompetitionInfo}
             shopType={shopType}
             onShopTypeChange={setShopType}
+            competitors={competitors}
           />
 
           {/* Tasks */}
