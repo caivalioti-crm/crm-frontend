@@ -1,6 +1,6 @@
 import {
-  ArrowLeft, Plus, MapPin, Building2, Calendar, Store,
-  Lightbulb, Users, ChevronDown, ChevronRight, User, Info,
+  ArrowLeft, Plus, MapPin,  Calendar, 
+  Lightbulb,  ChevronDown, ChevronRight, User, Info, Pencil
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
@@ -8,6 +8,7 @@ import { UnifiedProspectDialog } from '../prospects/UnifiedProspectDialog';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import type { CommercialEntityBase } from '../../types/commercialEntity';
+import { ProfileEditor } from '../ui/ProfileEditor';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -24,14 +25,17 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
-const SHOP_TYPE_LABELS: Record<string, string> = {
-  auto_parts_retailer: 'Ανταλλακτικά', garage: 'Γκαράζ', body_shop: 'Φανοποιείο',
-  dealership: 'Αντιπροσωπεία', truck_parts: 'Φορτηγά', other: 'Άλλο',
-};
-
-const STOCK_BEHAVIOR_LABELS: Record<string, string> = {
-  keeps_stock: 'Τηρεί Απόθεμα', on_demand: "Παραγγελία κατ'ανάγκη", mixed: 'Μικτό',
-};
+async function authedPatch(url: string, body: any) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const res = await fetch(`${BASE_URL}${url}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed'); }
+  return res.json();
+}
 
 const STATUS_FLOW = [
   { key: 'new_lead', label: 'Νέο Lead' },
@@ -56,25 +60,6 @@ function getDiscussionBadgeStyle(n: number): string {
 }
 
 function getL1Code(cat: any): string { return cat.category_code.split('.')[0]; }
-
-function CollapsibleSection({ title, icon, children, defaultCollapsed = false }: {
-  title: string; icon?: React.ReactNode; children: React.ReactNode; defaultCollapsed?: boolean;
-}) {
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
-  return (
-    <div className="bg-white rounded-xl shadow overflow-hidden">
-      <button onClick={() => setCollapsed(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors">
-        <div className="flex items-center gap-2">
-          {icon}
-          <span className="text-base font-semibold text-slate-900">{title}</span>
-        </div>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
-      </button>
-      {!collapsed && <div className="px-5 pb-5">{children}</div>}
-    </div>
-  );
-}
 
 export interface ProspectViewProps {
   prospect: CommercialEntityBase & {
@@ -110,6 +95,18 @@ export function ProspectView({ prospect: initialProspect, onBack }: ProspectView
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
 
   const currentStatusIndex = STATUS_FLOW.findIndex(s => s.key === initialProspect.status);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editData, setEditData] = useState({
+    business_name: initialProspect.businessName,
+    owner_name: initialProspect.ownerName ?? '',
+    phone: initialProspect.phone ?? '',
+    mobile: initialProspect.mobile ?? '',
+    email: initialProspect.email ?? '',
+    address: initialProspect.address ?? '',
+    notes: '',
+  });
 
   useEffect(() => {
     authedFetch('/api/categories')
@@ -184,6 +181,29 @@ export function ProspectView({ prospect: initialProspect, onBack }: ProspectView
   const filteredGroups = l1Groups.map(g => ({ ...g, filtered: g.items.filter(matchesFilter) })).filter(g => g.filtered.length > 0);
   const totalDiscussions = categories.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
 
+const handleSaveDetails = async () => {
+  if (!editData.phone.trim()) { setEditError('Το τηλέφωνο είναι υποχρεωτικό'); return; }
+  if (!editData.mobile.trim()) { setEditError('Το κινητό είναι υποχρεωτικό'); return; }
+  if (!editData.email.trim()) { setEditError('Το email είναι υποχρεωτικό'); return; }
+  setSaving(true);
+  setEditError(null);
+  try {
+    await authedPatch(`/api/prospects/${initialProspect.id}`, {
+      business_name: editData.business_name,
+      owner_name: editData.owner_name || null,
+      phone: editData.phone,
+      mobile: editData.mobile,
+      email: editData.email,
+      address: editData.address || null,
+    });
+    setEditing(false);
+  } catch (err: any) {
+    setEditError(err.message);
+  } finally {
+    setSaving(false);
+  }
+};
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
 
@@ -231,61 +251,100 @@ export function ProspectView({ prospect: initialProspect, onBack }: ProspectView
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
 
         {/* PROSPECT DETAILS */}
-        <section className="bg-white rounded-xl shadow p-5">
-          <div className="flex items-center gap-2 mb-4"><Info className="w-5 h-5 text-purple-600" /><h2 className="text-base font-semibold">Στοιχεία Prospect</h2></div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-700">
-            {initialProspect.phone && <div>📞 {initialProspect.phone}</div>}
-            {initialProspect.mobile && <div>📱 {initialProspect.mobile}</div>}
-            {initialProspect.email && <div>✉️ <a href={`mailto:${initialProspect.email}`} className="text-blue-600 hover:underline">{initialProspect.email}</a></div>}
-            {initialProspect.address && (
-              <div className="flex items-start gap-2 sm:col-span-2">
-                <MapPin className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" /><span>{initialProspect.address}</span>
-              </div>
-            )}
-          </div>
-          <div className="mt-3 text-xs text-slate-400">Δημιουργήθηκε: {formatDate(initialProspect.createdDate)}</div>
-        </section>
+<section className="bg-white rounded-xl shadow p-5">
+  <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center gap-2">
+      <Info className="w-5 h-5 text-purple-600" />
+      <h2 className="text-base font-semibold">Στοιχεία Prospect</h2>
+    </div>
+    <button onClick={() => { setEditing(v => !v); setEditError(null); }}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+        editing ? 'border-slate-300 text-slate-600 bg-slate-50' : 'border-purple-300 text-purple-600 bg-purple-50 hover:bg-purple-100'
+      }`}>
+      <Pencil className="w-3.5 h-3.5" />
+      {editing ? 'Ακύρωση' : 'Επεξεργασία'}
+    </button>
+  </div>
 
-        {/* SHOP PROFILE + COMPETITOR INFO */}
-        <section className="bg-white rounded-xl shadow overflow-hidden">
-          {profileLoading ? (
-            <div className="px-5 py-4 text-sm text-slate-400">Φόρτωση...</div>
-          ) : (!shopProfile && !competitorInfo) ? (
-            <div className="px-5 py-4 flex items-center gap-2 text-sm text-slate-400">
-              <Store className="w-4 h-4 shrink-0" />
-              <span>Δεν υπάρχουν στοιχεία προφίλ ή ανταγωνισμού</span>
-            </div>
-          ) : (
-            <CollapsibleSection title="Προφίλ & Ανταγωνισμός" icon={<Store className="w-5 h-5 text-purple-500" />} defaultCollapsed={false}>
-              <div className="space-y-4">
-                {shopProfile && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3"><Store className="w-4 h-4 text-purple-500" /><span className="text-sm font-semibold text-slate-700">Προφίλ Καταστήματος</span></div>
-                    <div className="space-y-2 text-sm text-slate-700">
-                      {shopProfile.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[shopProfile.shop_type] ?? shopProfile.shop_type}</span></div>}
-                      {shopProfile.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{shopProfile.number_of_employees}</span></div>}
-                      {shopProfile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-500">Εμβαδό</span><span className="font-medium">{shopProfile.shop_size_m2} m²</span></div>}
-                      {shopProfile.stock_behavior && <div className="flex justify-between"><span className="text-slate-500">Απόθεμα</span><span className="font-medium">{STOCK_BEHAVIOR_LABELS[shopProfile.stock_behavior] ?? shopProfile.stock_behavior}</span></div>}
-                    </div>
-                  </div>
-                )}
-                {shopProfile && competitorInfo && <div className="border-t border-slate-100" />}
-                {competitorInfo && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3"><Building2 className="w-4 h-4 text-orange-500" /><span className="text-sm font-semibold text-slate-700">Ανταγωνισμός</span></div>
-                    <div className="space-y-2 text-sm text-slate-700">
-                      {competitorInfo.main_competitor && <div className="flex justify-between"><span className="text-slate-500">Κύριος</span><span className="font-medium">{competitorInfo.main_competitor}</span></div>}
-                      {competitorInfo.other_competitors && <div className="flex justify-between"><span className="text-slate-500">Άλλοι</span><span className="font-medium">{competitorInfo.other_competitors}</span></div>}
-                      {competitorInfo.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-500">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(competitorInfo.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-                      {competitorInfo.competitor_strengths && <div><div className="text-slate-500 mb-1">Δυνατά σημεία</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.competitor_strengths}</div></div>}
-                      {competitorInfo.switch_reason && <div><div className="text-slate-500 mb-1">Λόγος αλλαγής</div><div className="text-xs bg-slate-50 rounded p-2">{competitorInfo.switch_reason}</div></div>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CollapsibleSection>
-          )}
-        </section>
+  {editing ? (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Επωνυμία *</label>
+          <input type="text" value={editData.business_name}
+            onChange={e => setEditData(d => ({ ...d, business_name: e.target.value }))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Ιδιοκτήτης</label>
+          <input type="text" value={editData.owner_name}
+            onChange={e => setEditData(d => ({ ...d, owner_name: e.target.value }))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Τηλέφωνο *</label>
+          <input type="text" value={editData.phone}
+            onChange={e => setEditData(d => ({ ...d, phone: e.target.value }))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Κινητό *</label>
+          <input type="text" value={editData.mobile}
+            onChange={e => setEditData(d => ({ ...d, mobile: e.target.value }))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Email *</label>
+          <input type="email" value={editData.email}
+            onChange={e => setEditData(d => ({ ...d, email: e.target.value }))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Διεύθυνση</label>
+          <input type="text" value={editData.address}
+            onChange={e => setEditData(d => ({ ...d, address: e.target.value }))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
+        </div>
+      </div>
+      {editError && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editError}</div>}
+      <button onClick={handleSaveDetails} disabled={saving}
+        className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors">
+        {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+      </button>
+    </div>
+  ) : (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-700">
+      {(editData.phone || initialProspect.phone) && <div>📞 {editData.phone || initialProspect.phone}</div>}
+      {(editData.mobile || initialProspect.mobile) && <div>📱 {editData.mobile || initialProspect.mobile}</div>}
+      {(editData.email || initialProspect.email) && (
+        <div>✉️ <a href={`mailto:${editData.email || initialProspect.email}`} className="text-blue-600 hover:underline">{editData.email || initialProspect.email}</a></div>
+      )}
+      {(editData.address || initialProspect.address) && (
+        <div className="flex items-start gap-2 sm:col-span-2">
+          <MapPin className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+          <span>{editData.address || initialProspect.address}</span>
+        </div>
+      )}
+    </div>
+  )}
+  <div className="mt-3 text-xs text-slate-400">Δημιουργήθηκε: {formatDate(initialProspect.createdDate)}</div>
+</section>
+
+{/* SHOP PROFILE + COMPETITOR INFO */}
+<section className="bg-white rounded-xl shadow overflow-hidden">
+  {profileLoading ? (
+    <div className="px-5 py-4 text-sm text-slate-400">Φόρτωση...</div>
+  ) : (
+    <ProfileEditor
+      entityType="prospect"
+      entityId={initialProspect.id}
+      shopProfile={shopProfile}
+      competitorInfo={competitorInfo}
+      onSaved={(sp, ci) => { setShopProfile(sp); setCompetitorInfo(ci); }}
+      accentColor="purple"
+    />
+  )}
+</section>
 
         {/* VISITS */}
         <section className="bg-white rounded-xl shadow p-5">
