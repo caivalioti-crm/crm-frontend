@@ -182,7 +182,6 @@ export function ProspectView({ prospect: initialProspect, onBack }: ProspectView
   const totalDiscussions = categories.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
 
 const handleSaveDetails = async () => {
-  if (!editData.phone.trim()) { setEditError('Το τηλέφωνο είναι υποχρεωτικό'); return; }
   if (!editData.mobile.trim()) { setEditError('Το κινητό είναι υποχρεωτικό'); return; }
   if (!editData.email.trim()) { setEditError('Το email είναι υποχρεωτικό'); return; }
   setSaving(true);
@@ -282,7 +281,7 @@ const handleSaveDetails = async () => {
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Τηλέφωνο *</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Τηλέφωνο</label>
           <input type="text" value={editData.phone}
             onChange={e => setEditData(d => ({ ...d, phone: e.target.value }))}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />

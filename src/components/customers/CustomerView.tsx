@@ -10,6 +10,7 @@ import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { ProfileEditor } from '../ui/ProfileEditor';
+import { CategoryIntelligence } from './CategoryIntelligence';
 
 
 
@@ -310,6 +311,7 @@ useEffect(() => {
       .catch(console.error).finally(() => setDocsLoading(false));
   }, [customer.code, docPeriodIdx]);
 
+  
   useEffect(() => {
     authedFetch(`/api/entity-profile/customer/${customer.code}`)
       .then(data => { setCompetitorInfo(data.competitor_info ?? null); setShopProfile(data.shop_profile ?? null); })
@@ -593,6 +595,7 @@ useEffect(() => {
                 { icon: <BarChart2 className="w-4 h-4" />, id: 'section-sales', title: 'Πωλήσεις' },
                 { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', title: 'Επισκέψεις' },
                 { icon: <Lightbulb className="w-4 h-4" />, id: 'section-categories', title: 'Κατηγορίες' },
+                { icon: <AlertCircle className="w-4 h-4" />, id: 'section-intelligence', title: 'Intelligence' },
               ].map((item, i) => (
                 <button key={i}
                   onClick={() => { const el = document.getElementById(item.id); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' }); }}
@@ -709,6 +712,7 @@ useEffect(() => {
             )}
           </section>
         )}
+
 
         {/* SHOP PROFILE + COMPETITOR INFO */}
 <section id="section-comp" className="bg-white rounded-xl shadow overflow-hidden">
@@ -1175,6 +1179,15 @@ useEffect(() => {
             </>
           )}
         </div>
+
+        {/* CATEGORY INTELLIGENCE */}
+        <section id="section-intelligence">
+          <CategoryIntelligence
+          customerCode={customer.code}
+          competitorInfo={competitorInfo}
+          salesPeriod={SALES_PERIODS[salesPeriodIdx]}
+        />
+        </section>
 
       </main>
 
