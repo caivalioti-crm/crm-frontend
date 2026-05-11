@@ -134,7 +134,7 @@ export function useDashboardFigma() {
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
-  const [showNewProspectDialog, setShowNewProspectDialog] = useState(false);
+  const [showUnifiedProspectDialog, setShowUnifiedProspectDialog] = useState(false);
   const [currentUser, setCurrentUser] = useState<SalesRep>({
     id: '', role: 'rep', name: 'Loading...', salesman_code: null,
   });
@@ -602,7 +602,7 @@ const areaStats = useMemo(() => {
     customersInScope: filteredCustomers.length,
     getDaysSinceVisit,
     showNewVisitDialog, setShowNewVisitDialog,
-    showNewProspectDialog, setShowNewProspectDialog,
+    showUnifiedProspectDialog, setShowUnifiedProspectDialog,
     currentUser, setCurrentUser,
     customerByTrdrId, scopedSales, customersWithSalesSet,
     repModeOverride, setRepModeOverride,

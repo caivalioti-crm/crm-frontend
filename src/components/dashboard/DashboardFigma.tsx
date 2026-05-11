@@ -6,7 +6,7 @@ import { useDashboardFigma } from '../../hooks/useDashboardFigma';
 import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { VisitsLog } from '../visits/VisitsLog';
 import { ProspectsList } from '../prospects/ProspectsList';
-import { NewProspectDialog } from '../prospects/NewProspectDialog';
+import { UnifiedProspectDialog } from '../prospects/UnifiedProspectDialog';
 import { CustomerView } from '../customers/CustomerView';
 import { ProspectView } from '../customers/ProspectView';
 import { CustomerListSection } from '../customers/CustomerListSection';
@@ -258,7 +258,7 @@ export function DashboardFigma() {
     selectedAreas, selectedCities, toggleArea, toggleCity, clearAreas, clearCities,
     setSelectedArea, setSelectedCity,
     searchQuery, setSearchQuery, filteredCustomers, getDaysSinceVisit,
-    showNewVisitDialog, setShowNewVisitDialog, showNewProspectDialog, setShowNewProspectDialog,
+    showNewVisitDialog, setShowNewVisitDialog, showUnifiedProspectDialog, setShowUnifiedProspectDialog,
     currentUser, categoryMaster, customersWithSalesSet,
     salesByCategory, salesByCategoryLoading, salesByCategoryExpanded,
     setSalesByCategoryExpanded, expandSalesByCategory,
@@ -986,7 +986,7 @@ export function DashboardFigma() {
 
             {/* ===== PROSPECTS ===== */}
             <div id="section-prospects">
-              <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser} onNewProspect={() => setShowNewProspectDialog(true)} onSelectProspect={setSelectedProspect} />
+              <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser} onNewProspect={() => setShowUnifiedProspectDialog(true)} onSelectProspect={setSelectedProspect} />
             </div>
           </>
         )}
@@ -1001,12 +1001,14 @@ export function DashboardFigma() {
         customers={filteredCustomers.filter(c => c.is_active !== false)}
         onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }} 
       />
-      <NewProspectDialog isOpen={showNewProspectDialog} onClose={() => setShowNewProspectDialog(false)} currentUser={currentUser}
-        onSave={() => { setShowNewProspectDialog(false); setProspectsRefreshKey(k => k + 1); }}
+      <UnifiedProspectDialog
+        isOpen={showUnifiedProspectDialog}
+        onClose={() => setShowUnifiedProspectDialog(false)}
         areas={areas}
         cities={(area) => customers.filter(c => c.area === area).map(c => c.city).filter((v, i, a) => a.indexOf(v) === i).sort()}
-        onViewCustomer={(code) => { const customer = customers.find(c => c.code === code); if (customer) { setShowNewProspectDialog(false); setSelectedCustomer(customer); } }}
-        onViewProspect={(_id) => { setShowNewProspectDialog(false); }}
+        onViewCustomer={(code) => { const customer = customers.find(c => c.code === code); if (customer) { setShowUnifiedProspectDialog(false); setSelectedCustomer(customer); } }}
+        onViewProspect={(_id) => { setShowUnifiedProspectDialog(false); }}
+        onSaved={() => { setShowUnifiedProspectDialog(false); setProspectsRefreshKey(k => k + 1); }}
       />
     </div>
   );
