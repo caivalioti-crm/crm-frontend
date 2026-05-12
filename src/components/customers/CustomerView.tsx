@@ -1381,14 +1381,16 @@ const playCvMemo = async (visitId: string) => {
           )}
         </div>
 
-        {/* CATEGORY INTELLIGENCE */}
-        <section id="section-intelligence">
-          <CategoryIntelligence
-          customerCode={customer.code}
-          competitorInfo={competitorInfo}
-          salesPeriod={SALES_PERIODS[salesPeriodIdx]}
-        />
-        </section>
+        {/* CATEGORY INTELLIGENCE — temporarily disabled */}
+{false && (
+  <section id="section-intelligence">
+    <CategoryIntelligence
+      customerCode={customer.code}
+      competitorInfo={competitorInfo}
+      salesPeriod={SALES_PERIODS[salesPeriodIdx]}
+    />
+  </section>
+)}
 
       </main>
 
