@@ -131,6 +131,7 @@ function getL1Label(l1Code: string, items: any[]): string {
 export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [visits, setVisits] = useState<any[]>([]);
   const [visitsLoading, setVisitsLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
@@ -258,17 +259,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     ];
   }, [lastSyncDate, lastInvoiceDate]);
 
-  useEffect(() => {
-    authedFetch('/api/erp/last-sync-date')
-      .then(res => { if (res.date) setLastSyncDate(res.date); })
-      .catch(console.error);
-  }, []);
 
-  useEffect(() => {
-    authedFetch('/api/erp/last-invoice-date')
-      .then(res => { if (res.date) setLastInvoiceDate(res.date); })
-      .catch(console.error);
-  }, []);
 
   useEffect(() => {
     authedFetch('/api/categories')
@@ -279,24 +270,29 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
       }).catch(console.error);
   }, []);
 
-  useEffect(() => {
-    authedFetch(`/api/customers/${customer.code}/categories`)
-      .then(data => setCategories(Array.isArray(data) ? data : []))
-      .catch(console.error).finally(() => setCategoriesLoading(false));
-  }, [customer.code, visitsRefreshKey]);
-
-  useEffect(() => {
-    authedFetch(`/api/visits?customer_code=${customer.code}`)
-      .then(data => setVisits(Array.isArray(data) ? data : []))
-      .catch(console.error).finally(() => setVisitsLoading(false));
-  }, [customer.code, visitsRefreshKey]);
-
-  useEffect(() => {
-    setSalesLoading(true);
-    authedFetch(`/api/erp/customers/${customer.code}/sales?from=2023-01-01&to=2026-12-31`)
-      .then(data => setSales(Array.isArray(data) ? data : []))
-      .catch(console.error).finally(() => setSalesLoading(false));
-  }, [customer.code]);
+useEffect(() => {
+  authedFetch(`/api/erp/customers/${customer.code}/summary`)
+    .then(data => {
+      setSales(Array.isArray(data.sales) ? data.sales : []);
+      setBalance(data.balance ?? null);
+      setDiscounts(data.discounts ?? null);
+      setVisits(Array.isArray(data.visits) ? data.visits : []);
+      setCategories(Array.isArray(data.categories) ? data.categories : []);
+      setShopProfile(data.profile?.shop_profile ?? null);
+      setCompetitorInfo(data.profile?.competitor_info ?? null);
+      if (data.lastSyncDate) setLastSyncDate(data.lastSyncDate);
+      if (data.lastInvoiceDate) setLastInvoiceDate(data.lastInvoiceDate);
+    })
+    .catch(console.error)
+    .finally(() => {
+      setSalesLoading(false);
+      setBalanceLoading(false);
+      setDiscountsLoading(false);
+      setVisitsLoading(false);
+      setCategoriesLoading(false);
+      setProfileLoading(false);
+    });
+}, [customer.code, visitsRefreshKey, refreshKey]);
 
   useEffect(() => {
     setSalesByCategoryLoading(true);
@@ -328,25 +324,7 @@ useEffect(() => {
   }, [customer.code, docPeriodIdx]);
 
   
-  useEffect(() => {
-    authedFetch(`/api/entity-profile/customer/${customer.code}`)
-      .then(data => { setCompetitorInfo(data.competitor_info ?? null); setShopProfile(data.shop_profile ?? null); })
-      .catch(console.error).finally(() => setProfileLoading(false));
-  }, [customer.code]);
 
-  useEffect(() => {
-    authedFetch(`/api/erp/customers/${customer.code}/balance`)
-      .then(data => setBalance(data))
-      .catch(console.error).finally(() => setBalanceLoading(false));
-  }, [customer.code]);
-
-  useEffect(() => {
-    setDiscountsLoading(true);
-    authedFetch(`/api/erp/customers/${customer.code}/discounts`)
-      .then(data => setDiscounts(data))
-      .catch(console.error)
-      .finally(() => setDiscountsLoading(false));
-  }, [customer.code]);
 
   function toggleDocExpand(findoc: number) {
     if (expandedDocId === findoc) { setExpandedDocId(null); return; }
@@ -650,7 +628,7 @@ const playCvMemo = async (visitId: string) => {
               <ArrowLeft className="w-4 h-4" />Back to Dashboard
             </button>
             <div className="flex items-center gap-2">
-              <button onClick={() => window.location.reload()}
+              <button onClick={() => setRefreshKey(k => k + 1)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
                 <RotateCcw className="w-4 h-4" />
               </button>

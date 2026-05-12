@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { User, TrendingUp, TrendingDown, LogOut, MapPin, Users, UserPlus, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma } from '../../hooks/useDashboardFigma';
@@ -287,7 +287,20 @@ export function DashboardFigma() {
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
   const [expandedL3s, setExpandedL3s] = useState<Set<string>>(new Set());
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean>(
+  (() => { try { return JSON.parse(sessionStorage.getItem('dashboardFilters') ?? '{}').filtersExpanded ?? false; } catch { return false; } })()
+);
+
+useEffect(() => {
+  const savedY = sessionStorage.getItem('dashboardScrollY');
+  if (savedY) {
+    setTimeout(() => {
+      window.scrollTo({ top: parseInt(savedY), behavior: 'instant' });
+      sessionStorage.removeItem('dashboardScrollY');
+      sessionStorage.removeItem('dashboardFilters');
+    }, 150);
+  }
+}, []);
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
@@ -649,8 +662,25 @@ export function DashboardFigma() {
                 currentUserRole={currentUser.role}
                 onSelectCustomer={(customer) => {
                   scrollPositionRef.current = window.scrollY;
+                  // Save filter state before navigating
+                  sessionStorage.setItem('dashboardScrollY', String(window.scrollY));
+                  sessionStorage.setItem('dashboardFilters', JSON.stringify({
+                    selectedAreas,
+                    selectedCities,
+                    notVisitedDays,
+                    searchQuery,
+                    salesFilter,
+                    performanceFilter,
+                    activeFilter,
+                    joinedDirection,
+                    joinedPeriod,
+                    customerSortMode,
+                    filtersExpanded,
+                    periodKey: selectedPeriod.key,
+                  }));
                   setSelectedCustomer(customer);
                 }}
+                 
                 getDaysSinceVisit={getDaysSinceVisit}
               />
             </div>
@@ -987,11 +1017,11 @@ export function DashboardFigma() {
               <VisitsLog key={`visits-${visitsRefreshKey}`} currentUser={currentUser} onNewVisit={() => setShowNewVisitDialog(true)} customers={customers} />
             </div>
 
-            
             {/* ===== PROSPECTS ===== */}
             <div id="section-prospects">
               <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser} onNewProspect={() => setShowUnifiedProspectDialog(true)} onSelectProspect={(prospect) => {
                 scrollPositionRef.current = window.scrollY;
+                sessionStorage.setItem('dashboardScrollY', String(window.scrollY));
                 setSelectedProspect(prospect);
               }} />
             </div>

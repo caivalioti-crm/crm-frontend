@@ -106,6 +106,12 @@ async function authedFetch(url: string) {
 }
 
 export function useDashboardFigma() {
+  /* ===================== SAVED FILTERS (session restore) ===================== */
+  const savedFilters = useMemo(() => {
+    try { return JSON.parse(sessionStorage.getItem('dashboardFilters') ?? '{}'); }
+    catch { return {}; }
+  }, []);
+
   /* ===================== DATA STATE ===================== */
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -125,14 +131,14 @@ export function useDashboardFigma() {
   const [topCustomersData, setTopCustomersData] = useState<Record<string, any[]>>({});
   const [topCustomersLoading, setTopCustomersLoading] = useState<Set<string>>(new Set());
 
-  /* ===================== UI STATE ===================== */
+ /* ===================== UI STATE ===================== */
   const [lastSyncDate, setLastSyncDate] = useState<string>(toLocalDateString(_now));
   const [lastInvoiceDate, setLastInvoiceDate] = useState<string>(toLocalDateString(_now));
-  const [selectedPeriodKey, setSelectedPeriodKey] = useState<string>('2026-YTD');
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState<string>(savedFilters.periodKey ?? '2026-YTD');
   const [selectedGeoArea, setSelectedGeoArea] = useState<string | null>(null);
-  const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
-  const [selectedCities, setSelectedCities] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAreas, setSelectedAreas] = useState<string[]>(savedFilters.selectedAreas ?? []);
+  const [selectedCities, setSelectedCities] = useState<string[]>(savedFilters.selectedCities ?? []);
+  const [searchQuery, setSearchQuery] = useState<string>(savedFilters.searchQuery ?? '');
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [showUnifiedProspectDialog, setShowUnifiedProspectDialog] = useState(false);
   const [currentUser, setCurrentUser] = useState<SalesRep>({
@@ -144,14 +150,14 @@ export function useDashboardFigma() {
   const [monthlySalesLoading, setMonthlySalesLoading] = useState(false);
   const [monthlySalesExpanded, setMonthlySalesExpanded] = useState(false);
 
-  /* ===================== FILTER STATE (moved from DashboardFigma) ===================== */
-  const [notVisitedDays, setNotVisitedDays] = useState<number | null>(null);
-  const [salesFilter, setSalesFilter] = useState<'all' | 'with' | 'without'>('all');
-  const [performanceFilter, setPerformanceFilter] = useState<'all' | 'up' | 'down'>('all');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [joinedDirection, setJoinedDirection] = useState<'before' | 'after'>('after');
-  const [joinedPeriod, setJoinedPeriod] = useState<string | null>(null);
-  const [customerSortMode, setCustomerSortMode] = useState<'name' | 'area_then_name'>('name');
+  /* ===================== FILTER STATE ===================== */
+  const [notVisitedDays, setNotVisitedDays] = useState<number | null>(savedFilters.notVisitedDays ?? null);
+  const [salesFilter, setSalesFilter] = useState<'all' | 'with' | 'without'>(savedFilters.salesFilter ?? 'all');
+  const [performanceFilter, setPerformanceFilter] = useState<'all' | 'up' | 'down'>(savedFilters.performanceFilter ?? 'all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>(savedFilters.activeFilter ?? 'all');
+  const [joinedDirection, setJoinedDirection] = useState<'before' | 'after'>(savedFilters.joinedDirection ?? 'after');
+  const [joinedPeriod, setJoinedPeriod] = useState<string | null>(savedFilters.joinedPeriod ?? null);
+  const [customerSortMode, setCustomerSortMode] = useState<'name' | 'area_then_name'>(savedFilters.customerSortMode ?? 'name');
 
   /* ===================== DYNAMIC PERIODS ===================== */
   const periods = useMemo(() => buildPeriods(lastSyncDate, lastInvoiceDate), [lastSyncDate, lastInvoiceDate]);
