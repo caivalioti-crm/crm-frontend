@@ -628,7 +628,15 @@ const playCvMemo = async (visitId: string) => {
               <ArrowLeft className="w-4 h-4" />Back to Dashboard
             </button>
             <div className="flex items-center gap-2">
-              <button onClick={() => setRefreshKey(k => k + 1)}
+              <button onClick={() => {
+                setSalesLoading(true);
+                setBalanceLoading(true);
+                setDiscountsLoading(true);
+                setVisitsLoading(true);
+                setCategoriesLoading(true);
+                setProfileLoading(true);
+                setRefreshKey(k => k + 1);
+              }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
                 <RotateCcw className="w-4 h-4" />
               </button>
@@ -1382,13 +1390,15 @@ const playCvMemo = async (visitId: string) => {
         </div>
 
         {/* CATEGORY INTELLIGENCE */}
-        <section id="section-intelligence">
-          <CategoryIntelligence
-            customerCode={customer.code}
-            competitorInfo={competitorInfo}
-            salesPeriod={SALES_PERIODS[salesPeriodIdx]}
-          />
-        </section>
+        {!salesLoading && (
+          <section id="section-intelligence">
+            <CategoryIntelligence
+              customerCode={customer.code}
+              competitorInfo={competitorInfo}
+              salesPeriod={SALES_PERIODS[salesPeriodIdx]}
+            />
+          </section>
+        )}
 
       </main>
 
