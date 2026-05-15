@@ -121,12 +121,30 @@ export function EntityProfileForm({
               <div>
                 <label className="block text-xs text-slate-600 mb-1">Κύριος Ανταγωνιστής</label>
                 {competitors && competitors.length > 0 ? (
-                  <select value={competitionInfo.mainCompetitor ?? ''}
-                    onChange={e => onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-                    <option value="">Επιλέξτε...</option>
-                    {competitors.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                  </select>
+                  <>
+                    <select
+                      value={competitors.some(c => c.name === competitionInfo.mainCompetitor) ? competitionInfo.mainCompetitor : (competitionInfo.mainCompetitor ? 'Άλλος' : '')}
+                      onChange={e => {
+                        if (e.target.value === 'Άλλος') {
+                          onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: '__other__' });
+                        } else {
+                          onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: e.target.value });
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                      <option value="">Επιλέξτε...</option>
+                      {competitors.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                    {(competitionInfo.mainCompetitor === '__other__' || (competitionInfo.mainCompetitor && !competitors.some(c => c.name === competitionInfo.mainCompetitor))) && (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={competitionInfo.mainCompetitor === '__other__' ? '' : competitionInfo.mainCompetitor}
+                        onChange={e => onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: e.target.value })}
+                        className="w-full mt-2 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        placeholder="Πληκτρολογήστε ανταγωνιστή..." />
+                    )}
+                  </>
                 ) : (
                   <input type="text" value={competitionInfo.mainCompetitor ?? ''}
                     onChange={e => onCompetitionInfoChange({ ...competitionInfo, mainCompetitor: e.target.value })}

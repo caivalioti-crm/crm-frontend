@@ -36,7 +36,10 @@ export function ProfileEditor({ entityType, entityId, shopProfile: initialShop, 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [competitors, setCompetitors] = useState<{id: string; name: string}[]>([]);
+  const [competitors, setCompetitors] = useState<{ id: string; name: string }[]>([]);
+
+  const [savedShop, setSavedShop] = useState<any>(initialShop);
+  const [savedComp, setSavedComp] = useState<any>(initialComp);
 
   const [shopType, setShopType] = useState(initialShop?.shop_type ?? '');
   const [shopProfile, setShopProfile] = useState<ShopProfile>({
@@ -51,6 +54,26 @@ export function ProfileEditor({ entityType, entityId, shopProfile: initialShop, 
     competitorStrengths: initialComp?.competitor_strengths ?? '',
     switchReason: initialComp?.switch_reason ?? '',
   });
+
+  useEffect(() => { setSavedShop(initialShop); }, [initialShop]);
+  useEffect(() => { setSavedComp(initialComp); }, [initialComp]);
+  useEffect(() => {
+    setShopType(initialShop?.shop_type ?? '');
+    setShopProfile({
+      numberOfEmployees: initialShop?.number_of_employees ?? undefined,
+      shopSizeM2: initialShop?.shop_size_m2 ?? undefined,
+      stockBehavior: initialShop?.stock_behavior ?? undefined,
+    });
+  }, [initialShop]);
+  useEffect(() => {
+    setCompetitionInfo({
+      mainCompetitor: initialComp?.main_competitor ?? '',
+      otherCompetitors: initialComp?.other_competitors ?? '',
+      estimatedMonthlySpend: initialComp?.estimated_monthly_spend ?? undefined,
+      competitorStrengths: initialComp?.competitor_strengths ?? '',
+      switchReason: initialComp?.switch_reason ?? '',
+    });
+  }, [initialComp]);
 
   useEffect(() => {
     if (editing && competitors.length === 0) {
@@ -86,10 +109,11 @@ export function ProfileEditor({ entityType, entityId, shopProfile: initialShop, 
         }),
       });
       if (!res.ok) throw new Error('Save failed');
-      onSaved(
-        { shop_type: shopType, number_of_employees: shopProfile.numberOfEmployees, shop_size_m2: shopProfile.shopSizeM2, stock_behavior: shopProfile.stockBehavior },
-        { main_competitor: competitionInfo.mainCompetitor, other_competitors: competitionInfo.otherCompetitors, estimated_monthly_spend: competitionInfo.estimatedMonthlySpend, competitor_strengths: competitionInfo.competitorStrengths, switch_reason: competitionInfo.switchReason }
-      );
+      const newShop = { shop_type: shopType, number_of_employees: shopProfile.numberOfEmployees, shop_size_m2: shopProfile.shopSizeM2, stock_behavior: shopProfile.stockBehavior };
+      const newComp = { main_competitor: competitionInfo.mainCompetitor, other_competitors: competitionInfo.otherCompetitors, estimated_monthly_spend: competitionInfo.estimatedMonthlySpend, competitor_strengths: competitionInfo.competitorStrengths, switch_reason: competitionInfo.switchReason };
+      setSavedShop(newShop);
+      setSavedComp(newComp);
+      onSaved(newShop, newComp);
       setEditing(false);
     } catch (err: any) {
       setError(err.message);
@@ -98,7 +122,7 @@ export function ProfileEditor({ entityType, entityId, shopProfile: initialShop, 
     }
   };
 
-  const hasData = initialShop || initialComp;
+  const hasData = savedShop || savedComp;
   const btnColor = accentColor === 'purple'
     ? 'border-purple-300 text-purple-600 bg-purple-50 hover:bg-purple-100'
     : 'border-indigo-300 text-indigo-600 bg-indigo-50 hover:bg-indigo-100';
@@ -138,27 +162,27 @@ export function ProfileEditor({ entityType, entityId, shopProfile: initialShop, 
         </div>
       ) : hasData ? (
         <div className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
-          {initialShop && (
+          {savedShop && (
             <div>
               <div className="flex items-center gap-2 mb-3"><Store className="w-4 h-4 text-blue-500" /><span className="text-sm font-semibold text-slate-700">Προφίλ Καταστήματος</span></div>
               <div className="space-y-2 text-sm text-slate-700">
-                {initialShop.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[initialShop.shop_type] ?? initialShop.shop_type}</span></div>}
-                {initialShop.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{initialShop.number_of_employees}</span></div>}
-                {initialShop.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-500">Εμβαδό</span><span className="font-medium">{initialShop.shop_size_m2} m²</span></div>}
-                {initialShop.stock_behavior && <div className="flex justify-between"><span className="text-slate-500">Απόθεμα</span><span className="font-medium">{STOCK_BEHAVIOR_LABELS[initialShop.stock_behavior] ?? initialShop.stock_behavior}</span></div>}
+                {savedShop.shop_type && <div className="flex justify-between"><span className="text-slate-500">Τύπος</span><span className="font-medium">{SHOP_TYPE_LABELS[savedShop.shop_type] ?? savedShop.shop_type}</span></div>}
+                {savedShop.number_of_employees && <div className="flex justify-between"><span className="text-slate-500">Εργαζόμενοι</span><span className="font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5" />{savedShop.number_of_employees}</span></div>}
+                {savedShop.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-500">Εμβαδό</span><span className="font-medium">{savedShop.shop_size_m2} m²</span></div>}
+                {savedShop.stock_behavior && <div className="flex justify-between"><span className="text-slate-500">Απόθεμα</span><span className="font-medium">{STOCK_BEHAVIOR_LABELS[savedShop.stock_behavior] ?? savedShop.stock_behavior}</span></div>}
               </div>
             </div>
           )}
-          {initialShop && initialComp && <div className="border-t border-slate-100" />}
-          {initialComp && (
+          {savedShop && savedComp && <div className="border-t border-slate-100" />}
+          {savedComp && (
             <div>
               <div className="flex items-center gap-2 mb-3"><Building2 className="w-4 h-4 text-orange-500" /><span className="text-sm font-semibold text-slate-700">Ανταγωνισμός</span></div>
               <div className="space-y-2 text-sm text-slate-700">
-                {initialComp.main_competitor && <div className="flex justify-between"><span className="text-slate-500">Κύριος</span><span className="font-medium">{initialComp.main_competitor}</span></div>}
-                {initialComp.other_competitors && <div className="flex justify-between"><span className="text-slate-500">Άλλοι</span><span className="font-medium">{initialComp.other_competitors}</span></div>}
-                {initialComp.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-500">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(initialComp.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-                {initialComp.competitor_strengths && <div><div className="text-slate-500 mb-1">Δυνατά σημεία</div><div className="text-xs bg-slate-50 rounded p-2">{initialComp.competitor_strengths}</div></div>}
-                {initialComp.switch_reason && <div><div className="text-slate-500 mb-1">Λόγος αλλαγής</div><div className="text-xs bg-slate-50 rounded p-2">{initialComp.switch_reason}</div></div>}
+                {savedComp.main_competitor && <div className="flex justify-between"><span className="text-slate-500">Κύριος</span><span className="font-medium">{savedComp.main_competitor}</span></div>}
+                {savedComp.other_competitors && <div className="flex justify-between"><span className="text-slate-500">Άλλοι</span><span className="font-medium">{savedComp.other_competitors}</span></div>}
+                {savedComp.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-500">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(savedComp.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+                {savedComp.competitor_strengths && <div><div className="text-slate-500 mb-1">Δυνατά σημεία</div><div className="text-xs bg-slate-50 rounded p-2">{savedComp.competitor_strengths}</div></div>}
+                {savedComp.switch_reason && <div><div className="text-slate-500 mb-1">Λόγος αλλαγής</div><div className="text-xs bg-slate-50 rounded p-2">{savedComp.switch_reason}</div></div>}
               </div>
             </div>
           )}
