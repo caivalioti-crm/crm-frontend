@@ -1182,12 +1182,41 @@ const playCvMemo = async (visitId: string) => {
                         )}
 
                         {/* Notes display */}
-                        {!isEditing && v.notes && (
-                          <div>
-                            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Σημειώσεις</div>
-                            <p className="text-sm text-slate-600">{v.notes}</p>
-                          </div>
-                        )}
+{!isEditing && v.notes && (
+  <div>
+    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Σημειώσεις</div>
+    <p className="text-sm text-slate-600">{v.notes}</p>
+  </div>
+)}
+
+{/* Shop & Competitor info from visit */}
+{!isEditing && (v.shop_profile || v.competitor_info) && (
+  <div className="space-y-2">
+    {v.shop_profile && (v.shop_profile.shop_type || v.shop_profile.number_of_employees || v.shop_profile.shop_size_m2 || v.shop_profile.stock_behavior) && (
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Προφίλ Καταστήματος</div>
+        <div className="space-y-1 text-xs text-slate-600">
+          {v.shop_profile.shop_type && <div className="flex justify-between"><span className="text-slate-400">Τύπος</span><span>{v.shop_profile.shop_type}</span></div>}
+          {v.shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-slate-400">Εργαζόμενοι</span><span>{v.shop_profile.number_of_employees}</span></div>}
+          {v.shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-400">Εμβαδό</span><span>{v.shop_profile.shop_size_m2} m²</span></div>}
+          {v.shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-slate-400">Απόθεμα</span><span>{v.shop_profile.stock_behavior}</span></div>}
+        </div>
+      </div>
+    )}
+    {v.competitor_info && (v.competitor_info.main_competitor || v.competitor_info.other_competitors || v.competitor_info.estimated_monthly_spend || v.competitor_info.competitor_strengths || v.competitor_info.switch_reason) && (
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Ανταγωνισμός</div>
+        <div className="space-y-1 text-xs text-slate-600">
+          {v.competitor_info.main_competitor && <div className="flex justify-between"><span className="text-slate-400">Κύριος</span><span className="font-medium">{v.competitor_info.main_competitor}</span></div>}
+          {v.competitor_info.other_competitors && <div className="flex justify-between"><span className="text-slate-400">Άλλοι</span><span>{v.competitor_info.other_competitors}</span></div>}
+          {v.competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(v.competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+          {v.competitor_info.competitor_strengths && <div><div className="text-slate-400 mb-0.5">Δυνατά σημεία</div><div className="bg-white rounded p-1.5">{v.competitor_info.competitor_strengths}</div></div>}
+          {v.competitor_info.switch_reason && <div><div className="text-slate-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-white rounded p-1.5">{v.competitor_info.switch_reason}</div></div>}
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
                       </div>
                     )}
@@ -1195,34 +1224,7 @@ const playCvMemo = async (visitId: string) => {
                 );
               })}
 
-              {/* Shop & Competitor info from visit */}
-              {!isEditing && (v.shop_profile || v.competitor_info) && (
-                <div className="space-y-2">
-                  {v.shop_profile && (v.shop_profile.shop_type || v.shop_profile.number_of_employees || v.shop_profile.shop_size_m2 || v.shop_profile.stock_behavior) && (
-                    <div>
-                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Προφίλ Καταστήματος</div>
-                      <div className="space-y-1 text-xs text-slate-600">
-                        {v.shop_profile.shop_type && <div className="flex justify-between"><span className="text-slate-400">Τύπος</span><span>{v.shop_profile.shop_type}</span></div>}
-                        {v.shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-slate-400">Εργαζόμενοι</span><span>{v.shop_profile.number_of_employees}</span></div>}
-                        {v.shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-400">Εμβαδό</span><span>{v.shop_profile.shop_size_m2} m²</span></div>}
-                        {v.shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-slate-400">Απόθεμα</span><span>{v.shop_profile.stock_behavior}</span></div>}
-                      </div>
-                    </div>
-                  )}
-                  {v.competitor_info && (v.competitor_info.main_competitor || v.competitor_info.other_competitors || v.competitor_info.estimated_monthly_spend || v.competitor_info.competitor_strengths || v.competitor_info.switch_reason) && (
-                    <div>
-                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Ανταγωνισμός</div>
-                      <div className="space-y-1 text-xs text-slate-600">
-                        {v.competitor_info.main_competitor && <div className="flex justify-between"><span className="text-slate-400">Κύριος</span><span className="font-medium">{v.competitor_info.main_competitor}</span></div>}
-                        {v.competitor_info.other_competitors && <div className="flex justify-between"><span className="text-slate-400">Άλλοι</span><span>{v.competitor_info.other_competitors}</span></div>}
-                        {v.competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(v.competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-                        {v.competitor_info.competitor_strengths && <div><div className="text-slate-400 mb-0.5">Δυνατά σημεία</div><div className="bg-white rounded p-1.5">{v.competitor_info.competitor_strengths}</div></div>}
-                        {v.competitor_info.switch_reason && <div><div className="text-slate-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-white rounded p-1.5">{v.competitor_info.switch_reason}</div></div>}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              
 
               {visits.length > 5 && (
                 <button
