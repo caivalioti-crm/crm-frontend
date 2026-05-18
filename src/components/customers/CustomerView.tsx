@@ -681,6 +681,7 @@ const playCvMemo = async (visitId: string) => {
                 { icon: <BarChart2 className="w-4 h-4" />, id: 'section-sales', title: 'Πωλήσεις' },
                 { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', title: 'Επισκέψεις' },
                 { icon: <Lightbulb className="w-4 h-4" />, id: 'section-categories', title: 'Κατηγορίες' },
+                { icon: <FileText className="w-4 h-4" />, id: 'section-docs', title: 'Έγγραφα' },
                 { icon: <AlertCircle className="w-4 h-4" />, id: 'section-intelligence', title: 'Intelligence' },
               ].map((item, i) => (
                 <button key={i}
@@ -690,10 +691,6 @@ const playCvMemo = async (visitId: string) => {
                   {item.icon}
                 </button>
               ))}
-              <button onClick={() => { if (docsRef.current) window.scrollTo({ top: docsRef.current.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' }); }}
-                title="Έγγραφα" className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors">
-                <FileText className="w-4 h-4" />
-              </button>
             </div>
             <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))}
               className="text-xs bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-white focus:ring-2 focus:ring-white/30">
