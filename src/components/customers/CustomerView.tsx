@@ -169,6 +169,7 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [expandedDocId, setExpandedDocId] = useState<number | null>(null);
   const [docLines, setDocLines] = useState<Record<number, any[]>>({});
   const [docLinesLoading, setDocLinesLoading] = useState<Set<number>>(new Set());
+  const [docCounts, setDocCounts] = useState<{ order: number; invoice: number; credit: number } | null>(null);
 
   const [competitorInfo, setCompetitorInfo] = useState<any>(null);
   const [shopProfile, setShopProfile] = useState<any>(null);
@@ -314,14 +315,18 @@ useEffect(() => {
   }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
 
   useEffect(() => {
-    setDocsLoading(true);
-    setDocsExpanded(false);
-    setExpandedDocId(null);
-    const { from, to } = DOC_PERIODS[docPeriodIdx];
-    authedFetch(`/api/erp/customers/${customer.code}/documents?from=${from}&to=${to}`)
-      .then(data => setDocuments(Array.isArray(data) ? data : []))
-      .catch(console.error).finally(() => setDocsLoading(false));
-  }, [customer.code, docPeriodIdx]);
+  setDocsLoading(true);
+  setDocsExpanded(false);
+  setExpandedDocId(null);
+  const { from, to } = DOC_PERIODS[docPeriodIdx];
+  authedFetch(`/api/erp/customers/${customer.code}/documents?from=${from}&to=${to}`)
+    .then(data => {
+      setDocuments(Array.isArray(data) ? data : (data.docs ?? []));
+      setDocCounts(data.counts ?? null);
+    })
+    .catch(console.error)
+    .finally(() => setDocsLoading(false));
+}, [customer.code, docPeriodIdx]);
 
   
 
@@ -394,8 +399,12 @@ useEffect(() => {
 
   const filteredDocs = docTypeFilter === 'all' ? documents : documents.filter(d => d.type === docTypeFilter);
   const visibleDocs  = docsExpanded ? filteredDocs : filteredDocs.slice(0, 8);
-  const docCounts    = { order: documents.filter(d => d.type === 'order').length, invoice: documents.filter(d => d.type === 'invoice').length, credit: documents.filter(d => d.type === 'credit').length };
-  const lastInvoice  = documents.find(d => d.type === 'invoice');
+  const displayCounts = docCounts ?? {
+  order:   documents.filter(d => d.type === 'order').length,
+  invoice: documents.filter(d => d.type === 'invoice').length,
+  credit:  documents.filter(d => d.type === 'credit').length,
+};
+const lastInvoice  = documents.find(d => d.type === 'invoice');
   const lastOrder    = documents.find(d => d.type === 'order');
   const totalDiscussions = categories.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
 
@@ -1328,19 +1337,34 @@ const playCvMemo = async (visitId: string) => {
             </select>
           </div>
 
-          {!docsLoading && documents.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{docCounts.order} παραγγελίες</span>
-              <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{docCounts.invoice} τιμολόγια</span>
-              {docCounts.credit > 0 && <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{docCounts.credit} πιστωτικά</span>}
-              {!balanceLoading && balance && (
-                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${balance.balance > 0 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                  <AlertCircle className="w-3 h-3" />
-                  Υπόλοιπο €{Math.abs(balance.balance).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
-                </span>
-              )}
-            </div>
-          )}
+        {(!docsLoading && documents.length > 0) && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+              {displayCounts.order} παραγγελίες
+            </span>
+            <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+              {displayCounts.invoice} τιμολόγια
+            </span>
+          {displayCounts.credit > 0 &&
+            <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+              {displayCounts.credit} πιστωτικά
+            </span>
+          }
+            
+          </div>
+        )}
+
+        {/* Balance — always shown once loaded, regardless of docs */}
+        {!balanceLoading && balance !== null && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
+              balance.balance > 0 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+            }`}>
+              <AlertCircle className="w-3 h-3" />
+              Υπόλοιπο €{Math.abs(balance.balance).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        )}
 
           {!docsLoading && (lastInvoice || lastOrder) && (
             <div className="grid grid-cols-2 gap-3 mb-4">
