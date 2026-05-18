@@ -1014,7 +1014,17 @@ useEffect(() => {
 
             {/* ===== VISITS LOG ===== */}
             <div id="section-visits">
-              <VisitsLog key={`visits-${visitsRefreshKey}`} currentUser={currentUser} onNewVisit={() => setShowNewVisitDialog(true)} customers={customers} />
+              <VisitsLog
+                key={`visits-${visitsRefreshKey}`}
+                currentUser={currentUser}
+                onNewVisit={() => setShowNewVisitDialog(true)}
+                customers={customers}
+                onSelectCustomer={(customer) => {
+                  scrollPositionRef.current = window.scrollY;
+                  sessionStorage.setItem('dashboardScrollY', String(window.scrollY));
+                  setSelectedCustomer(customer);
+                }}
+              />
             </div>
 
             {/* ===== PROSPECTS ===== */}

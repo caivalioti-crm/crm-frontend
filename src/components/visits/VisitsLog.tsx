@@ -59,6 +59,7 @@ type VisitsLogProps = {
   };
   onNewVisit: () => void;
   customers?: { code: string; name: string; city: string; area: string; trdr_id?: number }[];
+  onSelectCustomer?: (customer: any) => void;
 };
 
 async function authedFetch(url: string) {
@@ -89,7 +90,7 @@ async function authedRequest(method: string, url: string, body?: any) {
   return res.json();
 }
 
-export function VisitsLog({ currentUser, onNewVisit, customers = [] }: VisitsLogProps) {
+export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCustomer }: VisitsLogProps) {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -489,13 +490,27 @@ const playMemo = async (visitId: string) => {
                           <div className="flex flex-wrap items-center gap-2 mb-1.5">
                             <span className="text-sm font-semibold text-gray-900">{formatVisitDate(visit.visit_date)}</span>
                             <span className="text-gray-300">·</span>
-                            <span className="text-sm font-medium text-blue-600">{customer?.name ?? visit.customer_code}</span>
+                            {customer && onSelectCustomer ? (
+                              <button
+                                onClick={e => { e.stopPropagation(); onSelectCustomer(customer); }}
+                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                              >
+                                {customer.name}
+                              </button>
+                            ) : (
+                              <span className="text-sm font-medium text-blue-600">{customer?.name ?? visit.customer_code}</span>
+                            )}
                             <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono">{visit.customer_code}</span>
                             <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{visit.visit_type}</span>
                             {visitCategories.length > 0 && (
                               <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs flex items-center gap-1">
                                 <Tag className="w-3 h-3" />
                                 {visitCategories.length}
+                              </span>
+                            )}
+                            {visit.voice_memo_path && (
+                              <span className="px-2 py-0.5 bg-purple-50 text-purple-500 rounded text-xs flex items-center gap-1">
+                                <Mic className="w-3 h-3" /> Memo
                               </span>
                             )}
                             {unreadComments.length > 0 && (
@@ -609,6 +624,35 @@ const playMemo = async (visitId: string) => {
                           <div>
                             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visit Notes</div>
                             <p className="text-sm text-gray-700 leading-relaxed">{visit.notes || '—'}</p>
+                          </div>
+                        )}
+
+                        {/* Shop & Competitor info from visit */}
+                        {!isEditing && ((visit as any).shop_profile || (visit as any).competitor_info) && (
+                          <div className="space-y-2">
+                            {(visit as any).shop_profile && ((visit as any).shop_profile.shop_type || (visit as any).shop_profile.number_of_employees || (visit as any).shop_profile.shop_size_m2 || (visit as any).shop_profile.stock_behavior) && (
+                              <div>
+                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Προφίλ Καταστήματος</div>
+                                <div className="bg-white rounded-lg px-3 py-2.5 border border-gray-200 space-y-1 text-xs text-gray-700">
+                                  {(visit as any).shop_profile.shop_type && <div className="flex justify-between"><span className="text-gray-400">Τύπος</span><span>{(visit as any).shop_profile.shop_type}</span></div>}
+                                  {(visit as any).shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-gray-400">Εργαζόμενοι</span><span>{(visit as any).shop_profile.number_of_employees}</span></div>}
+                                  {(visit as any).shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-gray-400">Εμβαδό</span><span>{(visit as any).shop_profile.shop_size_m2} m²</span></div>}
+                                  {(visit as any).shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-gray-400">Απόθεμα</span><span>{(visit as any).shop_profile.stock_behavior}</span></div>}
+                                </div>
+                              </div>
+                            )}
+                            {(visit as any).competitor_info && ((visit as any).competitor_info.main_competitor || (visit as any).competitor_info.other_competitors || (visit as any).competitor_info.estimated_monthly_spend || (visit as any).competitor_info.competitor_strengths || (visit as any).competitor_info.switch_reason) && (
+                              <div>
+                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Ανταγωνισμός</div>
+                                <div className="bg-white rounded-lg px-3 py-2.5 border border-gray-200 space-y-1 text-xs text-gray-700">
+                                  {(visit as any).competitor_info.main_competitor && <div className="flex justify-between"><span className="text-gray-400">Κύριος</span><span className="font-medium">{(visit as any).competitor_info.main_competitor}</span></div>}
+                                  {(visit as any).competitor_info.other_competitors && <div className="flex justify-between"><span className="text-gray-400">Άλλοι</span><span>{(visit as any).competitor_info.other_competitors}</span></div>}
+                                  {(visit as any).competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-gray-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number((visit as any).competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+                                  {(visit as any).competitor_info.competitor_strengths && <div><div className="text-gray-400 mb-0.5">Δυνατά σημεία</div><div className="bg-slate-50 rounded p-1.5">{(visit as any).competitor_info.competitor_strengths}</div></div>}
+                                  {(visit as any).competitor_info.switch_reason && <div><div className="text-gray-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-slate-50 rounded p-1.5">{(visit as any).competitor_info.switch_reason}</div></div>}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
