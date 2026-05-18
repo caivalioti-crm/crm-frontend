@@ -420,12 +420,12 @@ export function CategoryIntelligence({
             )}
           </div>
           <button
-          onClick={loadSimilar}
-          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-purple-600 transition-colors"
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>{similarLoading ? '...' : `${data.similar_customers.count} ομότιμοι`}</span>
-        </button>
+  onClick={() => { console.log('clicked'); loadSimilar(); }}
+  style={{ background: 'purple', color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '12px' }}
+>
+  <Users className="w-3.5 h-3.5 inline mr-1" />
+  {similarLoading ? '...' : `${data.similar_customers.count} ομότιμοι`}
+</button>
         </div>
         <div className="text-xs text-slate-400 mt-1">{salesPeriod.label} vs {salesPeriod.prevLabel}</div>
       </div>
