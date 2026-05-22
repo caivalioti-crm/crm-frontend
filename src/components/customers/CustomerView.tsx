@@ -43,6 +43,8 @@ export interface CustomerViewProps {
     shipmentName?: string; carrierName?: string; is_active?: boolean; prccategory?: number | null;  
     inserted_date?: string | null; 
     updated_date?: string | null;
+    payment?: string | null;
+    warning?: string | null;
   };
   onBack: () => void;
 }
@@ -179,6 +181,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [catFilter, setCatFilter] = useState<CatFilterType>('all');
   const [expandedDiscL1s, setExpandedDiscL1s] = useState<Set<string>>(new Set());
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
+  const [payment, setPayment] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const docsRef = useRef<HTMLDivElement>(null);
 
@@ -283,6 +287,8 @@ useEffect(() => {
       setCompetitorInfo(data.profile?.competitor_info ?? null);
       if (data.lastSyncDate) setLastSyncDate(data.lastSyncDate);
       if (data.lastInvoiceDate) setLastInvoiceDate(data.lastInvoiceDate);
+      if (data.payment) setPayment(data.payment);
+      if (data.warning) setWarning(data.warning);
     })
     .catch(console.error)
     .finally(() => {
@@ -725,6 +731,15 @@ const playCvMemo = async (visitId: string) => {
               {customer.lastVisitDate ? <div>Τελευταία επίσκεψη: <span className="font-medium">{formatDate(customer.lastVisitDate)}</span></div> : <div className="text-slate-400 text-xs italic">Καμία επίσκεψη ακόμα</div>}
               {customer.inserted_date && <div>Πελάτης από: <span className="font-medium">{formatDate(customer.inserted_date)}</span></div>}
               {customer.updated_date && <div className="text-xs text-slate-400">Ενημέρωση ERP: {formatDate(customer.updated_date)}</div>}
+              {payment && (
+                  <div>Όροι Πληρωμής: <span className="font-medium">{payment}</span></div>
+                )}
+                {warning && (
+                  <div className="flex items-center gap-1.5 mt-1 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>{warning}</span>
+                  </div>
+                )}
             </div>
           </div>
         </section>
