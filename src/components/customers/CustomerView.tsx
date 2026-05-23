@@ -1,8 +1,8 @@
 import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
-  Lightbulb, FileText, Tag, ChevronDown, ChevronRight, 
+  Lightbulb, FileText, Tag, ChevronDown, ChevronRight,
   TrendingUp, TrendingDown, BarChart2, Medal, TriangleAlert, AlertCircle, Receipt, User, RotateCcw,
-  ClipboardList, Mic, Pause, Pencil,
+  ClipboardList, Mic, Pause, Pencil, Bell, CheckCircle, Clock, PlayCircle, CalendarClock,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
@@ -200,6 +200,11 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [cvMemoUrls, setCvMemoUrls] = useState<Record<string, string>>({});
   const [cvMemoLoading, setCvMemoLoading] = useState<Record<string, boolean>>({});
   const cvAudioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+  
+  // Task management state
+  const [taskUpdating, setTaskUpdating] = useState<string | null>(null);
+  const [renewingTaskId, setRenewingTaskId] = useState<string | null>(null);
+  const [renewDate, setRenewDate] = useState('');
 
   const SALES_PERIODS = useMemo(() => {
   const labelD = new Date(lastSyncDate);
@@ -632,6 +637,55 @@ const playCvMemo = async (visitId: string) => {
   }, 50);
 };
 
+const today = new Date().toISOString().split('T')[0];
+
+const updateTaskStatus = async (taskId: string, status: string, visitId: string) => {
+  setTaskUpdating(taskId);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    await fetch(`${BASE_URL}/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ status }),
+    });
+    setVisits(prev => prev.map(v =>
+      v.id === visitId
+        ? { ...v, crm_visit_tasks: (v.crm_visit_tasks ?? []).map((t: any) => t.id === taskId ? { ...t, status } : t) }
+        : v
+    ));
+  } catch { alert('Αποτυχία ενημέρωσης'); }
+  finally { setTaskUpdating(null); }
+};
+
+const renewTaskReminder = async (taskId: string, visitId: string) => {
+  if (!renewDate) return;
+  setTaskUpdating(taskId);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    await fetch(`${BASE_URL}/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ reminder_date: renewDate }),
+    });
+    setVisits(prev => prev.map(v =>
+      v.id === visitId
+        ? { ...v, crm_visit_tasks: (v.crm_visit_tasks ?? []).map((t: any) => t.id === taskId ? { ...t, reminder_date: renewDate } : t) }
+        : v
+    ));
+    setRenewingTaskId(null);
+    setRenewDate('');
+  } catch { alert('Αποτυχία ενημέρωσης'); }
+  finally { setTaskUpdating(null); }
+};
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
 
@@ -655,6 +709,29 @@ const playCvMemo = async (visitId: string) => {
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
                 <RotateCcw className="w-4 h-4" />
               </button>
+              {/* Due tasks bell badge */}
+              {(() => {
+                const allTasks = visits.flatMap(v => (v.crm_visit_tasks ?? []).map((t: any) => ({ ...t, visit_id: v.id })));
+                const overdue = allTasks.filter(t => t.status !== 'completed' && t.reminder_date && t.reminder_date < today);
+                const todayDue = allTasks.filter(t => t.status !== 'completed' && t.reminder_date === today);
+                const pending = allTasks.filter(t => t.status !== 'completed');
+                if (overdue.length > 0) return (
+                  <span className="flex items-center gap-1 px-2.5 py-1.5 bg-red-800 text-white rounded-lg text-xs font-bold">
+                    <Bell className="w-4 h-4" />{overdue.length} ληξιπρόθεσμες
+                  </span>
+                );
+                if (todayDue.length > 0) return (
+                  <span className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-400 text-amber-900 rounded-lg text-xs font-bold">
+                    <Bell className="w-4 h-4" />{todayDue.length} για σήμερα
+                  </span>
+                );
+                if (pending.length > 0) return (
+                  <span className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-medium">
+                    <Bell className="w-4 h-4" />{pending.length} εκκρεμείς
+                  </span>
+                );
+                return null;
+              })()}
               <button onClick={() => setShowNewVisitDialog(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
                 <Plus className="w-4 h-4" />New Visit
@@ -1071,7 +1148,7 @@ const playCvMemo = async (visitId: string) => {
           )}
         </section>
 
-        {/* VISITS */}
+{/* VISITS */}
         <section id="section-visits" className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -1097,7 +1174,7 @@ const playCvMemo = async (visitId: string) => {
                 return (
                   <div key={v.id} className="border border-slate-100 rounded-lg overflow-hidden">
 
-                    {/* Visit row header — click to expand */}
+                    {/* Visit row header */}
                     <button
                       onClick={() => setExpandedVisitId(isExpanded ? null : v.id)}
                       className="w-full flex items-start justify-between py-2.5 px-3 hover:bg-slate-50 transition-colors text-left"
@@ -1124,6 +1201,28 @@ const playCvMemo = async (visitId: string) => {
                         {v.owner_name && (
                           <span className="text-xs text-slate-400">{v.owner_name}</span>
                         )}
+                        {(() => {
+                        const tasks = v.crm_visit_tasks ?? [];
+                        const overdue = tasks.filter((t: any) => t.status !== 'completed' && t.reminder_date && t.reminder_date < today);
+                        const todayDue = tasks.filter((t: any) => t.status !== 'completed' && t.reminder_date === today);
+                        const pending = tasks.filter((t: any) => t.status !== 'completed');
+                        if (overdue.length > 0) return (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-800 text-white rounded-full text-xs font-bold">
+                            <Bell className="w-3 h-3" />{overdue.length}
+                          </span>
+                        );
+                        if (todayDue.length > 0) return (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
+                            <Bell className="w-3 h-3" />{todayDue.length}
+                          </span>
+                        );
+                        if (pending.length > 0) return (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs">
+                            <Bell className="w-3 h-3" />{pending.length}
+                          </span>
+                        );
+                        return null;
+                      })()}
                         <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       </div>
                     </button>
@@ -1202,50 +1301,148 @@ const playCvMemo = async (visitId: string) => {
                           </div>
                         )}
 
-                        {/* Notes display */}
-{!isEditing && v.notes && (
-  <div>
-    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Σημειώσεις</div>
-    <p className="text-sm text-slate-600">{v.notes}</p>
-  </div>
-)}
+                        {/* Tasks */}
+                        {!isEditing && (v.crm_visit_tasks ?? []).length > 0 && (
+                          <div>
+                            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                              Εργασίες ({(v.crm_visit_tasks ?? []).filter((t: any) => t.status === 'completed').length}/{(v.crm_visit_tasks ?? []).length})
+                            </div>
+                            <div className="space-y-2">
+                              {(v.crm_visit_tasks ?? []).map((task: any) => {
+                                const isOverdue = task.status !== 'completed' && task.reminder_date && task.reminder_date < today;
+                                const isTodayDue = task.status !== 'completed' && task.reminder_date === today;
+                                const isRenewing = renewingTaskId === task.id;
+                                return (
+                                  <div key={task.id} className={`rounded-lg border p-2.5 text-xs ${isOverdue ? 'border-red-200 bg-red-50' : isTodayDue ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                                        {task.status === 'completed'
+                                          ? <CheckCircle className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
+                                          : task.status === 'in-progress'
+                                          ? <Clock className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
+                                          : isOverdue
+                                          ? <Bell className="w-3.5 h-3.5 text-red-700 mt-0.5 shrink-0" />
+                                          : isTodayDue
+                                          ? <Bell className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+                                          : <AlertCircle className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />}
+                                        <div className="min-w-0">
+                                          <p className={`${task.status === 'completed' ? 'line-through text-slate-400' : 'text-slate-700'}`}>{task.description}</p>
+                                          {task.reminder_date && (
+                                            <div className={`mt-0.5 ${isOverdue ? 'text-red-600 font-medium' : isTodayDue ? 'text-amber-700 font-medium' : 'text-slate-400'}`}>
+                                              📅 {task.reminder_date}
+                                              {isOverdue && ' — Ληξιπρόθεσμη'}
+                                              {isTodayDue && ' — Σήμερα'}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                      {task.status !== 'completed' && (
+                                        <button
+                                          onClick={() => updateTaskStatus(task.id, 'completed', v.id)}
+                                          disabled={taskUpdating === task.id}
+                                          className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                          title="Ολοκλήρωση"
+                                        >
+                                          <CheckCircle className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                      {task.status === 'not-started' && (
+                                        <button
+                                          onClick={() => updateTaskStatus(task.id, 'in-progress', v.id)}
+                                          disabled={taskUpdating === task.id}
+                                          className="p-1.5 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 disabled:opacity-50"
+                                          title="Σε εξέλιξη"
+                                        >
+                                          <PlayCircle className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                      {task.status !== 'completed' && (
+                                        <button
+                                          onClick={() => { setRenewingTaskId(task.id); setRenewDate(''); }}
+                                          className="p-1.5 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
+                                          title="Ανανέωση υπενθύμισης"
+                                        >
+                                          <CalendarClock className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                    </div>
+                                    {isRenewing && (
+                                    <div className="mt-2 space-y-1.5">
+                                      {task.reminder_date && (
+                                        <div className="text-xs text-slate-400">
+                                          Τρέχουσα υπενθύμιση: <span className="font-medium text-slate-600">{task.reminder_date}</span>
+                                        </div>
+                                      )}
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="date"
+                                          value={renewDate}
+                                          onChange={e => setRenewDate(e.target.value)}
+                                          className="px-2 py-1 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                        <button
+                                          onClick={() => renewTaskReminder(task.id, v.id)}
+                                          disabled={!renewDate || taskUpdating === task.id}
+                                          className="px-2 py-1 bg-indigo-600 text-white rounded text-xs disabled:opacity-50"
+                                        >Ανανέωση</button>
+                                        <button
+                                          onClick={() => setRenewingTaskId(null)}
+                                          className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs"
+                                        >×</button>
+                                      </div>
+                                    </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
-{/* Shop & Competitor info from visit */}
-{!isEditing && (v.shop_profile || v.competitor_info) && (
-  <div className="space-y-2">
-    {v.shop_profile && (v.shop_profile.shop_type || v.shop_profile.number_of_employees || v.shop_profile.shop_size_m2 || v.shop_profile.stock_behavior) && (
-      <div>
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Προφίλ Καταστήματος</div>
-        <div className="space-y-1 text-xs text-slate-600">
-          {v.shop_profile.shop_type && <div className="flex justify-between"><span className="text-slate-400">Τύπος</span><span>{v.shop_profile.shop_type}</span></div>}
-          {v.shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-slate-400">Εργαζόμενοι</span><span>{v.shop_profile.number_of_employees}</span></div>}
-          {v.shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-400">Εμβαδό</span><span>{v.shop_profile.shop_size_m2} m²</span></div>}
-          {v.shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-slate-400">Απόθεμα</span><span>{v.shop_profile.stock_behavior}</span></div>}
-        </div>
-      </div>
-    )}
-    {v.competitor_info && (v.competitor_info.main_competitor || v.competitor_info.other_competitors || v.competitor_info.estimated_monthly_spend || v.competitor_info.competitor_strengths || v.competitor_info.switch_reason) && (
-      <div>
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Ανταγωνισμός</div>
-        <div className="space-y-1 text-xs text-slate-600">
-          {v.competitor_info.main_competitor && <div className="flex justify-between"><span className="text-slate-400">Κύριος</span><span className="font-medium">{v.competitor_info.main_competitor}</span></div>}
-          {v.competitor_info.other_competitors && <div className="flex justify-between"><span className="text-slate-400">Άλλοι</span><span>{v.competitor_info.other_competitors}</span></div>}
-          {v.competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(v.competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-          {v.competitor_info.competitor_strengths && <div><div className="text-slate-400 mb-0.5">Δυνατά σημεία</div><div className="bg-white rounded p-1.5">{v.competitor_info.competitor_strengths}</div></div>}
-          {v.competitor_info.switch_reason && <div><div className="text-slate-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-white rounded p-1.5">{v.competitor_info.switch_reason}</div></div>}
-        </div>
-      </div>
-    )}
-  </div>
-)}
+                        {/* Notes display */}
+                        {!isEditing && v.notes && (
+                          <div>
+                            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Σημειώσεις</div>
+                            <p className="text-sm text-slate-600">{v.notes}</p>
+                          </div>
+                        )}
+
+                        {/* Shop & Competitor info from visit */}
+                        {!isEditing && (v.shop_profile || v.competitor_info) && (
+                          <div className="space-y-2">
+                            {v.shop_profile && (v.shop_profile.shop_type || v.shop_profile.number_of_employees || v.shop_profile.shop_size_m2 || v.shop_profile.stock_behavior) && (
+                              <div>
+                                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Προφίλ Καταστήματος</div>
+                                <div className="space-y-1 text-xs text-slate-600">
+                                  {v.shop_profile.shop_type && <div className="flex justify-between"><span className="text-slate-400">Τύπος</span><span>{v.shop_profile.shop_type}</span></div>}
+                                  {v.shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-slate-400">Εργαζόμενοι</span><span>{v.shop_profile.number_of_employees}</span></div>}
+                                  {v.shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-400">Εμβαδό</span><span>{v.shop_profile.shop_size_m2} m²</span></div>}
+                                  {v.shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-slate-400">Απόθεμα</span><span>{v.shop_profile.stock_behavior}</span></div>}
+                                </div>
+                              </div>
+                            )}
+                            {v.competitor_info && (v.competitor_info.main_competitor || v.competitor_info.other_competitors || v.competitor_info.estimated_monthly_spend || v.competitor_info.competitor_strengths || v.competitor_info.switch_reason) && (
+                              <div>
+                                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Ανταγωνισμός</div>
+                                <div className="space-y-1 text-xs text-slate-600">
+                                  {v.competitor_info.main_competitor && <div className="flex justify-between"><span className="text-slate-400">Κύριος</span><span className="font-medium">{v.competitor_info.main_competitor}</span></div>}
+                                  {v.competitor_info.other_competitors && <div className="flex justify-between"><span className="text-slate-400">Άλλοι</span><span>{v.competitor_info.other_competitors}</span></div>}
+                                  {v.competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(v.competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+                                  {v.competitor_info.competitor_strengths && <div><div className="text-slate-400 mb-0.5">Δυνατά σημεία</div><div className="bg-white rounded p-1.5">{v.competitor_info.competitor_strengths}</div></div>}
+                                  {v.competitor_info.switch_reason && <div><div className="text-slate-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-white rounded p-1.5">{v.competitor_info.switch_reason}</div></div>}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                       </div>
                     )}
                   </div>
                 );
               })}
-
-              
 
               {visits.length > 5 && (
                 <button
