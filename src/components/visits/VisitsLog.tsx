@@ -90,6 +90,8 @@ async function authedRequest(method: string, url: string, body?: any) {
   return res.json();
 }
 
+const VISITS_PAGE_SIZE = 30;
+
 export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCustomer }: VisitsLogProps) {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
@@ -101,6 +103,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
   const [selectedCity, setSelectedCity] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [showAllVisits, setShowAllVisits] = useState(false);
 
   // Edit state
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
@@ -122,43 +125,43 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
 
   const isFullAccess = ['admin', 'manager', 'exec'].includes(currentUser.role);
 
-// Voice memo playback
-const [playingMemoId, setPlayingMemoId] = useState<string | null>(null);
-const [memoUrls, setMemoUrls] = useState<Record<string, string>>({});
-const [memoLoading, setMemoLoading] = useState<Record<string, boolean>>({});
-const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+  // Voice memo playback
+  const [playingMemoId, setPlayingMemoId] = useState<string | null>(null);
+  const [memoUrls, setMemoUrls] = useState<Record<string, string>>({});
+  const [memoLoading, setMemoLoading] = useState<Record<string, boolean>>({});
+  const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
 
-const playMemo = async (visitId: string) => {
-  if (playingMemoId && playingMemoId !== visitId) {
-    audioRefs.current[playingMemoId]?.pause();
-    setPlayingMemoId(null);
-  }
-  if (playingMemoId === visitId) {
-    audioRefs.current[visitId]?.pause();
-    setPlayingMemoId(null);
-    return;
-  }
-  if (!memoUrls[visitId]) {
-    setMemoLoading(prev => ({ ...prev, [visitId]: true }));
-    try {
-      const data = await authedFetch(`/api/visits/${visitId}/voice-memo`);
-      setMemoUrls(prev => ({ ...prev, [visitId]: data.url }));
-    } catch {
-      alert('Failed to load voice memo');
+  const playMemo = async (visitId: string) => {
+    if (playingMemoId && playingMemoId !== visitId) {
+      audioRefs.current[playingMemoId]?.pause();
+      setPlayingMemoId(null);
+    }
+    if (playingMemoId === visitId) {
+      audioRefs.current[visitId]?.pause();
+      setPlayingMemoId(null);
       return;
-    } finally {
-      setMemoLoading(prev => ({ ...prev, [visitId]: false }));
     }
-  }
-  setTimeout(() => {
-    const audio = audioRefs.current[visitId];
-    if (audio) {
-      audio.play();
-      setPlayingMemoId(visitId);
-      audio.onended = () => setPlayingMemoId(null);
+    if (!memoUrls[visitId]) {
+      setMemoLoading(prev => ({ ...prev, [visitId]: true }));
+      try {
+        const data = await authedFetch(`/api/visits/${visitId}/voice-memo`);
+        setMemoUrls(prev => ({ ...prev, [visitId]: data.url }));
+      } catch {
+        alert('Failed to load voice memo');
+        return;
+      } finally {
+        setMemoLoading(prev => ({ ...prev, [visitId]: false }));
+      }
     }
-  }, 50);
-};
+    setTimeout(() => {
+      const audio = audioRefs.current[visitId];
+      if (audio) {
+        audio.play();
+        setPlayingMemoId(visitId);
+        audio.onended = () => setPlayingMemoId(null);
+      }
+    }, 50);
+  };
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
@@ -179,6 +182,11 @@ const playMemo = async (visitId: string) => {
   useEffect(() => {
     fetchVisits();
   }, [fetchVisits]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setShowAllVisits(false);
+  }, [searchQuery, selectedArea, selectedCity, dateFrom, dateTo]);
 
   const categoryMap = new Map(allCategories.map(c => [c.category_code, c]));
   const customerMap = new Map(customers.map(c => [c.code, c]));
@@ -202,6 +210,9 @@ const playMemo = async (visitId: string) => {
     if (dateTo && v.visit_date > dateTo) return false;
     return true;
   });
+
+  const visibleVisits = showAllVisits ? filteredVisits : filteredVisits.slice(0, VISITS_PAGE_SIZE);
+  const hasMoreVisits = filteredVisits.length > VISITS_PAGE_SIZE;
 
   const hasActiveFilters = searchQuery || selectedArea || selectedCity || dateFrom || dateTo;
 
@@ -373,9 +384,6 @@ const playMemo = async (visitId: string) => {
 
   const visitTypeOptions = ['in-person', 'phone', 'video', 'other'];
 
-
-
-
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
       {/* Header */}
@@ -468,429 +476,449 @@ const playMemo = async (visitId: string) => {
                 {hasActiveFilters ? 'No visits match your filters.' : 'No visits recorded yet.'}
               </div>
             ) : (
-              filteredVisits.map(visit => {
-                const customer = customerMap.get(visit.customer_code);
-                const taskSummary = getTaskSummary(visit.crm_visit_tasks);
-                const isExpanded = expandedVisit === visit.id;
-                const visitCategories = visit.crm_visit_categories ?? [];
-                const categoryGroups = groupVisitCategories(visitCategories);
-                const comments = visit.crm_visit_comments ?? [];
-                const unreadComments = comments.filter(c => !c.is_read);
-                const isEditing = editingVisitId === visit.id;
-                const isCommenting = commentingVisitId === visit.id;
+              <>
+                {visibleVisits.map(visit => {
+                  const customer = customerMap.get(visit.customer_code);
+                  const taskSummary = getTaskSummary(visit.crm_visit_tasks);
+                  const isExpanded = expandedVisit === visit.id;
+                  const visitCategories = visit.crm_visit_categories ?? [];
+                  const categoryGroups = groupVisitCategories(visitCategories);
+                  const comments = visit.crm_visit_comments ?? [];
+                  const unreadComments = comments.filter(c => !c.is_read);
+                  const isEditing = editingVisitId === visit.id;
+                  const isCommenting = commentingVisitId === visit.id;
 
-                return (
-                  <div key={visit.id}>
-                    <button
-                      onClick={() => setExpandedVisit(isExpanded ? null : visit.id)}
-                      className="w-full px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                            <span className="text-sm font-semibold text-gray-900">{formatVisitDate(visit.visit_date)}</span>
-                            <span className="text-gray-300">·</span>
-                            {customer && onSelectCustomer ? (
-                              <button
-                                onClick={e => { e.stopPropagation(); onSelectCustomer(customer); }}
-                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                              >
-                                {customer.name}
-                              </button>
-                            ) : (
-                              <span className="text-sm font-medium text-blue-600">{customer?.name ?? visit.customer_code}</span>
-                            )}
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono">{visit.customer_code}</span>
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{visit.visit_type}</span>
-                            {visitCategories.length > 0 && (
-                              <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs flex items-center gap-1">
-                                <Tag className="w-3 h-3" />
-                                {visitCategories.length}
-                              </span>
-                            )}
-                            {visit.voice_memo_path && (
-                              <span className="px-2 py-0.5 bg-purple-50 text-purple-500 rounded text-xs flex items-center gap-1">
-                                <Mic className="w-3 h-3" /> Memo
-                              </span>
-                            )}
-                            {unreadComments.length > 0 && (
-                              <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs flex items-center gap-1 font-bold">
-                                <Bell className="w-3 h-3" />
-                                {unreadComments.length} new
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-1">
-                            {customer && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                {customer.city}, {customer.area}
-                              </span>
-                            )}
-                            {isFullAccess && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-3 h-3" />
-                                {visit.owner_name}
-                              </span>
-                            )}
-                          </div>
-                          {visit.notes && (
-                            <p className="text-sm text-gray-600 line-clamp-2">{visit.notes}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {taskSummary.total > 0 && (
-                            taskSummary.pending > 0 ? (
-                              <span className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
-                                <AlertCircle className="w-3 h-3" />
-                                {taskSummary.pending}
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
-                                <CheckCircle className="w-3 h-3" />
-                              </span>
-                            )
-                          )}
-                          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                        </div>
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      <div className="px-4 sm:px-6 pb-5 pt-3 bg-blue-50 border-t border-blue-100 space-y-4">
-
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {canEditDelete(visit) && !isEditing && (
-                            <>
-                              <button onClick={() => startEdit(visit)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs hover:bg-gray-50 transition-colors">
-                                <Pencil className="w-3.5 h-3.5" />
-                                Edit
-                              </button>
-                              <button onClick={() => handleDelete(visit.id)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors">
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Delete
-                              </button>
-                            </>
-                          )}
-                          {isFullAccess && !isCommenting && (
-                            <button onClick={() => { setCommentingVisitId(visit.id); setNewComment(''); }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-300 text-blue-600 rounded-lg text-xs hover:bg-blue-50 transition-colors">
-                              <MessageSquare className="w-3.5 h-3.5" />
-                              Add Comment
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Edit form */}
-                        {isEditing && (
-                          <div className="bg-white rounded-lg p-4 border border-gray-200 space-y-4">
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Edit Visit</div>
-                            <SmartDateInput label="Date" value={editDate} onChange={setEditDate} hint={false} />
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Visit Type</label>
-                              <select value={editType} onChange={e => setEditType(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-                                {visitTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-                              <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[80px]" />
-                            </div>
-                            <CategorySelector
-                              allCategories={allCategories}
-                              selected={editCategories}
-                              onChange={setEditCategories}
-                            />
-                            <div className="flex gap-2">
-                              <button onClick={() => handleSaveEdit(visit.id)} disabled={editSaving}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
-                                {editSaving ? 'Saving...' : 'Save'}
-                              </button>
-                              <button onClick={() => setEditingVisitId(null)}
-                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Visit Notes */}
-                        {!isEditing && (
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visit Notes</div>
-                            <p className="text-sm text-gray-700 leading-relaxed">{visit.notes || '—'}</p>
-                          </div>
-                        )}
-
-                        {/* Shop & Competitor info from visit */}
-                        {!isEditing && ((visit as any).shop_profile || (visit as any).competitor_info) && (
-                          <div className="space-y-2">
-                            {(visit as any).shop_profile && ((visit as any).shop_profile.shop_type || (visit as any).shop_profile.number_of_employees || (visit as any).shop_profile.shop_size_m2 || (visit as any).shop_profile.stock_behavior) && (
-                              <div>
-                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Προφίλ Καταστήματος</div>
-                                <div className="bg-white rounded-lg px-3 py-2.5 border border-gray-200 space-y-1 text-xs text-gray-700">
-                                  {(visit as any).shop_profile.shop_type && <div className="flex justify-between"><span className="text-gray-400">Τύπος</span><span>{(visit as any).shop_profile.shop_type}</span></div>}
-                                  {(visit as any).shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-gray-400">Εργαζόμενοι</span><span>{(visit as any).shop_profile.number_of_employees}</span></div>}
-                                  {(visit as any).shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-gray-400">Εμβαδό</span><span>{(visit as any).shop_profile.shop_size_m2} m²</span></div>}
-                                  {(visit as any).shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-gray-400">Απόθεμα</span><span>{(visit as any).shop_profile.stock_behavior}</span></div>}
-                                </div>
-                              </div>
-                            )}
-                            {(visit as any).competitor_info && ((visit as any).competitor_info.main_competitor || (visit as any).competitor_info.other_competitors || (visit as any).competitor_info.estimated_monthly_spend || (visit as any).competitor_info.competitor_strengths || (visit as any).competitor_info.switch_reason) && (
-                              <div>
-                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Ανταγωνισμός</div>
-                                <div className="bg-white rounded-lg px-3 py-2.5 border border-gray-200 space-y-1 text-xs text-gray-700">
-                                  {(visit as any).competitor_info.main_competitor && <div className="flex justify-between"><span className="text-gray-400">Κύριος</span><span className="font-medium">{(visit as any).competitor_info.main_competitor}</span></div>}
-                                  {(visit as any).competitor_info.other_competitors && <div className="flex justify-between"><span className="text-gray-400">Άλλοι</span><span>{(visit as any).competitor_info.other_competitors}</span></div>}
-                                  {(visit as any).competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-gray-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number((visit as any).competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-                                  {(visit as any).competitor_info.competitor_strengths && <div><div className="text-gray-400 mb-0.5">Δυνατά σημεία</div><div className="bg-slate-50 rounded p-1.5">{(visit as any).competitor_info.competitor_strengths}</div></div>}
-                                  {(visit as any).competitor_info.switch_reason && <div><div className="text-gray-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-slate-50 rounded p-1.5">{(visit as any).competitor_info.switch_reason}</div></div>}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Voice Memo Playback */}
-                        {!isEditing && visit.voice_memo_path && (
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Voice Memo</div>
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => playMemo(visit.id)}
-                                disabled={memoLoading[visit.id]}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-purple-300 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-50 transition-colors disabled:opacity-50"
-                              >
-                                {memoLoading[visit.id] ? (
-                                  <span className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                                ) : playingMemoId === visit.id ? (
-                                  <Pause className="w-3.5 h-3.5" />
-                                ) : (
-                                  <Mic className="w-3.5 h-3.5" />
-                                )}
-                                {memoLoading[visit.id] ? 'Loading...' : playingMemoId === visit.id ? 'Pause' : 'Play Memo'}
-                              </button>
-                              {memoUrls[visit.id] && (
-                                <audio
-                                  ref={el => { audioRefs.current[visit.id] = el; }}
-                                  src={memoUrls[visit.id]}
-                                  className="hidden"
-                                />
+                  return (
+                    <div key={visit.id}>
+                      <button
+                        onClick={() => setExpandedVisit(isExpanded ? null : visit.id)}
+                        className="w-full px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                              <span className="text-sm font-semibold text-gray-900">{formatVisitDate(visit.visit_date)}</span>
+                              <span className="text-gray-300">·</span>
+                              {customer && onSelectCustomer ? (
+                                <button
+                                  onClick={e => { e.stopPropagation(); onSelectCustomer(customer); }}
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                >
+                                  {customer.name}
+                                </button>
+                              ) : (
+                                <span className="text-sm font-medium text-blue-600">{customer?.name ?? visit.customer_code}</span>
                               )}
-                            </div>
-                          </div>
-                        )}
-
-
-                        {/* Categories Discussed */}
-                        {!isEditing && categoryGroups.size > 0 && (
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                              Categories Discussed ({visitCategories.length})
-                            </div>
-                            <div className="space-y-2">
-                              {Array.from(categoryGroups.entries()).map(([parentName, { general, subcats }]) => (
-                                <div key={parentName} className="bg-white rounded-lg px-3 py-2.5 border border-gray-200">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-sm font-medium text-gray-800">{parentName}</span>
-                                    {general && (
-                                      <span className="px-2 py-0.5 border border-dashed border-blue-400 text-blue-500 rounded text-xs">general</span>
-                                    )}
-                                  </div>
-                                  {subcats.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {subcats.map(sub => (
-                                        <span key={sub} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">{sub}</span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Tasks */}
-                        {visit.crm_visit_tasks.length > 0 && (
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                              Tasks ({taskSummary.completed}/{taskSummary.total} completed)
-                            </div>
-                            <div className="space-y-2">
-                              {visit.crm_visit_tasks.map(task => (
-                                <div key={task.id} className="flex items-start gap-3 bg-white rounded-lg px-3 py-2.5 border border-gray-200">
-                                  <div className="mt-0.5">
-                                    {task.status === 'completed' ? <CheckCircle className="w-4 h-4 text-green-500" />
-                                      : task.status === 'in-progress' ? <Clock className="w-4 h-4 text-orange-500" />
-                                      : <AlertCircle className="w-4 h-4 text-gray-400" />}
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className={`text-sm ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                                      {task.description}
-                                    </p>
-                                    {task.reminder_date && (
-                                      <div className="text-xs text-gray-400 mt-0.5">Reminder: {task.reminder_date}</div>
-                                    )}
-                                  </div>
-                                  <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                                    task.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                    task.status === 'in-progress' ? 'bg-orange-100 text-orange-700' :
-                                    'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    {task.status === 'not-started' ? 'Not started' :
-                                     task.status === 'in-progress' ? 'In progress' : 'Completed'}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Comments */}
-                        {(comments.length > 0 || isCommenting) && (
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                              Manager Comments
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono">{visit.customer_code}</span>
+                              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{visit.visit_type}</span>
+                              {visitCategories.length > 0 && (
+                                <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs flex items-center gap-1">
+                                  <Tag className="w-3 h-3" />
+                                  {visitCategories.length}
+                                </span>
+                              )}
+                              {visit.voice_memo_path && (
+                                <span className="px-2 py-0.5 bg-purple-50 text-purple-500 rounded text-xs flex items-center gap-1">
+                                  <Mic className="w-3 h-3" /> Memo
+                                </span>
+                              )}
                               {unreadComments.length > 0 && (
-                                <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs">{unreadComments.length} unread</span>
+                                <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs flex items-center gap-1 font-bold">
+                                  <Bell className="w-3 h-3" />
+                                  {unreadComments.length} new
+                                </span>
                               )}
                             </div>
-                            <div className="space-y-3">
-                              {comments.map(comment => {
-                                const isReplying = replyingCommentId === comment.id;
-                                const isOwnComment = comment.user_id === currentUser.id;
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-1">
+                              {customer && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  {customer.city}, {customer.area}
+                                </span>
+                              )}
+                              {isFullAccess && (
+                                <span className="flex items-center gap-1">
+                                  <User className="w-3 h-3" />
+                                  {visit.owner_name}
+                                </span>
+                              )}
+                            </div>
+                            {visit.notes && (
+                              <p className="text-sm text-gray-600 line-clamp-2">{visit.notes}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {taskSummary.total > 0 && (
+                              taskSummary.pending > 0 ? (
+                                <span className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
+                                  <AlertCircle className="w-3 h-3" />
+                                  {taskSummary.pending}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
+                                  <CheckCircle className="w-3 h-3" />
+                                </span>
+                              )
+                            )}
+                            <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          </div>
+                        </div>
+                      </button>
 
-                                return (
-                                  <div key={comment.id} className={`rounded-lg border overflow-hidden ${!comment.is_read ? 'border-red-300' : 'border-gray-200'}`}>
+                      {isExpanded && (
+                        <div className="px-4 sm:px-6 pb-5 pt-3 bg-blue-50 border-t border-blue-100 space-y-4">
 
-                                    {/* Comment */}
-                                    <div className={`px-3 py-2.5 ${!comment.is_read ? 'bg-red-50' : 'bg-white'}`}>
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="flex-1">
-                                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                            <span className="text-xs font-semibold text-gray-700">{comment.commenter_name}</span>
-                                            <span className="text-xs text-gray-400">{formatDateTime(comment.created_at)}</span>
-                                            {!comment.is_read && (
-                                              <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">New</span>
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {canEditDelete(visit) && !isEditing && (
+                              <>
+                                <button onClick={() => startEdit(visit)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs hover:bg-gray-50 transition-colors">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  Edit
+                                </button>
+                                <button onClick={() => handleDelete(visit.id)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 text-red-600 rounded-lg text-xs hover:bg-red-50 transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                            {isFullAccess && !isCommenting && (
+                              <button onClick={() => { setCommentingVisitId(visit.id); setNewComment(''); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-300 text-blue-600 rounded-lg text-xs hover:bg-blue-50 transition-colors">
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                Add Comment
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Edit form */}
+                          {isEditing && (
+                            <div className="bg-white rounded-lg p-4 border border-gray-200 space-y-4">
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Edit Visit</div>
+                              <SmartDateInput label="Date" value={editDate} onChange={setEditDate} hint={false} />
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Visit Type</label>
+                                <select value={editType} onChange={e => setEditType(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                  {visitTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                                <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[80px]" />
+                              </div>
+                              <CategorySelector
+                                allCategories={allCategories}
+                                selected={editCategories}
+                                onChange={setEditCategories}
+                              />
+                              <div className="flex gap-2">
+                                <button onClick={() => handleSaveEdit(visit.id)} disabled={editSaving}
+                                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+                                  {editSaving ? 'Saving...' : 'Save'}
+                                </button>
+                                <button onClick={() => setEditingVisitId(null)}
+                                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Visit Notes */}
+                          {!isEditing && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visit Notes</div>
+                              <p className="text-sm text-gray-700 leading-relaxed">{visit.notes || '—'}</p>
+                            </div>
+                          )}
+
+                          {/* Shop & Competitor info from visit */}
+                          {!isEditing && ((visit as any).shop_profile || (visit as any).competitor_info) && (
+                            <div className="space-y-2">
+                              {(visit as any).shop_profile && ((visit as any).shop_profile.shop_type || (visit as any).shop_profile.number_of_employees || (visit as any).shop_profile.shop_size_m2 || (visit as any).shop_profile.stock_behavior) && (
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Προφίλ Καταστήματος</div>
+                                  <div className="bg-white rounded-lg px-3 py-2.5 border border-gray-200 space-y-1 text-xs text-gray-700">
+                                    {(visit as any).shop_profile.shop_type && <div className="flex justify-between"><span className="text-gray-400">Τύπος</span><span>{(visit as any).shop_profile.shop_type}</span></div>}
+                                    {(visit as any).shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-gray-400">Εργαζόμενοι</span><span>{(visit as any).shop_profile.number_of_employees}</span></div>}
+                                    {(visit as any).shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-gray-400">Εμβαδό</span><span>{(visit as any).shop_profile.shop_size_m2} m²</span></div>}
+                                    {(visit as any).shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-gray-400">Απόθεμα</span><span>{(visit as any).shop_profile.stock_behavior}</span></div>}
+                                  </div>
+                                </div>
+                              )}
+                              {(visit as any).competitor_info && ((visit as any).competitor_info.competitors_v2?.length > 0 || (visit as any).competitor_info.main_competitor || (visit as any).competitor_info.estimated_monthly_spend || (visit as any).competitor_info.switch_reason) && (
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Ανταγωνισμός</div>
+                                  <div className="bg-white rounded-lg px-3 py-2.5 border border-gray-200 space-y-2 text-xs text-gray-700">
+                                    {/* New format */}
+                                    {(visit as any).competitor_info.competitors_v2?.map((c: any) => (
+                                      <div key={c.name} className="border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                                        <div className="flex items-center gap-1.5 font-medium">
+                                          {c.isPrimary && <span className="text-amber-500">★</span>}
+                                          <span>{c.name}</span>
+                                        </div>
+                                        {c.notes && <div className="text-gray-400 mt-0.5">{c.notes}</div>}
+                                      </div>
+                                    ))}
+                                    {/* Legacy format fallback */}
+                                    {!(visit as any).competitor_info.competitors_v2?.length && (visit as any).competitor_info.main_competitor && (
+                                      <div className="flex justify-between"><span className="text-gray-400">Κύριος</span><span className="font-medium">{(visit as any).competitor_info.main_competitor}</span></div>
+                                    )}
+                                    {(visit as any).competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-gray-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number((visit as any).competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+                                    {(visit as any).competitor_info.switch_reason && <div><div className="text-gray-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-slate-50 rounded p-1.5">{(visit as any).competitor_info.switch_reason}</div></div>}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Voice Memo Playback */}
+                          {!isEditing && visit.voice_memo_path && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Voice Memo</div>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => playMemo(visit.id)}
+                                  disabled={memoLoading[visit.id]}
+                                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-purple-300 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-50 transition-colors disabled:opacity-50"
+                                >
+                                  {memoLoading[visit.id] ? (
+                                    <span className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                                  ) : playingMemoId === visit.id ? (
+                                    <Pause className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Mic className="w-3.5 h-3.5" />
+                                  )}
+                                  {memoLoading[visit.id] ? 'Loading...' : playingMemoId === visit.id ? 'Pause' : 'Play Memo'}
+                                </button>
+                                {memoUrls[visit.id] && (
+                                  <audio
+                                    ref={el => { audioRefs.current[visit.id] = el; }}
+                                    src={memoUrls[visit.id]}
+                                    className="hidden"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Categories Discussed */}
+                          {!isEditing && categoryGroups.size > 0 && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                Categories Discussed ({visitCategories.length})
+                              </div>
+                              <div className="space-y-2">
+                                {Array.from(categoryGroups.entries()).map(([parentName, { general, subcats }]) => (
+                                  <div key={parentName} className="bg-white rounded-lg px-3 py-2.5 border border-gray-200">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-sm font-medium text-gray-800">{parentName}</span>
+                                      {general && (
+                                        <span className="px-2 py-0.5 border border-dashed border-blue-400 text-blue-500 rounded text-xs">general</span>
+                                      )}
+                                    </div>
+                                    {subcats.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {subcats.map(sub => (
+                                          <span key={sub} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">{sub}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tasks */}
+                          {visit.crm_visit_tasks.length > 0 && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                Tasks ({taskSummary.completed}/{taskSummary.total} completed)
+                              </div>
+                              <div className="space-y-2">
+                                {visit.crm_visit_tasks.map(task => (
+                                  <div key={task.id} className="flex items-start gap-3 bg-white rounded-lg px-3 py-2.5 border border-gray-200">
+                                    <div className="mt-0.5">
+                                      {task.status === 'completed' ? <CheckCircle className="w-4 h-4 text-green-500" />
+                                        : task.status === 'in-progress' ? <Clock className="w-4 h-4 text-orange-500" />
+                                        : <AlertCircle className="w-4 h-4 text-gray-400" />}
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className={`text-sm ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                        {task.description}
+                                      </p>
+                                      {task.reminder_date && (
+                                        <div className="text-xs text-gray-400 mt-0.5">Reminder: {task.reminder_date}</div>
+                                      )}
+                                    </div>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                                      task.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                      task.status === 'in-progress' ? 'bg-orange-100 text-orange-700' :
+                                      'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      {task.status === 'not-started' ? 'Not started' :
+                                       task.status === 'in-progress' ? 'In progress' : 'Completed'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Comments */}
+                          {(comments.length > 0 || isCommenting) && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                                Manager Comments
+                                {unreadComments.length > 0 && (
+                                  <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs">{unreadComments.length} unread</span>
+                                )}
+                              </div>
+                              <div className="space-y-3">
+                                {comments.map(comment => {
+                                  const isReplying = replyingCommentId === comment.id;
+                                  const isOwnComment = comment.user_id === currentUser.id;
+
+                                  return (
+                                    <div key={comment.id} className={`rounded-lg border overflow-hidden ${!comment.is_read ? 'border-red-300' : 'border-gray-200'}`}>
+                                      <div className={`px-3 py-2.5 ${!comment.is_read ? 'bg-red-50' : 'bg-white'}`}>
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                              <span className="text-xs font-semibold text-gray-700">{comment.commenter_name}</span>
+                                              <span className="text-xs text-gray-400">{formatDateTime(comment.created_at)}</span>
+                                              {!comment.is_read && (
+                                                <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">New</span>
+                                              )}
+                                              {comment.is_read && comment.read_by_name && (
+                                                <span className="text-xs text-green-600 flex items-center gap-1">
+                                                  ✅ Read by {comment.read_by_name}
+                                                  {comment.read_at && ` · ${formatDateTime(comment.read_at)}`}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <p className="text-sm text-gray-700">{comment.comment}</p>
+                                          </div>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            {!comment.is_read && visit.user_id === currentUser.id && comment.user_id !== currentUser.id && (
+                                              <button
+                                                onClick={() => handleMarkRead(visit.id, comment.id)}
+                                                className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 text-gray-600 rounded text-xs hover:bg-gray-50"
+                                              >
+                                                ✅ Mark read
+                                              </button>
                                             )}
-                                            {comment.is_read && comment.read_by_name && (
-                                              <span className="text-xs text-green-600 flex items-center gap-1">
-                                                ✅ Read by {comment.read_by_name}
-                                                {comment.read_at && ` · ${formatDateTime(comment.read_at)}`}
-                                              </span>
+                                            {isFullAccess && isOwnComment && (
+                                              <button
+                                                onClick={() => handleDeleteComment(visit.id, comment.id)}
+                                                className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
                                             )}
                                           </div>
-                                          <p className="text-sm text-gray-700">{comment.comment}</p>
-                                        </div>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                          {!comment.is_read && visit.user_id === currentUser.id && comment.user_id !== currentUser.id && (
-                                            <button
-                                              onClick={() => handleMarkRead(visit.id, comment.id)}
-                                              className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 text-gray-600 rounded text-xs hover:bg-gray-50"
-                                            >
-                                              ✅ Mark read
-                                            </button>
-                                          )}
-                                          {isFullAccess && isOwnComment && (
-                                            <button
-                                              onClick={() => handleDeleteComment(visit.id, comment.id)}
-                                              className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                          )}
                                         </div>
                                       </div>
+
+                                      {comment.reply_text && (
+                                        <div className="px-3 py-2.5 bg-blue-50 border-t border-blue-100">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-xs font-semibold text-blue-700">↩ Reply</span>
+                                            {comment.reply_at && (
+                                              <span className="text-xs text-gray-400">{formatDateTime(comment.reply_at)}</span>
+                                            )}
+                                          </div>
+                                          <p className="text-sm text-blue-800">{comment.reply_text}</p>
+                                        </div>
+                                      )}
+
+                                      {!comment.reply_text && !isFullAccess && comment.is_read && !isReplying && (
+                                        <div className="px-3 py-2 bg-gray-50 border-t border-gray-100">
+                                          <button
+                                            onClick={() => { setReplyingCommentId(comment.id); setReplyText(''); }}
+                                            className="text-xs text-blue-600 hover:text-blue-800"
+                                          >
+                                            ↩ Reply
+                                          </button>
+                                        </div>
+                                      )}
+
+                                      {isReplying && (
+                                        <div className="px-3 py-2.5 bg-gray-50 border-t border-gray-100 space-y-2">
+                                          <textarea
+                                            value={replyText}
+                                            onChange={e => setReplyText(e.target.value)}
+                                            placeholder="Write your reply..."
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[60px]"
+                                          />
+                                          <div className="flex gap-2">
+                                            <button
+                                              onClick={() => handleReply(visit.id, comment.id)}
+                                              disabled={replySaving || !replyText.trim()}
+                                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-medium"
+                                            >
+                                              {replySaving ? 'Sending...' : 'Send Reply'}
+                                            </button>
+                                            <button
+                                              onClick={() => { setReplyingCommentId(null); setReplyText(''); }}
+                                              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs"
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
-
-                                    {/* Existing reply */}
-                                    {comment.reply_text && (
-                                      <div className="px-3 py-2.5 bg-blue-50 border-t border-blue-100">
-                                        <div className="flex items-center gap-2 mb-1">
-                                          <span className="text-xs font-semibold text-blue-700">↩ Reply</span>
-                                          {comment.reply_at && (
-                                            <span className="text-xs text-gray-400">{formatDateTime(comment.reply_at)}</span>
-                                          )}
-                                        </div>
-                                        <p className="text-sm text-blue-800">{comment.reply_text}</p>
-                                      </div>
-                                    )}
-
-                                    {/* Reply button — only for rep, after reading, no existing reply */}
-                                    {!comment.reply_text && !isFullAccess && comment.is_read && !isReplying && (
-                                      <div className="px-3 py-2 bg-gray-50 border-t border-gray-100">
-                                        <button
-                                          onClick={() => { setReplyingCommentId(comment.id); setReplyText(''); }}
-                                          className="text-xs text-blue-600 hover:text-blue-800"
-                                        >
-                                          ↩ Reply
-                                        </button>
-                                      </div>
-                                    )}
-
-                                    {/* Reply input */}
-                                    {isReplying && (
-                                      <div className="px-3 py-2.5 bg-gray-50 border-t border-gray-100 space-y-2">
-                                        <textarea
-                                          value={replyText}
-                                          onChange={e => setReplyText(e.target.value)}
-                                          placeholder="Write your reply..."
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[60px]"
-                                        />
-                                        <div className="flex gap-2">
-                                          <button
-                                            onClick={() => handleReply(visit.id, comment.id)}
-                                            disabled={replySaving || !replyText.trim()}
-                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-medium"
-                                          >
-                                            {replySaving ? 'Sending...' : 'Send Reply'}
-                                          </button>
-                                          <button
-                                            onClick={() => { setReplyingCommentId(null); setReplyText(''); }}
-                                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs"
-                                          >
-                                            Cancel
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Add comment form */}
-                        {isCommenting && (
-                          <div className="bg-white rounded-lg p-3 border border-blue-200 space-y-2">
-                            <div className="text-xs font-semibold text-gray-600">New Comment</div>
-                            <textarea value={newComment} onChange={e => setNewComment(e.target.value)}
-                              placeholder="Write a comment for the rep..."
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[80px]" />
-                            <div className="flex gap-2">
-                              <button onClick={() => handleAddComment(visit.id)} disabled={commentSaving || !newComment.trim()}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
-                                {commentSaving ? 'Sending...' : 'Send'}
-                              </button>
-                              <button onClick={() => { setCommentingVisitId(null); setNewComment(''); }}
-                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
-                                Cancel
-                              </button>
+                          {/* Add comment form */}
+                          {isCommenting && (
+                            <div className="bg-white rounded-lg p-3 border border-blue-200 space-y-2">
+                              <div className="text-xs font-semibold text-gray-600">New Comment</div>
+                              <textarea value={newComment} onChange={e => setNewComment(e.target.value)}
+                                placeholder="Write a comment for the rep..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 min-h-[80px]" />
+                              <div className="flex gap-2">
+                                <button onClick={() => handleAddComment(visit.id)} disabled={commentSaving || !newComment.trim()}
+                                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+                                  {commentSaving ? 'Sending...' : 'Send'}
+                                </button>
+                                <button onClick={() => { setCommentingVisitId(null); setNewComment(''); }}
+                                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
+                                  Cancel
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Show more / show less button */}
+                {hasMoreVisits && (
+                  <button
+                    onClick={() => setShowAllVisits(v => !v)}
+                    className="w-full flex items-center justify-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium py-3 border-t border-gray-100"
+                  >
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showAllVisits ? 'rotate-180' : ''}`} />
+                    {showAllVisits
+                      ? 'Εμφάνιση λιγότερων'
+                      : `Εμφάνιση όλων (${filteredVisits.length})`}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </>
