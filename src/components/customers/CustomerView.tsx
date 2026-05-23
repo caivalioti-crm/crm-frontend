@@ -1,7 +1,7 @@
 import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
   Lightbulb, FileText, Tag, ChevronDown, ChevronRight, 
-  TrendingUp, TrendingDown, BarChart2, Medal, AlertCircle, Receipt, User, RotateCcw,
+  TrendingUp, TrendingDown, BarChart2, Medal, TriangleAlert, AlertCircle, Receipt, User, RotateCcw,
   ClipboardList, Mic, Pause, Pencil,
 } from 'lucide-react';
 
@@ -736,7 +736,7 @@ const playCvMemo = async (visitId: string) => {
                 )}
                 {warning && (
                   <div className="flex items-center gap-1.5 mt-1 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <TriangleAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                     <span>{warning}</span>
                   </div>
                 )}

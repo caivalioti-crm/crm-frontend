@@ -1,31 +1,37 @@
-// ✅ Shared CRM intelligence (persists Prospect → Customer)
+export interface CompetitorEntry {
+  name: string;
+  isPrimary: boolean;
+  notes?: string;
+}
+
 export interface CompetitionInfo {
+  competitors?: CompetitorEntry[];
+  estimatedMonthlySpend?: number;
+  switchReason?: string;
+  // legacy fields — kept for backward compat reading
   mainCompetitor?: string;
   otherCompetitors?: string;
-  estimatedMonthlySpend?: number;
   competitorStrengths?: string;
-  switchReason?: string;
 }
 
 export interface ShopProfile {
   numberOfEmployees?: number;
   shopSizeM2?: number;
   stockBehavior?: 'keeps_stock' | 'on_demand' | 'mixed';
+  vehicleTypes?: string[];
+  vehicleBrands?: string[];
 }
 
-// ✅ CRM draft transport (Prospect only)
 export interface TransportDraft {
   transportCompany?: string;
   transportMeans?: string;
 }
 
-// ✅ ERP transport (Customer only)
 export interface TransportERP {
   transportCompany?: string;
   transportMeans?: string;
 }
 
-// ✅ Base commercial entity (CRM-owned)
 export interface CommercialEntityBase {
   competitionInfo?: CompetitionInfo;
   shopProfile?: ShopProfile;
