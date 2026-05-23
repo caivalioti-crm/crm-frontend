@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag, MessageSquare, Bell, Trash2, Pencil, Mic, Pause } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Calendar, MapPin, User, ChevronDown, Search, CheckCircle, Clock, AlertCircle, Plus, ChevronRight, Tag, MessageSquare, Mail, Bell, Trash2, Pencil, Mic, Pause } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
@@ -60,6 +60,10 @@ type VisitsLogProps = {
   onNewVisit: () => void;
   customers?: { code: string; name: string; city: string; area: string; trdr_id?: number }[];
   onSelectCustomer?: (customer: any) => void;
+  taskFilter?: 'none' | 'due';
+  commentFilter?: 'none' | 'unread';
+  dueTasks?: { today: any[]; overdue: any[]; total: number };
+  onClearFilters?: () => void;
 };
 
 async function authedFetch(url: string) {
@@ -92,7 +96,9 @@ async function authedRequest(method: string, url: string, body?: any) {
 
 const VISITS_PAGE_SIZE = 30;
 
-export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCustomer }: VisitsLogProps) {
+export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCustomer,
+  taskFilter = 'none', commentFilter = 'none', dueTasks, onClearFilters
+}: VisitsLogProps) {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -211,8 +217,24 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
     return true;
   });
 
-  const visibleVisits = showAllVisits ? filteredVisits : filteredVisits.slice(0, VISITS_PAGE_SIZE);
-  const hasMoreVisits = filteredVisits.length > VISITS_PAGE_SIZE;
+  const dueVisitIds = useMemo(() => {
+  if (!dueTasks) return new Set<string>();
+  return new Set([
+    ...dueTasks.today.map((t: any) => t.visit_id),
+    ...dueTasks.overdue.map((t: any) => t.visit_id),
+  ]);
+}, [dueTasks]);
+
+  const activelyFilteredVisits = useMemo(() => {
+    if (taskFilter === 'due') return filteredVisits.filter(v => dueVisitIds.has(v.id));
+    if (commentFilter === 'unread') return filteredVisits.filter(v =>
+      (v.crm_visit_comments ?? []).some(c => !c.is_read)
+    );
+    return filteredVisits;
+  }, [filteredVisits, taskFilter, commentFilter, dueVisitIds]);
+
+  const visibleVisits = showAllVisits ? activelyFilteredVisits : activelyFilteredVisits.slice(0, VISITS_PAGE_SIZE);
+  const hasMoreVisits = activelyFilteredVisits.length > VISITS_PAGE_SIZE;
 
   const hasActiveFilters = searchQuery || selectedArea || selectedCity || dateFrom || dateTo;
 
@@ -403,7 +425,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
             )}
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filteredVisits.length} visit{filteredVisits.length !== 1 ? 's' : ''}
+            {activelyFilteredVisits.length} visit{activelyFilteredVisits.length !== 1 ? 's' : ''}
             {hasActiveFilters ? ' (filtered)' : ` · ${visits.length} total`}
           </p>
         </div>
@@ -467,11 +489,20 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
             )}
           </div>
 
+          {(taskFilter === 'due' || commentFilter === 'unread') && (
+            <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+              <span className="text-xs text-indigo-700 font-medium">
+                {taskFilter === 'due' ? `Εμφάνιση επισκέψεων με ληξιπρόθεσμες εργασίες (${activelyFilteredVisits.length})` : `Εμφάνιση επισκέψεων με αδιάβαστα σχόλια (${activelyFilteredVisits.length})`}
+              </span>
+              <button onClick={onClearFilters} className="text-xs text-indigo-500 hover:underline">× Clear</button>
+            </div>
+          )}
+
           {/* Visit list */}
           <div className="divide-y divide-gray-100">
             {loading ? (
               <div className="px-6 py-8 text-center text-gray-400 text-sm">Loading visits...</div>
-            ) : filteredVisits.length === 0 ? (
+            ) : activelyFilteredVisits.length === 0 ? (
               <div className="px-6 py-8 text-center text-gray-400 text-sm">
                 {hasActiveFilters ? 'No visits match your filters.' : 'No visits recorded yet.'}
               </div>
@@ -524,7 +555,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
                               )}
                               {unreadComments.length > 0 && (
                                 <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-xs flex items-center gap-1 font-bold">
-                                  <Bell className="w-3 h-3" />
+                                  <Mail className="w-3 h-3" />
                                   {unreadComments.length} new
                                 </span>
                               )}
@@ -548,18 +579,34 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
                             )}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            {taskSummary.total > 0 && (
-                              taskSummary.pending > 0 ? (
-                                <span className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
-                                  <AlertCircle className="w-3 h-3" />
-                                  {taskSummary.pending}
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
-                                  <CheckCircle className="w-3 h-3" />
-                                </span>
-                              )
-                            )}
+                            {taskSummary.total > 0 && (() => {
+                            const todayDue = (visit.crm_visit_tasks ?? []).filter(t =>
+                              t.status !== 'completed' && t.reminder_date === new Date().toISOString().split('T')[0]
+                            );
+                            const overdue = (visit.crm_visit_tasks ?? []).filter(t =>
+                              t.status !== 'completed' && t.reminder_date && t.reminder_date < new Date().toISOString().split('T')[0]
+                            );
+                            if (overdue.length > 0) return (
+                              <span className="flex items-center gap-1 px-2 py-1 bg-red-800 text-white rounded-full text-xs font-bold">
+                                <Bell className="w-3 h-3" />{overdue.length}
+                              </span>
+                            );
+                            if (todayDue.length > 0) return (
+                              <span className="flex items-center gap-1 px-2 py-1 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
+                                <Bell className="w-3 h-3" />{todayDue.length}
+                              </span>
+                            );
+                            if (taskSummary.pending > 0) return (
+                              <span className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
+                                <Bell className="w-3 h-3" />{taskSummary.pending}
+                              </span>
+                            );
+                            return (
+                              <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
+                                <CheckCircle className="w-3 h-3" />
+                              </span>
+                            );
+                          })()}
                             <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                           </div>
                         </div>
@@ -915,7 +962,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
                     <ChevronDown className={`w-4 h-4 transition-transform ${showAllVisits ? 'rotate-180' : ''}`} />
                     {showAllVisits
                       ? 'Εμφάνιση λιγότερων'
-                      : `Εμφάνιση όλων (${filteredVisits.length})`}
+                      : `Εμφάνιση όλων (${activelyFilteredVisits.length})`}
                   </button>
                 )}
               </>

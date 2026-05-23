@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { User, TrendingUp, TrendingDown, LogOut, MapPin, Users, UserPlus, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
+import { User, TrendingUp, TrendingDown, LogOut, MapPin, Mail, Users, UserPlus, Bell, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma } from '../../hooks/useDashboardFigma';
 
@@ -273,6 +273,9 @@ export function DashboardFigma() {
     joinedPeriod, setJoinedPeriod,
     customerSortMode, setCustomerSortMode, monthlySales, monthlySalesCompare, monthlySalesLoading,
     monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, 
+    dueTasks, unreadCommentCount,
+    taskFilter, setTaskFilter,
+    commentFilter, setCommentFilter,
 
   } = useDashboardFigma();
 
@@ -464,6 +467,48 @@ useEffect(() => {
                 </>
               )}
             </div>
+          )}
+          {/* Task alerts bell */}
+          {dueTasks.total > 0 && (
+            <button
+              onClick={() => {
+                setTaskFilter(taskFilter === 'due' ? 'none' : 'due');
+                setCommentFilter('none');
+                const el = document.getElementById('section-visits');
+                if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
+              }}
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${taskFilter === 'due' ? 'bg-white text-indigo-700' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
+            >
+              <Bell className="w-4 h-4" />
+              {dueTasks.overdue.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-700 text-white text-xs font-bold">
+                  {dueTasks.overdue.length}
+                </span>
+              )}
+              {dueTasks.today.length > 0 && (
+                <span className="px-1.5 py-0.5 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
+                  {dueTasks.today.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Unread comments mail */}
+          {unreadCommentCount > 0 && (
+            <button
+              onClick={() => {
+                setCommentFilter(commentFilter === 'unread' ? 'none' : 'unread');
+                setTaskFilter('none');
+                const el = document.getElementById('section-visits');
+                if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
+              }}
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${commentFilter === 'unread' ? 'bg-white text-indigo-700' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
+            >
+              <Mail className="w-4 h-4" />
+              <span className="px-1.5 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">
+                {unreadCommentCount}
+              </span>
+            </button>
           )}
         </div>
       </header>
@@ -1015,16 +1060,20 @@ useEffect(() => {
             {/* ===== VISITS LOG ===== */}
             <div id="section-visits">
               <VisitsLog
-                key={`visits-${visitsRefreshKey}`}
-                currentUser={currentUser}
-                onNewVisit={() => setShowNewVisitDialog(true)}
-                customers={customers}
-                onSelectCustomer={(customer) => {
-                  scrollPositionRef.current = window.scrollY;
-                  sessionStorage.setItem('dashboardScrollY', String(window.scrollY));
-                  setSelectedCustomer(customer);
-                }}
-              />
+              key={`visits-${visitsRefreshKey}`}
+              currentUser={currentUser}
+              onNewVisit={() => setShowNewVisitDialog(true)}
+              customers={customers}
+              taskFilter={taskFilter}
+              commentFilter={commentFilter}
+              dueTasks={dueTasks}
+              onClearFilters={() => { setTaskFilter('none'); setCommentFilter('none'); }}
+              onSelectCustomer={(customer) => {
+                scrollPositionRef.current = window.scrollY;
+                sessionStorage.setItem('dashboardScrollY', String(window.scrollY));
+                setSelectedCustomer(customer);
+              }}
+            />
             </div>
 
             {/* ===== PROSPECTS ===== */}

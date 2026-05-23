@@ -149,6 +149,10 @@ export function useDashboardFigma() {
   const [monthlySalesCompare, setMonthlySalesCompare] = useState<{month: string; netamnt: number}[]>([]);
   const [monthlySalesLoading, setMonthlySalesLoading] = useState(false);
   const [monthlySalesExpanded, setMonthlySalesExpanded] = useState(false);
+  const [dueTasks, setDueTasks] = useState<{ today: any[]; overdue: any[]; total: number }>({ today: [], overdue: [], total: 0 });
+  const [unreadCommentCount, setUnreadCommentCount] = useState(0);
+  const [taskFilter, setTaskFilter] = useState<'none' | 'due'>('none');
+  const [commentFilter, setCommentFilter] = useState<'none' | 'unread'>('none');
 
   /* ===================== FILTER STATE ===================== */
   const [notVisitedDays, setNotVisitedDays] = useState<number | null>(savedFilters.notVisitedDays ?? null);
@@ -207,6 +211,15 @@ export function useDashboardFigma() {
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    if (!currentUser.id) return;
+    authedFetch('/api/tasks/due')
+      .then(data => setDueTasks(data))
+      .catch(console.error);
+    authedFetch('/api/comments/unread')
+      .then(data => setUnreadCommentCount(data.count ?? 0))
+      .catch(console.error);
+  }, [currentUser.id]);
 
   /* ===================== FETCH SALES ===================== */
   const fetchSales = useCallback(async (period: Period) => {
@@ -627,5 +640,8 @@ const areaStats = useMemo(() => {
     customerSortMode, setCustomerSortMode,
     fullyFilteredCustomerIds, monthlySales, monthlySalesCompare, monthlySalesLoading,
     monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, geoFilteredCompareSales, geoFilteredSales, 
+    dueTasks, unreadCommentCount, 
+    taskFilter, setTaskFilter,
+    commentFilter, setCommentFilter,
     };
   }
