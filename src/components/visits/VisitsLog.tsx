@@ -419,10 +419,32 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
             Visit Log
             {totalUnread > 0 && (
               <span className="flex items-center gap-1 px-2 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">
-                <Bell className="w-3 h-3" />
+                <Mail className="w-3 h-3" />
                 {totalUnread}
               </span>
             )}
+            {(() => {
+              const today = new Date().toISOString().split('T')[0];
+              const overdueCount = visits.reduce((sum, v) =>
+                sum + (v.crm_visit_tasks ?? []).filter(t => t.status !== 'completed' && t.reminder_date && t.reminder_date < today).length, 0
+              );
+              const todayCount = visits.reduce((sum, v) =>
+                sum + (v.crm_visit_tasks ?? []).filter(t => t.status !== 'completed' && t.reminder_date === today).length, 0
+              );
+              if (overdueCount > 0) return (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-red-800 text-white rounded-full text-xs font-bold">
+                  <Bell className="w-3 h-3" />
+                  {overdueCount}
+                </span>
+              );
+              if (todayCount > 0) return (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
+                  <Bell className="w-3 h-3" />
+                  {todayCount}
+                </span>
+              );
+              return null;
+            })()}
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
             {activelyFilteredVisits.length} visit{activelyFilteredVisits.length !== 1 ? 's' : ''}

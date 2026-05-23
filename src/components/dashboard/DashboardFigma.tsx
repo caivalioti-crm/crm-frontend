@@ -10,6 +10,7 @@ import { UnifiedProspectDialog } from '../prospects/UnifiedProspectDialog';
 import { CustomerView } from '../customers/CustomerView';
 import { ProspectView } from '../customers/ProspectView';
 import { CustomerListSection } from '../customers/CustomerListSection';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 const NOT_VISITED_OPTIONS = [
   { label: 'All', value: null },
@@ -278,6 +279,8 @@ export function DashboardFigma() {
     commentFilter, setCommentFilter,
 
   } = useDashboardFigma();
+
+  usePushNotifications(currentUser.id);
 
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
