@@ -2,7 +2,7 @@ import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
   Lightbulb, FileText, Tag, ChevronDown, ChevronRight,
   TrendingUp, TrendingDown, BarChart2, Medal, TriangleAlert, AlertCircle, Receipt, User, RotateCcw,
-  ClipboardList, Mic, Pause, Pencil, Bell, CheckCircle, Clock, PlayCircle, CalendarClock, Navigation,
+  ClipboardList, Mic, Pause, Pencil, Bell, CheckCircle, Clock, PlayCircle, CalendarClock, Navigation, MapPin,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
@@ -181,6 +181,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
   const [payment, setPayment] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [locationCapturing, setLocationCapturing] = useState(false);
+  const [locationCaptured, setLocationCaptured] = useState(false);  
 
   const docsRef = useRef<HTMLDivElement>(null);
 
@@ -666,16 +668,57 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
               })()}
 
               {(customer.address || customer.city) && (
-                <a
-                  href={navUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
-                  title="Πλοήγηση"
-                >
-                  <Navigation className="w-4 h-4" />
-                </a>
-              )}
+  <>
+    <a
+      href={navUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+      title="Πλοήγηση"
+    >
+      <Navigation className="w-4 h-4" />
+    </a>
+    <button
+      onClick={async () => {
+        if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+        setLocationCapturing(true);
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token;
+              await fetch(`${BASE_URL}/api/customers/${customer.code}/coordinates`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                body: JSON.stringify({
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                  accuracy_meters: pos.coords.accuracy,
+                }),
+              });
+              setLocationCaptured(true);
+              setTimeout(() => setLocationCaptured(false), 3000);
+            } catch { alert('Αποτυχία αποθήκευσης τοποθεσίας'); }
+            finally { setLocationCapturing(false); }
+          },
+          () => { alert('Αδυναμία εντοπισμού τοποθεσίας'); setLocationCapturing(false); },
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }}
+      disabled={locationCapturing}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${locationCaptured ? 'bg-green-500 text-white' : 'bg-white/20 hover:bg-white/30'}`}
+      title="Καταγραφή τοποθεσίας"
+    >
+      {locationCapturing ? (
+        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+      ) : locationCaptured ? (
+        <CheckCircle className="w-4 h-4" />
+      ) : (
+        <MapPin className="w-4 h-4" />
+      )}
+    </button>
+  </>
+)}
 
               <button
                 onClick={() => setShowNewVisitDialog(true)}
