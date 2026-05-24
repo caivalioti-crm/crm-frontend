@@ -291,6 +291,7 @@ export function DashboardFigma() {
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
   const scrollPositionRef = useRef<number>(0);
+  const cameFromCalendarRef = useRef(false);
   
   const [prospectsRefreshKey, setProspectsRefreshKey] = useState(0);
   const [geoAreasExpanded, setGeoAreasExpanded] = useState(false);
@@ -1106,6 +1107,10 @@ useEffect(() => {
           customer={selectedCustomer}
           onBack={() => {
             setSelectedCustomer(null);
+            if (cameFromCalendarRef.current) {
+              cameFromCalendarRef.current = false;
+              setShowCalendar(true);
+            }
             requestAnimationFrame(() => {
               window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
             });
@@ -1117,6 +1122,10 @@ useEffect(() => {
           prospect={selectedProspect}
           onBack={() => {
             setSelectedProspect(null);
+            if (cameFromCalendarRef.current) {
+              cameFromCalendarRef.current = false;
+              setShowCalendar(true);
+            }
             requestAnimationFrame(() => {
               window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
             });
@@ -1145,6 +1154,11 @@ useEffect(() => {
           currentUser={currentUser}
           onClose={() => setShowCalendar(false)}
           customers={customers}
+          onSelectCustomer={(customer) => {
+            cameFromCalendarRef.current = true;
+            setShowCalendar(false);
+            setSelectedCustomer(customer);
+          }}
         />
       )}
     </div>

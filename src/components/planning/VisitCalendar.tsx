@@ -70,7 +70,7 @@ const VISIT_TYPE_COLORS: Record<string, string> = {
   'other': 'bg-slate-400',
 };
 
-export function VisitCalendar({ onClose, customers = [] }: CalendarProps) {
+export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: CalendarProps) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -322,11 +322,21 @@ export function VisitCalendar({ onClose, customers = [] }: CalendarProps) {
                 <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Πραγματικές Επισκέψεις</div>
                 <div className="space-y-2">
                   {selectedActual.map(v => (
-                    <div key={v.id} className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                    <div
+                        key={v.id}
+                        onClick={() => {
+                            const cust = customers.find(c => c.code === v.customer_code);
+                            if (cust && onSelectCustomer) onSelectCustomer(cust);
+                        }}
+                        className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors"
+                        >
                       <CheckCircle className="w-4 h-4 text-purple-500 mt-0.5 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-slate-700">{v.customer_code}</span>
+                          <span className="text-sm font-medium text-slate-700">
+                                        {customers.find(c => c.code === v.customer_code)?.name ?? v.customer_code}
+                                        </span>
+                                        <span className="text-xs font-mono text-slate-400">{v.customer_code}</span>
                           {v.visit_type && (
                             <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">{v.visit_type}</span>
                           )}
