@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { User, TrendingUp, TrendingDown, LogOut, MapPin, Mail, Users, UserPlus, Bell, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
+import { User, TrendingUp, TrendingDown, LogOut, MapPin, Mail, Users, UserPlus, Bell, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma } from '../../hooks/useDashboardFigma';
 
@@ -40,6 +40,7 @@ function MultiSelectFilterGroup({
   const [multiMode, setMultiMode] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const visibleItems = expanded ? items : items.slice(0, DEFAULT_VISIBLE_ITEMS);
   const hasMore = items.length > DEFAULT_VISIBLE_ITEMS;
@@ -409,6 +410,7 @@ useEffect(() => {
               { icon: <BarChart2 className="w-4 h-4" />, id: 'section-categories', roles: ['admin', 'manager', 'exec'] },
               { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', roles: null },
               { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null },
+              { icon: <CalendarDays className="w-4 h-4" />, id: 'section-visits', title: 'Ημερολόγιο', action: () => setShowCalendar(true) },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
               .map(({ icon, id }) => (
