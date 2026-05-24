@@ -235,12 +235,14 @@ useEffect(() => {
       const dayResult = result.days?.[0];
       if (!dayResult) { setCustomerPool([]); return; }
 
-      const suggested: CustomerSelection[] = dayResult.suggested.map((s: any) => ({
+        const suggested: CustomerSelection[] = dayResult.suggested.map((s: any) => ({
         ...s,
+        name: s.customer_name ?? s.name ?? s.code,
+        code: s.customer_code ?? s.code,
         included: true,
         sos: false,
         duration_minutes: 30,
-      }));
+        }));
 
       setCustomerPool(suggested);
     } catch (err) {
@@ -272,14 +274,16 @@ useEffect(() => {
       });
 
       const newPlan: Record<string, CustomerSelection[]> = {};
-      for (const day of result.days ?? []) {
+        for (const day of result.days ?? []) {
         newPlan[day.date] = day.suggested.map((s: any) => ({
-          ...s,
-          included: true,
-          sos: false,
-          duration_minutes: 30,
+            ...s,
+            name: s.customer_name ?? s.name ?? s.code,
+            code: s.customer_code ?? s.code,
+            included: true,
+            sos: false,
+            duration_minutes: 30,
         }));
-      }
+        }
 
       // Apply SOS overrides from pool
       for (const slot of validSlots) {
@@ -576,10 +580,13 @@ useEffect(() => {
             {/* Optional filters */}
             <div className="mb-4">
               <button onClick={() => setFiltersExpanded(v => !v)}
-                className="flex items-center gap-2 text-sm text-slate-600 hover:text-indigo-600 mb-2">
+                className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 mb-2 px-3 py-2 bg-indigo-50 rounded-lg w-full border border-indigo-100">
                 <ChevronDown className={`w-4 h-4 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`} />
-                Προαιρετικά φίλτρα
-              </button>
+                Προαιρετικά φίλτρα πελατών
+                {(filterNotVisitedDays || filterPerformance !== 'all' || filterTiers.length > 0) && (
+                    <span className="ml-auto px-1.5 py-0.5 bg-indigo-600 text-white text-xs rounded-full">Ενεργά</span>
+                )}
+                </button>
               {filtersExpanded && (
                 <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-3">
                   <div>
