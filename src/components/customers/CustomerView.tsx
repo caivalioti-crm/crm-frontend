@@ -2,7 +2,7 @@ import {
   ArrowLeft, Info, Building2, Truck, Plus, Calendar, ShoppingCart, HatGlassesIcon,
   Lightbulb, FileText, Tag, ChevronDown, ChevronRight,
   TrendingUp, TrendingDown, BarChart2, Medal, TriangleAlert, AlertCircle, Receipt, User, RotateCcw,
-  ClipboardList, Mic, Pause, Pencil, Bell, CheckCircle, Clock, PlayCircle, CalendarClock,
+  ClipboardList, Mic, Pause, Pencil, Bell, CheckCircle, Clock, PlayCircle, CalendarClock, Navigation,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
@@ -13,7 +13,7 @@ import { ProfileEditor } from '../ui/ProfileEditor';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategoryIntelligence } from './CategoryIntelligence';
 
-
+import type { CommercialEntityBase } from '../../types/commercialEntity';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -30,8 +30,6 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
-import type { CommercialEntityBase } from '../../types/commercialEntity';
-
 export interface CustomerViewProps {
   customer: CommercialEntityBase & {
     code: string; name: string; nameGreek?: string;
@@ -40,8 +38,8 @@ export interface CustomerViewProps {
     contactName?: string; vatNumber?: string; createdDate?: string;
     lastVisitDate?: string; transportCompany?: string; transportMeans?: string;
     overallDiscount?: number; afm?: string; fax?: string; zip?: string;
-    shipmentName?: string; carrierName?: string; is_active?: boolean; prccategory?: number | null;  
-    inserted_date?: string | null; 
+    shipmentName?: string; carrierName?: string; is_active?: boolean; prccategory?: number | null;
+    inserted_date?: string | null;
     updated_date?: string | null;
     payment?: string | null;
     warning?: string | null;
@@ -186,7 +184,6 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
 
   const docsRef = useRef<HTMLDivElement>(null);
 
-  // Visit expand/edit state
   const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
   const [showAllVisits, setShowAllVisits] = useState(false);
   const [editingVisitInCustomer, setEditingVisitInCustomer] = useState<string | null>(null);
@@ -195,81 +192,34 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [cvEditDate, setCvEditDate] = useState('');
   const [cvEditSaving, setCvEditSaving] = useState(false);
 
-  // Voice memo state
   const [cvPlayingMemoId, setCvPlayingMemoId] = useState<string | null>(null);
   const [cvMemoUrls, setCvMemoUrls] = useState<Record<string, string>>({});
   const [cvMemoLoading, setCvMemoLoading] = useState<Record<string, boolean>>({});
   const cvAudioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
-  
-  // Task management state
+
   const [taskUpdating, setTaskUpdating] = useState<string | null>(null);
   const [renewingTaskId, setRenewingTaskId] = useState<string | null>(null);
   const [renewDate, setRenewDate] = useState('');
 
   const SALES_PERIODS = useMemo(() => {
-  const labelD = new Date(lastSyncDate);
-  const cutoffD = new Date(lastInvoiceDate);
-  const ytdMonth = cutoffD.getMonth() + 1;
-  const ytdMonthStr = String(ytdMonth).padStart(2, '0');
-  const ytdLabel = labelD.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
-  const ytdDateTo  = new Date(cutoffD.getFullYear(), cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
-  const ytdPrevTo  = new Date(cutoffD.getFullYear() - 1, cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
-
+    const labelD = new Date(lastSyncDate);
+    const cutoffD = new Date(lastInvoiceDate);
+    const ytdMonth = cutoffD.getMonth() + 1;
+    const ytdMonthStr = String(ytdMonth).padStart(2, '0');
+    const ytdLabel = labelD.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
+    const ytdDateTo = new Date(cutoffD.getFullYear(), cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
+    const ytdPrevTo = new Date(cutoffD.getFullYear() - 1, cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
     return [
-      {
-        label: 'Q1 2026', from: '2026-01', to: '2026-03',
-        prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025',
-        dateFrom: '2026-01-01', dateTo: '2026-03-31',
-        prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31',
-      },
-      {
-        label: 'Q2 2026', from: '2026-04', to: '2026-06',
-        prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025',
-        dateFrom: '2026-04-01', dateTo: '2026-06-30',
-        prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30',
-      },
-      {
-        label: `2026 YTD (έως ${ytdLabel})`,
-        from: '2026-01', to: `2026-${ytdMonthStr}`,
-        prevFrom: '2025-01', prevTo: `2025-${ytdMonthStr}`,
-        prevLabel: `Ιαν–${ytdLabel} 2025`,
-        dateFrom: '2026-01-01', dateTo: ytdDateTo,
-        prevDateFrom: '2025-01-01', prevDateTo: ytdPrevTo,
-      },
-      {
-        label: '2025 Full', from: '2025-01', to: '2025-12',
-        prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024',
-        dateFrom: '2025-01-01', dateTo: '2025-12-31',
-        prevDateFrom: '2024-01-01', prevDateTo: '2024-12-31',
-      },
-      {
-        label: 'Q4 2025', from: '2025-10', to: '2025-12',
-        prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024',
-        dateFrom: '2025-10-01', dateTo: '2025-12-31',
-        prevDateFrom: '2024-10-01', prevDateTo: '2024-12-31',
-      },
-      {
-        label: 'Q3 2025', from: '2025-07', to: '2025-09',
-        prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024',
-        dateFrom: '2025-07-01', dateTo: '2025-09-30',
-        prevDateFrom: '2024-07-01', prevDateTo: '2024-09-30',
-      },
-      {
-        label: 'Q2 2025', from: '2025-04', to: '2025-06',
-        prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024',
-        dateFrom: '2025-04-01', dateTo: '2025-06-30',
-        prevDateFrom: '2024-04-01', prevDateTo: '2024-06-30',
-      },
-      {
-        label: 'Q1 2025', from: '2025-01', to: '2025-03',
-        prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024',
-        dateFrom: '2025-01-01', dateTo: '2025-03-31',
-        prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31',
-      },
+      { label: 'Q1 2026', from: '2026-01', to: '2026-03', prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025', dateFrom: '2026-01-01', dateTo: '2026-03-31', prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31' },
+      { label: 'Q2 2026', from: '2026-04', to: '2026-06', prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025', dateFrom: '2026-04-01', dateTo: '2026-06-30', prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30' },
+      { label: `2026 YTD (έως ${ytdLabel})`, from: '2026-01', to: `2026-${ytdMonthStr}`, prevFrom: '2025-01', prevTo: `2025-${ytdMonthStr}`, prevLabel: `Ιαν–${ytdLabel} 2025`, dateFrom: '2026-01-01', dateTo: ytdDateTo, prevDateFrom: '2025-01-01', prevDateTo: ytdPrevTo },
+      { label: '2025 Full', from: '2025-01', to: '2025-12', prevFrom: '2024-01', prevTo: '2024-12', prevLabel: '2024', dateFrom: '2025-01-01', dateTo: '2025-12-31', prevDateFrom: '2024-01-01', prevDateTo: '2024-12-31' },
+      { label: 'Q4 2025', from: '2025-10', to: '2025-12', prevFrom: '2024-10', prevTo: '2024-12', prevLabel: 'Q4 2024', dateFrom: '2025-10-01', dateTo: '2025-12-31', prevDateFrom: '2024-10-01', prevDateTo: '2024-12-31' },
+      { label: 'Q3 2025', from: '2025-07', to: '2025-09', prevFrom: '2024-07', prevTo: '2024-09', prevLabel: 'Q3 2024', dateFrom: '2025-07-01', dateTo: '2025-09-30', prevDateFrom: '2024-07-01', prevDateTo: '2024-09-30' },
+      { label: 'Q2 2025', from: '2025-04', to: '2025-06', prevFrom: '2024-04', prevTo: '2024-06', prevLabel: 'Q2 2024', dateFrom: '2025-04-01', dateTo: '2025-06-30', prevDateFrom: '2024-04-01', prevDateTo: '2024-06-30' },
+      { label: 'Q1 2025', from: '2025-01', to: '2025-03', prevFrom: '2024-01', prevTo: '2024-03', prevLabel: 'Q1 2024', dateFrom: '2025-01-01', dateTo: '2025-03-31', prevDateFrom: '2024-01-01', prevDateTo: '2024-03-31' },
     ];
   }, [lastSyncDate, lastInvoiceDate]);
-
-
 
   useEffect(() => {
     authedFetch('/api/categories')
@@ -280,31 +230,31 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
       }).catch(console.error);
   }, []);
 
-useEffect(() => {
-  authedFetch(`/api/erp/customers/${customer.code}/summary`)
-    .then(data => {
-      setSales(Array.isArray(data.sales) ? data.sales : []);
-      setBalance(data.balance ?? null);
-      setDiscounts(data.discounts ?? null);
-      setVisits(Array.isArray(data.visits) ? data.visits : []);
-      setCategories(Array.isArray(data.categories) ? data.categories : []);
-      setShopProfile(data.profile?.shop_profile ?? null);
-      setCompetitorInfo(data.profile?.competitor_info ?? null);
-      if (data.lastSyncDate) setLastSyncDate(data.lastSyncDate);
-      if (data.lastInvoiceDate) setLastInvoiceDate(data.lastInvoiceDate);
-      if (data.payment) setPayment(data.payment);
-      if (data.warning) setWarning(data.warning);
-    })
-    .catch(console.error)
-    .finally(() => {
-      setSalesLoading(false);
-      setBalanceLoading(false);
-      setDiscountsLoading(false);
-      setVisitsLoading(false);
-      setCategoriesLoading(false);
-      setProfileLoading(false);
-    });
-}, [customer.code, visitsRefreshKey, refreshKey]);
+  useEffect(() => {
+    authedFetch(`/api/erp/customers/${customer.code}/summary`)
+      .then(data => {
+        setSales(Array.isArray(data.sales) ? data.sales : []);
+        setBalance(data.balance ?? null);
+        setDiscounts(data.discounts ?? null);
+        setVisits(Array.isArray(data.visits) ? data.visits : []);
+        setCategories(Array.isArray(data.categories) ? data.categories : []);
+        setShopProfile(data.profile?.shop_profile ?? null);
+        setCompetitorInfo(data.profile?.competitor_info ?? null);
+        if (data.lastSyncDate) setLastSyncDate(data.lastSyncDate);
+        if (data.lastInvoiceDate) setLastInvoiceDate(data.lastInvoiceDate);
+        if (data.payment) setPayment(data.payment);
+        if (data.warning) setWarning(data.warning);
+      })
+      .catch(console.error)
+      .finally(() => {
+        setSalesLoading(false);
+        setBalanceLoading(false);
+        setDiscountsLoading(false);
+        setVisitsLoading(false);
+        setCategoriesLoading(false);
+        setProfileLoading(false);
+      });
+  }, [customer.code, visitsRefreshKey, refreshKey]);
 
   useEffect(() => {
     setSalesByCategoryLoading(true);
@@ -316,7 +266,7 @@ useEffect(() => {
       .catch(console.error).finally(() => setSalesByCategoryLoading(false));
   }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
 
-useEffect(() => {
+  useEffect(() => {
     setSalesByBranchLoading(true);
     const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
     authedFetch(`/api/erp/customers/${customer.code}/sales-by-branch?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}`)
@@ -326,21 +276,18 @@ useEffect(() => {
   }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
 
   useEffect(() => {
-  setDocsLoading(true);
-  setDocsExpanded(false);
-  setExpandedDocId(null);
-  const { from, to } = DOC_PERIODS[docPeriodIdx];
-  authedFetch(`/api/erp/customers/${customer.code}/documents?from=${from}&to=${to}`)
-    .then(data => {
-      setDocuments(Array.isArray(data) ? data : (data.docs ?? []));
-      setDocCounts(data.counts ?? null);
-    })
-    .catch(console.error)
-    .finally(() => setDocsLoading(false));
-}, [customer.code, docPeriodIdx]);
-
-  
-
+    setDocsLoading(true);
+    setDocsExpanded(false);
+    setExpandedDocId(null);
+    const { from, to } = DOC_PERIODS[docPeriodIdx];
+    authedFetch(`/api/erp/customers/${customer.code}/documents?from=${from}&to=${to}`)
+      .then(data => {
+        setDocuments(Array.isArray(data) ? data : (data.docs ?? []));
+        setDocCounts(data.counts ?? null);
+      })
+      .catch(console.error)
+      .finally(() => setDocsLoading(false));
+  }, [customer.code, docPeriodIdx]);
 
   function toggleDocExpand(findoc: number) {
     if (expandedDocId === findoc) { setExpandedDocId(null); return; }
@@ -401,22 +348,22 @@ useEffect(() => {
 
   const sp = SALES_PERIODS[salesPeriodIdx];
   const currentTotal = sumPeriod(sales, sp.from, sp.to);
-  const prevTotal    = sumPeriod(sales, sp.prevFrom, sp.prevTo);
+  const prevTotal = sumPeriod(sales, sp.prevFrom, sp.prevTo);
   const currentQty = sumQtyPeriod(sales, sp.from, sp.to);
-  const prevQty    = sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
-  const growthPct    = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
-  const isUp         = growthPct !== null && growthPct >= 0;
-  const diffAbs      = currentTotal - prevTotal;
+  const prevQty = sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
+  const growthPct = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
+  const isUp = growthPct !== null && growthPct >= 0;
+  const diffAbs = currentTotal - prevTotal;
 
   const filteredDocs = docTypeFilter === 'all' ? documents : documents.filter(d => d.type === docTypeFilter);
-  const visibleDocs  = docsExpanded ? filteredDocs : filteredDocs.slice(0, 8);
+  const visibleDocs = docsExpanded ? filteredDocs : filteredDocs.slice(0, 8);
   const displayCounts = docCounts ?? {
-  order:   documents.filter(d => d.type === 'order').length,
-  invoice: documents.filter(d => d.type === 'invoice').length,
-  credit:  documents.filter(d => d.type === 'credit').length,
-};
-const lastInvoice  = documents.find(d => d.type === 'invoice');
-  const lastOrder    = documents.find(d => d.type === 'order');
+    order: documents.filter(d => d.type === 'order').length,
+    invoice: documents.filter(d => d.type === 'invoice').length,
+    credit: documents.filter(d => d.type === 'credit').length,
+  };
+  const lastInvoice = documents.find(d => d.type === 'invoice');
+  const lastOrder = documents.find(d => d.type === 'order');
   const totalDiscussions = categories.reduce((s, c) => s + (c.times_discussed ?? 0), 0);
 
   function matchesFilter(cat: any): boolean {
@@ -568,123 +515,110 @@ const lastInvoice  = documents.find(d => d.type === 'invoice');
     );
   }
 
-// Visit edit helpers
-const startEditVisitInCustomer = (v: any) => {
-  setEditingVisitInCustomer(v.id);
-  setCvEditNotes(v.notes ?? '');
-  setCvEditType(v.visit_type ?? 'in-person');
-  setCvEditDate(isoToDisplay(v.visit_date));
-};
+  const startEditVisitInCustomer = (v: any) => {
+    setEditingVisitInCustomer(v.id);
+    setCvEditNotes(v.notes ?? '');
+    setCvEditType(v.visit_type ?? 'in-person');
+    setCvEditDate(isoToDisplay(v.visit_date));
+  };
 
-const saveEditVisitInCustomer = async (visitId: string) => {
-  setCvEditSaving(true);
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    const res = await fetch(`${BASE_URL}/api/visits/${visitId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        notes: cvEditNotes,
-        visit_type: cvEditType,
-        visit_date: dateToISO(cvEditDate),
-      }),
-    });
-    if (!res.ok) throw new Error('Failed');
-    const updated = await res.json();
-    setVisits((prev: any[]) => prev.map(v => v.id === visitId ? { ...v, ...updated } : v));
-    setEditingVisitInCustomer(null);
-  } catch {
-    alert('Αποτυχία αποθήκευσης');
-  } finally {
-    setCvEditSaving(false);
-  }
-};
-
-// Voice memo helper
-const playCvMemo = async (visitId: string) => {
-  if (cvPlayingMemoId && cvPlayingMemoId !== visitId) {
-    cvAudioRefs.current[cvPlayingMemoId]?.pause();
-    setCvPlayingMemoId(null);
-  }
-  if (cvPlayingMemoId === visitId) {
-    cvAudioRefs.current[visitId]?.pause();
-    setCvPlayingMemoId(null);
-    return;
-  }
-  if (!cvMemoUrls[visitId]) {
-    setCvMemoLoading(prev => ({ ...prev, [visitId]: true }));
+  const saveEditVisitInCustomer = async (visitId: string) => {
+    setCvEditSaving(true);
     try {
-      const data = await authedFetch(`/api/visits/${visitId}/voice-memo`);
-      setCvMemoUrls(prev => ({ ...prev, [visitId]: data.url }));
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`${BASE_URL}/api/visits/${visitId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ notes: cvEditNotes, visit_type: cvEditType, visit_date: dateToISO(cvEditDate) }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const updated = await res.json();
+      setVisits((prev: any[]) => prev.map(v => v.id === visitId ? { ...v, ...updated } : v));
+      setEditingVisitInCustomer(null);
     } catch {
-      alert('Failed to load memo');
-      return;
+      alert('Αποτυχία αποθήκευσης');
     } finally {
-      setCvMemoLoading(prev => ({ ...prev, [visitId]: false }));
+      setCvEditSaving(false);
     }
-  }
-  setTimeout(() => {
-    const audio = cvAudioRefs.current[visitId];
-    if (audio) {
-      audio.play();
-      setCvPlayingMemoId(visitId);
-      audio.onended = () => setCvPlayingMemoId(null);
+  };
+
+  const playCvMemo = async (visitId: string) => {
+    if (cvPlayingMemoId && cvPlayingMemoId !== visitId) {
+      cvAudioRefs.current[cvPlayingMemoId]?.pause();
+      setCvPlayingMemoId(null);
     }
-  }, 50);
-};
+    if (cvPlayingMemoId === visitId) {
+      cvAudioRefs.current[visitId]?.pause();
+      setCvPlayingMemoId(null);
+      return;
+    }
+    if (!cvMemoUrls[visitId]) {
+      setCvMemoLoading(prev => ({ ...prev, [visitId]: true }));
+      try {
+        const data = await authedFetch(`/api/visits/${visitId}/voice-memo`);
+        setCvMemoUrls(prev => ({ ...prev, [visitId]: data.url }));
+      } catch {
+        alert('Failed to load memo');
+        return;
+      } finally {
+        setCvMemoLoading(prev => ({ ...prev, [visitId]: false }));
+      }
+    }
+    setTimeout(() => {
+      const audio = cvAudioRefs.current[visitId];
+      if (audio) {
+        audio.play();
+        setCvPlayingMemoId(visitId);
+        audio.onended = () => setCvPlayingMemoId(null);
+      }
+    }, 50);
+  };
 
-const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
 
-const updateTaskStatus = async (taskId: string, status: string, visitId: string) => {
-  setTaskUpdating(taskId);
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    await fetch(`${BASE_URL}/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ status }),
-    });
-    setVisits(prev => prev.map(v =>
-      v.id === visitId
-        ? { ...v, crm_visit_tasks: (v.crm_visit_tasks ?? []).map((t: any) => t.id === taskId ? { ...t, status } : t) }
-        : v
-    ));
-  } catch { alert('Αποτυχία ενημέρωσης'); }
-  finally { setTaskUpdating(null); }
-};
+  const updateTaskStatus = async (taskId: string, status: string, visitId: string) => {
+    setTaskUpdating(taskId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      await fetch(`${BASE_URL}/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ status }),
+      });
+      setVisits(prev => prev.map(v =>
+        v.id === visitId
+          ? { ...v, crm_visit_tasks: (v.crm_visit_tasks ?? []).map((t: any) => t.id === taskId ? { ...t, status } : t) }
+          : v
+      ));
+    } catch { alert('Αποτυχία ενημέρωσης'); }
+    finally { setTaskUpdating(null); }
+  };
 
-const renewTaskReminder = async (taskId: string, visitId: string) => {
-  if (!renewDate) return;
-  setTaskUpdating(taskId);
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    await fetch(`${BASE_URL}/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ reminder_date: renewDate }),
-    });
-    setVisits(prev => prev.map(v =>
-      v.id === visitId
-        ? { ...v, crm_visit_tasks: (v.crm_visit_tasks ?? []).map((t: any) => t.id === taskId ? { ...t, reminder_date: renewDate } : t) }
-        : v
-    ));
-    setRenewingTaskId(null);
-    setRenewDate('');
-  } catch { alert('Αποτυχία ενημέρωσης'); }
-  finally { setTaskUpdating(null); }
-};
+  const renewTaskReminder = async (taskId: string, visitId: string) => {
+    if (!renewDate) return;
+    setTaskUpdating(taskId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      await fetch(`${BASE_URL}/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ reminder_date: renewDate }),
+      });
+      setVisits(prev => prev.map(v =>
+        v.id === visitId
+          ? { ...v, crm_visit_tasks: (v.crm_visit_tasks ?? []).map((t: any) => t.id === taskId ? { ...t, reminder_date: renewDate } : t) }
+          : v
+      ));
+      setRenewingTaskId(null);
+      setRenewDate('');
+    } catch { alert('Αποτυχία ενημέρωσης'); }
+    finally { setTaskUpdating(null); }
+  };
+
+  const navUrl = `https://maps.google.com/?daddr=${encodeURIComponent([customer.address, customer.city, customer.area, 'Greece'].filter(Boolean).join(', '))}`;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -697,24 +631,22 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
               <ArrowLeft className="w-4 h-4" />Back to Dashboard
             </button>
             <div className="flex items-center gap-2">
-              <button onClick={() => {
-                setSalesLoading(true);
-                setBalanceLoading(true);
-                setDiscountsLoading(true);
-                setVisitsLoading(true);
-                setCategoriesLoading(true);
-                setProfileLoading(true);
-                setRefreshKey(k => k + 1);
-              }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
+              <button
+                onClick={() => {
+                  setSalesLoading(true); setBalanceLoading(true); setDiscountsLoading(true);
+                  setVisitsLoading(true); setCategoriesLoading(true); setProfileLoading(true);
+                  setRefreshKey(k => k + 1);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+              >
                 <RotateCcw className="w-4 h-4" />
               </button>
-              {/* Due tasks bell badge */}
+
               {(() => {
-                const allTasks = visits.flatMap(v => (v.crm_visit_tasks ?? []).map((t: any) => ({ ...t, visit_id: v.id })));
-                const overdue = allTasks.filter(t => t.status !== 'completed' && t.reminder_date && t.reminder_date < today);
-                const todayDue = allTasks.filter(t => t.status !== 'completed' && t.reminder_date === today);
-                const pending = allTasks.filter(t => t.status !== 'completed');
+                const allTasks = visits.flatMap((v: any) => (v.crm_visit_tasks ?? []).map((t: any) => ({ ...t, visit_id: v.id })));
+                const overdue = allTasks.filter((t: any) => t.status !== 'completed' && t.reminder_date && t.reminder_date < today);
+                const todayDue = allTasks.filter((t: any) => t.status !== 'completed' && t.reminder_date === today);
+                const pending = allTasks.filter((t: any) => t.status !== 'completed');
                 if (overdue.length > 0) return (
                   <span className="flex items-center gap-1 px-2.5 py-1.5 bg-red-800 text-white rounded-lg text-xs font-bold">
                     <Bell className="w-4 h-4" />{overdue.length} ληξιπρόθεσμες
@@ -732,8 +664,23 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                 );
                 return null;
               })()}
-              <button onClick={() => setShowNewVisitDialog(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors">
+
+              {(customer.address || customer.city) && (
+                <a
+                  href={navUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+                  title="Πλοήγηση"
+                >
+                  <Navigation className="w-4 h-4" />
+                </a>
+              )}
+
+              <button
+                onClick={() => setShowNewVisitDialog(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium transition-colors"
+              >
                 <Plus className="w-4 h-4" />New Visit
               </button>
             </div>
@@ -808,15 +755,13 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
               {customer.lastVisitDate ? <div>Τελευταία επίσκεψη: <span className="font-medium">{formatDate(customer.lastVisitDate)}</span></div> : <div className="text-slate-400 text-xs italic">Καμία επίσκεψη ακόμα</div>}
               {customer.inserted_date && <div>Πελάτης από: <span className="font-medium">{formatDate(customer.inserted_date)}</span></div>}
               {customer.updated_date && <div className="text-xs text-slate-400">Ενημέρωση ERP: {formatDate(customer.updated_date)}</div>}
-              {payment && (
-                  <div>Όροι Πληρωμής: <span className="font-medium">{payment}</span></div>
-                )}
-                {warning && (
-                  <div className="flex items-center gap-1.5 mt-1 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                    <TriangleAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>{warning}</span>
-                  </div>
-                )}
+              {payment && <div>Όροι Πληρωμής: <span className="font-medium">{payment}</span></div>}
+              {warning && (
+                <div className="flex items-center gap-1.5 mt-1 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                  <TriangleAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>{warning}</span>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -888,21 +833,20 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
           </section>
         )}
 
-
         {/* SHOP PROFILE + COMPETITOR INFO */}
-<section id="section-comp" className="bg-white rounded-xl shadow overflow-hidden">
-  {profileLoading ? (
-    <div className="px-5 py-4 text-sm text-slate-400">Φόρτωση...</div>
-  ) : (
-    <ProfileEditor
-      entityType="customer"
-      entityId={customer.code}
-      shopProfile={shopProfile}
-      competitorInfo={competitorInfo}
-      onSaved={(sp, ci) => { setShopProfile(sp); setCompetitorInfo(ci); }}
-    />
-  )}
-</section>
+        <section id="section-comp" className="bg-white rounded-xl shadow overflow-hidden">
+          {profileLoading ? (
+            <div className="px-5 py-4 text-sm text-slate-400">Φόρτωση...</div>
+          ) : (
+            <ProfileEditor
+              entityType="customer"
+              entityId={customer.code}
+              shopProfile={shopProfile}
+              competitorInfo={competitorInfo}
+              onSaved={(sp, ci) => { setShopProfile(sp); setCompetitorInfo(ci); }}
+            />
+          )}
+        </section>
 
         {/* SALES ANALYSIS */}
         <section id="section-sales" className="bg-white rounded-xl shadow p-5">
@@ -970,7 +914,7 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                         {months.map(m => {
                           const prevKey = toPrevMonth(m.month);
                           const prevAmt = prevMonthMap.get(prevKey) ?? null;
-                          const curPct  = Math.max((m.netamnt / maxAmt) * 100, 2);
+                          const curPct = Math.max((m.netamnt / maxAmt) * 100, 2);
                           const prevPct = prevAmt !== null ? Math.max((prevAmt / maxAmt) * 100, 2) : 0;
                           const monthLabel = new Date(m.month + '-01').toLocaleString('el-GR', { month: 'short' });
                           return (
@@ -1148,7 +1092,7 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
           )}
         </section>
 
-{/* VISITS */}
+        {/* VISITS */}
         <section id="section-visits" className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -1173,23 +1117,15 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
 
                 return (
                   <div key={v.id} className="border border-slate-100 rounded-lg overflow-hidden">
-
-                    {/* Visit row header */}
                     <button
                       onClick={() => setExpandedVisitId(isExpanded ? null : v.id)}
                       className="w-full flex items-start justify-between py-2.5 px-3 hover:bg-slate-50 transition-colors text-left"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-slate-700">{formatDate(v.visit_date)}</div>
-                        {v.notes && (
-                          <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</div>
-                        )}
+                        {v.notes && <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</div>}
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {v.visit_type && (
-                            <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
-                              {v.visit_type}
-                            </span>
-                          )}
+                          {v.visit_type && <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">{v.visit_type}</span>}
                           {v.voice_memo_path && (
                             <span className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-500 rounded flex items-center gap-1">
                               <Mic className="w-3 h-3" /> Memo
@@ -1198,40 +1134,36 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
-                        {v.owner_name && (
-                          <span className="text-xs text-slate-400">{v.owner_name}</span>
-                        )}
+                        {v.owner_name && <span className="text-xs text-slate-400">{v.owner_name}</span>}
                         {(() => {
-                        const tasks = v.crm_visit_tasks ?? [];
-                        const overdue = tasks.filter((t: any) => t.status !== 'completed' && t.reminder_date && t.reminder_date < today);
-                        const todayDue = tasks.filter((t: any) => t.status !== 'completed' && t.reminder_date === today);
-                        const pending = tasks.filter((t: any) => t.status !== 'completed');
-                        if (overdue.length > 0) return (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-800 text-white rounded-full text-xs font-bold">
-                            <Bell className="w-3 h-3" />{overdue.length}
-                          </span>
-                        );
-                        if (todayDue.length > 0) return (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
-                            <Bell className="w-3 h-3" />{todayDue.length}
-                          </span>
-                        );
-                        if (pending.length > 0) return (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs">
-                            <Bell className="w-3 h-3" />{pending.length}
-                          </span>
-                        );
-                        return null;
-                      })()}
+                          const tasks = v.crm_visit_tasks ?? [];
+                          const overdue = tasks.filter((t: any) => t.status !== 'completed' && t.reminder_date && t.reminder_date < today);
+                          const todayDue = tasks.filter((t: any) => t.status !== 'completed' && t.reminder_date === today);
+                          const pending = tasks.filter((t: any) => t.status !== 'completed');
+                          if (overdue.length > 0) return (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-800 text-white rounded-full text-xs font-bold">
+                              <Bell className="w-3 h-3" />{overdue.length}
+                            </span>
+                          );
+                          if (todayDue.length > 0) return (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
+                              <Bell className="w-3 h-3" />{todayDue.length}
+                            </span>
+                          );
+                          if (pending.length > 0) return (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs">
+                              <Bell className="w-3 h-3" />{pending.length}
+                            </span>
+                          );
+                          return null;
+                        })()}
                         <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       </div>
                     </button>
 
-                    {/* Expanded detail */}
                     {isExpanded && (
                       <div className="px-3 pb-3 pt-2 bg-slate-50 border-t border-slate-100 space-y-3">
 
-                        {/* Action buttons */}
                         {!isEditing && (
                           <div className="flex items-center gap-2 flex-wrap">
                             <button
@@ -1257,18 +1189,13 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                                   {cvMemoLoading[v.id] ? 'Loading...' : isPlaying ? 'Pause' : 'Play Memo'}
                                 </button>
                                 {cvMemoUrls[v.id] && (
-                                  <audio
-                                    ref={el => { cvAudioRefs.current[v.id] = el; }}
-                                    src={cvMemoUrls[v.id]}
-                                    className="hidden"
-                                  />
+                                  <audio ref={el => { cvAudioRefs.current[v.id] = el; }} src={cvMemoUrls[v.id]} className="hidden" />
                                 )}
                               </>
                             )}
                           </div>
                         )}
 
-                        {/* Edit form */}
                         {isEditing && (
                           <div className="bg-white rounded-lg p-3 border border-slate-200 space-y-3">
                             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Επεξεργασία Επίσκεψης</div>
@@ -1277,9 +1204,7 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                               <label className="block text-xs font-medium text-slate-600 mb-1">Τύπος</label>
                               <select value={cvEditType} onChange={e => setCvEditType(e.target.value)}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
-                                {['in-person', 'phone', 'video', 'other'].map(t => (
-                                  <option key={t} value={t}>{t}</option>
-                                ))}
+                                {['in-person', 'phone', 'video', 'other'].map(t => <option key={t} value={t}>{t}</option>)}
                               </select>
                             </div>
                             <div>
@@ -1288,8 +1213,7 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 min-h-[80px]" />
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={() => saveEditVisitInCustomer(v.id)}
-                                disabled={cvEditSaving}
+                              <button onClick={() => saveEditVisitInCustomer(v.id)} disabled={cvEditSaving}
                                 className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
                                 {cvEditSaving ? 'Αποθήκευση...' : 'Αποθήκευση'}
                               </button>
@@ -1301,7 +1225,6 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                           </div>
                         )}
 
-                        {/* Tasks */}
                         {!isEditing && (v.crm_visit_tasks ?? []).length > 0 && (
                           <div>
                             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
@@ -1337,62 +1260,42 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-1 shrink-0">
-                                      {task.status !== 'completed' && (
-                                        <button
-                                          onClick={() => updateTaskStatus(task.id, 'completed', v.id)}
-                                          disabled={taskUpdating === task.id}
-                                          className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
-                                          title="Ολοκλήρωση"
-                                        >
-                                          <CheckCircle className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                      {task.status === 'not-started' && (
-                                        <button
-                                          onClick={() => updateTaskStatus(task.id, 'in-progress', v.id)}
-                                          disabled={taskUpdating === task.id}
-                                          className="p-1.5 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 disabled:opacity-50"
-                                          title="Σε εξέλιξη"
-                                        >
-                                          <PlayCircle className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                      {task.status !== 'completed' && (
-                                        <button
-                                          onClick={() => { setRenewingTaskId(task.id); setRenewDate(''); }}
-                                          className="p-1.5 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
-                                          title="Ανανέωση υπενθύμισης"
-                                        >
-                                          <CalendarClock className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                    </div>
-                                    {isRenewing && (
-                                    <div className="mt-2 space-y-1.5">
-                                      {task.reminder_date && (
-                                        <div className="text-xs text-slate-400">
-                                          Τρέχουσα υπενθύμιση: <span className="font-medium text-slate-600">{task.reminder_date}</span>
-                                        </div>
-                                      )}
-                                      <div className="flex items-center gap-2">
-                                        <input
-                                          type="date"
-                                          value={renewDate}
-                                          onChange={e => setRenewDate(e.target.value)}
-                                          className="px-2 py-1 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-indigo-500"
-                                        />
-                                        <button
-                                          onClick={() => renewTaskReminder(task.id, v.id)}
-                                          disabled={!renewDate || taskUpdating === task.id}
-                                          className="px-2 py-1 bg-indigo-600 text-white rounded text-xs disabled:opacity-50"
-                                        >Ανανέωση</button>
-                                        <button
-                                          onClick={() => setRenewingTaskId(null)}
-                                          className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs"
-                                        >×</button>
+                                        {task.status !== 'completed' && (
+                                          <button onClick={() => updateTaskStatus(task.id, 'completed', v.id)} disabled={taskUpdating === task.id}
+                                            className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50" title="Ολοκλήρωση">
+                                            <CheckCircle className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                        {task.status === 'not-started' && (
+                                          <button onClick={() => updateTaskStatus(task.id, 'in-progress', v.id)} disabled={taskUpdating === task.id}
+                                            className="p-1.5 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 disabled:opacity-50" title="Σε εξέλιξη">
+                                            <PlayCircle className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                        {task.status !== 'completed' && (
+                                          <button onClick={() => { setRenewingTaskId(task.id); setRenewDate(''); }}
+                                            className="p-1.5 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200" title="Ανανέωση υπενθύμισης">
+                                            <CalendarClock className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
+                                    {isRenewing && (
+                                      <div className="mt-2 space-y-1.5">
+                                        {task.reminder_date && (
+                                          <div className="text-xs text-slate-400">
+                                            Τρέχουσα υπενθύμιση: <span className="font-medium text-slate-600">{task.reminder_date}</span>
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                          <input type="date" value={renewDate} onChange={e => setRenewDate(e.target.value)}
+                                            className="px-2 py-1 border border-slate-300 rounded text-xs focus:ring-2 focus:ring-indigo-500" />
+                                          <button onClick={() => renewTaskReminder(task.id, v.id)} disabled={!renewDate || taskUpdating === task.id}
+                                            className="px-2 py-1 bg-indigo-600 text-white rounded text-xs disabled:opacity-50">Ανανέωση</button>
+                                          <button onClick={() => setRenewingTaskId(null)}
+                                            className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs">×</button>
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
                                 );
@@ -1401,7 +1304,6 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                           </div>
                         )}
 
-                        {/* Notes display */}
                         {!isEditing && v.notes && (
                           <div>
                             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Σημειώσεις</div>
@@ -1409,7 +1311,6 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
                           </div>
                         )}
 
-                        {/* Shop & Competitor info from visit */}
                         {!isEditing && (v.shop_profile || v.competitor_info) && (
                           <div className="space-y-2">
                             {v.shop_profile && (v.shop_profile.shop_type || v.shop_profile.number_of_employees || v.shop_profile.shop_size_m2 || v.shop_profile.stock_behavior) && (
@@ -1445,10 +1346,7 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
               })}
 
               {visits.length > 5 && (
-                <button
-                  onClick={() => setShowAllVisits(prev => !prev)}
-                  className="text-xs text-indigo-500 hover:text-indigo-700 pt-1"
-                >
+                <button onClick={() => setShowAllVisits(prev => !prev)} className="text-xs text-indigo-500 hover:text-indigo-700 pt-1">
                   {showAllVisits ? 'Εμφάνιση λιγότερων' : `+${visits.length - 5} ακόμα επισκέψεις`}
                 </button>
               )}
@@ -1546,34 +1444,22 @@ const renewTaskReminder = async (taskId: string, visitId: string) => {
             </select>
           </div>
 
-        {(!docsLoading && documents.length > 0) && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-              {displayCounts.order} παραγγελίες
-            </span>
-            <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-              {displayCounts.invoice} τιμολόγια
-            </span>
-          {displayCounts.credit > 0 &&
-            <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-              {displayCounts.credit} πιστωτικά
-            </span>
-          }
-            
-          </div>
-        )}
+          {(!docsLoading && documents.length > 0) && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{displayCounts.order} παραγγελίες</span>
+              <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">{displayCounts.invoice} τιμολόγια</span>
+              {displayCounts.credit > 0 && <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">{displayCounts.credit} πιστωτικά</span>}
+            </div>
+          )}
 
-        {/* Balance — always shown once loaded, regardless of docs */}
-        {!balanceLoading && balance !== null && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-              balance.balance > 0 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
-            }`}>
-              <AlertCircle className="w-3 h-3" />
-              Υπόλοιπο €{Math.abs(balance.balance).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-        )}
+          {!balanceLoading && balance !== null && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${balance.balance > 0 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                <AlertCircle className="w-3 h-3" />
+                Υπόλοιπο €{Math.abs(balance.balance).toLocaleString('el-GR', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
 
           {!docsLoading && (lastInvoice || lastOrder) && (
             <div className="grid grid-cols-2 gap-3 mb-4">
