@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, X, Plus, Calendar, MapPin,
-  CheckCircle, Clock, User, Building2, CalendarDays,
+  CheckCircle, Clock, User, Building2, CalendarDays, Pencil, Filter,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -27,10 +27,36 @@ const GREEK_MONTHS = [
   'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος',
   'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος',
 ];
-
 const GREEK_DAYS_SHORT = ['Δευ', 'Τρι', 'Τετ', 'Πεμ', 'Παρ', 'Σαβ', 'Κυρ'];
-
 const TIME_SEGMENTS = ['09-11', '11-13', '13-15', '15-17', '17-19'];
+
+const REP_COLORS = [
+  { dot: 'bg-violet-600',  text: 'text-violet-700',  city: 'text-violet-600'  },
+  { dot: 'bg-red-500',     text: 'text-red-600',     city: 'text-red-500'     },
+  { dot: 'bg-orange-400',  text: 'text-orange-500',  city: 'text-orange-400'  },
+  { dot: 'bg-sky-500',     text: 'text-sky-600',     city: 'text-sky-500'     },
+  { dot: 'bg-pink-500',    text: 'text-pink-600',    city: 'text-pink-500'    },
+  { dot: 'bg-yellow-400',  text: 'text-yellow-600',  city: 'text-yellow-500'  },
+  { dot: 'bg-teal-500',    text: 'text-teal-600',    city: 'text-teal-500'    },
+  { dot: 'bg-fuchsia-500', text: 'text-fuchsia-600', city: 'text-fuchsia-500' },
+];
+
+function hashColor(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % REP_COLORS.length;
+}
+
+const REP_COLOR_OVERRIDES: Record<string, { dot: string; text: string; city: string }> = {
+  'Tsogiannis': { dot: 'bg-slate-600', text: 'text-slate-700', city: 'text-slate-600' },
+};
+
+function getRepColor(ownerName: string) {
+  if (REP_COLOR_OVERRIDES[ownerName]) return REP_COLOR_OVERRIDES[ownerName];
+  return REP_COLORS[hashColor(ownerName ?? '')];
+}
 
 interface CalendarProps {
   currentUser: { id: string; role: string; name: string; salesman_code?: string | null };
@@ -42,7 +68,6 @@ interface CalendarProps {
 function getMonthDays(year: number, month: number): (Date | null)[] {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  // Monday-first: 0=Mon...6=Sun
   let startDow = firstDay.getDay() - 1;
   if (startDow < 0) startDow = 6;
   const days: (Date | null)[] = [];
@@ -63,12 +88,15 @@ function getMondayOfWeek(d: Date): string {
   return dateKey(monday);
 }
 
-const VISIT_TYPE_COLORS: Record<string, string> = {
-  'in-person': 'bg-purple-500',
-  'phone': 'bg-blue-400',
-  'video': 'bg-cyan-400',
-  'other': 'bg-slate-400',
-};
+const blankForm = () => ({
+  customerCode: '',
+  customerSearch: '',
+  date: '',
+  timeSegment: '',
+  preciseTime: '',
+  notes: '',
+  isFixed: false,
+});
 
 export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: CalendarProps) {
   const today = new Date();
@@ -78,20 +106,17 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
   const [plannedVisits, setPlannedVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
-  const [showAddPlanned, setShowAddPlanned] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Add planned visit form state
-  const [formCustomerCode, setFormCustomerCode] = useState('');
-  const [formCustomerSearch, setFormCustomerSearch] = useState('');
-  const [formDate, setFormDate] = useState('');
-  const [formTimeSegment, setFormTimeSegment] = useState('');
-  const [formPreciseTime, setFormPreciseTime] = useState('');
-  const [formNotes, setFormNotes] = useState('');
-  const [formIsFixed, setFormIsFixed] = useState(false);
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(blankForm());
   const [formSaving, setFormSaving] = useState(false);
 
-  
+  const [filterArea, setFilterArea] = useState('');
+  const [filterCity, setFilterCity] = useState('');
+  const [filterRep, setFilterRep] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -120,7 +145,6 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
 
   const days = getMonthDays(year, month);
 
-  // Group by date
   const actualByDate = new Map<string, any[]>();
   for (const v of actualVisits) {
     const k = v.visit_date?.slice(0, 10);
@@ -128,7 +152,6 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
     if (!actualByDate.has(k)) actualByDate.set(k, []);
     actualByDate.get(k)!.push(v);
   }
-
   const plannedByDate = new Map<string, any[]>();
   for (const v of plannedVisits) {
     const k = v.planned_date?.slice(0, 10);
@@ -138,44 +161,94 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
   }
 
   const todayKey = dateKey(today);
-
   const selectedKey = selectedDay ? dateKey(selectedDay) : null;
-  const selectedActual = selectedKey ? (actualByDate.get(selectedKey) ?? []) : [];
-  const selectedPlanned = selectedKey ? (plannedByDate.get(selectedKey) ?? []) : [];
 
-  const filteredCustomers = customers.filter(c =>
+  const filterVisit = (v: any, isActual: boolean) => {
+    const cust = customers.find((c: any) => c.code === v.customer_code);
+    if (filterArea && cust?.area !== filterArea) return false;
+    if (filterCity && cust?.city !== filterCity) return false;
+    if (isActual && filterRep && v.owner_name !== filterRep) return false;
+    return true;
+  };
+
+  const selectedActual = (selectedKey ? (actualByDate.get(selectedKey) ?? []) : []).filter(v => filterVisit(v, true));
+  const selectedPlanned = (selectedKey ? (plannedByDate.get(selectedKey) ?? []) : []).filter(v => filterVisit(v, false));
+
+  const allReps = [...new Set(actualVisits.map(v => v.owner_name).filter(Boolean))].sort() as string[];
+  const allAreas = [...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
+  const allCities = [...new Set(
+    customers
+      .filter((c: any) => !filterArea || c.area === filterArea)
+      .map((c: any) => c.city).filter(Boolean)
+  )].sort() as string[];
+
+  const filteredCustomers = customers.filter((c: any) =>
     c.is_active !== false &&
-    (formCustomerSearch === '' ||
-      c.name?.toLowerCase().includes(formCustomerSearch.toLowerCase()) ||
-      c.code?.includes(formCustomerSearch))
+    (form.customerSearch === '' ||
+      c.name?.toLowerCase().includes(form.customerSearch.toLowerCase()) ||
+      c.code?.includes(form.customerSearch))
   ).slice(0, 20);
 
-  const handleAddPlanned = async () => {
-    if (!formDate) return;
+  const citiesForDay = (dk: string): { city: string; ownerName: string }[] => {
+    const actual = (actualByDate.get(dk) ?? []).filter(v => filterVisit(v, true));
+    const planned = (plannedByDate.get(dk) ?? []).filter(v => filterVisit(v, false));
+    const seen = new Map<string, string>();
+    for (const v of actual) {
+      const cust = customers.find((c: any) => c.code === v.customer_code);
+      if (cust?.city && !seen.has(cust.city)) seen.set(cust.city, v.owner_name ?? '');
+    }
+    for (const v of planned) {
+      const cust = customers.find((c: any) => c.code === v.customer_code);
+      const city = cust?.city ?? v.city;
+      if (city && !seen.has(city)) seen.set(city, v.owner_name ?? '');
+    }
+    return [...seen.entries()].slice(0, 2).map(([city, ownerName]) => ({ city, ownerName }));
+  };
+
+  const openAdd = (d: Date) => {
+    setSelectedDay(d);
+    setFormMode('add');
+    setEditingId(null);
+    setForm({ ...blankForm(), date: dateKey(d) });
+  };
+
+  const openEdit = (v: any) => {
+    setFormMode('edit');
+    setEditingId(v.id);
+    setForm({
+      customerCode: v.customer_code ?? '',
+      customerSearch: '',
+      date: v.planned_date ?? '',
+      timeSegment: v.time_segment ?? '',
+      preciseTime: v.planned_time?.slice(0, 5) ?? '',
+      notes: v.notes ?? '',
+      isFixed: v.is_fixed_appointment ?? false,
+    });
+  };
+
+  const handleSave = async () => {
+    if (!form.date) return;
     setFormSaving(true);
     try {
-      await authedFetch('/api/planning/planned-visits', {
-        method: 'POST',
-        body: JSON.stringify({
-          planned_date: formDate,
-          week_start: getMondayOfWeek(new Date(formDate)),
-          customer_code: formCustomerCode || null,
-          time_segment: formTimeSegment || null,
-          planned_time: formPreciseTime || null,
-          notes: formNotes || null,
-          is_fixed_appointment: formIsFixed,
-        }),
-      });
-      setShowAddPlanned(false);
-      setFormCustomerCode('');
-      setFormCustomerSearch('');
-      setFormDate(selectedKey ?? '');
-      setFormTimeSegment('');
-      setFormPreciseTime('');
-      setFormNotes('');
-      setFormIsFixed(false);
+      const body = {
+        planned_date: form.date,
+        week_start: getMondayOfWeek(new Date(form.date)),
+        customer_code: form.customerCode || null,
+        time_segment: form.timeSegment || null,
+        planned_time: form.preciseTime || null,
+        notes: form.notes || null,
+        is_fixed_appointment: form.isFixed,
+      };
+      if (formMode === 'edit' && editingId) {
+        await authedFetch(`/api/planning/planned-visits/${editingId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        await authedFetch('/api/planning/planned-visits', { method: 'POST', body: JSON.stringify(body) });
+      }
+      setFormMode(null);
+      setEditingId(null);
+      setForm(blankForm());
       setRefreshKey(k => k + 1);
-    } catch (err) {
+    } catch {
       alert('Αποτυχία αποθήκευσης');
     } finally {
       setFormSaving(false);
@@ -183,6 +256,7 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
   };
 
   const handleDeletePlanned = async (id: string) => {
+    if (!confirm('Διαγραφή προγραμματισμένης επίσκεψης;')) return;
     try {
       await authedFetch(`/api/planning/planned-visits/${id}`, { method: 'DELETE' });
       setRefreshKey(k => k + 1);
@@ -191,11 +265,7 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
     }
   };
 
-  const openAddForDay = (d: Date) => {
-    setSelectedDay(d);
-    setFormDate(dateKey(d));
-    setShowAddPlanned(true);
-  };
+  const hasActiveFilters = !!(filterArea || filterCity || filterRep);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-4 px-2">
@@ -207,10 +277,71 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
             <CalendarDays className="w-5 h-5" />
             <h2 className="text-lg font-bold">Ημερολόγιο Επισκέψεων</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilters(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showFilters || hasActiveFilters ? 'bg-white text-indigo-700' : 'bg-white/20 hover:bg-white/30'}`}
+            >
+              <Filter className="w-4 h-4" />
+              {hasActiveFilters && <span className="w-2 h-2 bg-amber-400 rounded-full" />}
+            </button>
+            <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {/* Filters */}
+        {showFilters && (
+        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Περιοχή</label>
+              <select value={filterArea} onChange={e => { setFilterArea(e.target.value); setFilterCity(''); }}
+                className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                <option value="">Όλες</option>
+                {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Πόλη</label>
+              <select value={filterCity} onChange={e => setFilterCity(e.target.value)}
+                className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                <option value="">Όλες</option>
+                {allCities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            {allReps.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Εκπρόσωπος</label>
+                <select value={filterRep} onChange={e => setFilterRep(e.target.value)}
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                  <option value="">Όλοι</option>
+                  {allReps.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            )}
+            {hasActiveFilters && (
+              <button onClick={() => { setFilterArea(''); setFilterCity(''); setFilterRep(''); }}
+                className="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 self-end">
+                × Καθαρισμός
+              </button>
+            )}
+          </div>
+          
+          {/* Rep color guide — below filters on same panel */}
+          {allReps.length > 1 && (
+            <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
+              {allReps.map(r => (
+                <span key={r} className="flex items-center gap-1 text-xs text-slate-600">
+                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${getRepColor(r).dot}`} />
+                  {r}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
         {/* Month nav */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100">
@@ -226,66 +357,85 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
           </button>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 px-6 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-500">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" />Επίσκεψη</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block" />Προγραμ.</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" />Ραντεβού</span>
+        {/* Legend — rep colors */}
+        <div className="flex items-center gap-4 px-6 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-500 flex-wrap">
+          {allReps.length > 0 ? (
+            <>
+              {allReps.map(rep => (
+                <span key={rep} className="flex items-center gap-1.5">
+                  <span className={`w-3 h-3 rounded-full inline-block ${getRepColor(rep).dot}`} />
+                  {rep}
+                </span>
+              ))}
+              <span className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-200">
+                <span className="w-3 h-3 rounded-full inline-block bg-green-500" />Ραντεβού
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" />Επίσκεψη</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block" />Προγραμ.</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" />Ραντεβού</span>
+            </>
+          )}
         </div>
 
         {/* Calendar grid */}
         <div className="px-4 py-3">
-          {/* Day headers */}
           <div className="grid grid-cols-7 mb-1">
             {GREEK_DAYS_SHORT.map(d => (
               <div key={d} className="text-center text-xs font-medium text-slate-400 py-1">{d}</div>
             ))}
           </div>
 
-          {/* Day cells */}
           <div className="grid grid-cols-7 gap-0.5">
             {days.map((d, i) => {
               if (!d) return <div key={`empty-${i}`} />;
               const dk = dateKey(d);
-              const actual = actualByDate.get(dk) ?? [];
-              const planned = plannedByDate.get(dk) ?? [];
+              const actual = (actualByDate.get(dk) ?? []).filter(v => filterVisit(v, true));
+              const planned = (plannedByDate.get(dk) ?? []).filter(v => filterVisit(v, false));
               const isToday = dk === todayKey;
               const isSelected = dk === selectedKey;
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               const total = actual.length + planned.length;
+              const cities = citiesForDay(dk);
 
               return (
                 <button
                   key={dk}
                   onClick={() => setSelectedDay(isSelected ? null : d)}
                   className={`
-                    relative min-h-[56px] p-1.5 rounded-lg text-left transition-all border
+                    relative min-h-[64px] p-1.5 rounded-lg text-left transition-all border
                     ${isSelected ? 'bg-indigo-50 border-indigo-300 shadow-sm' : 'border-transparent hover:bg-slate-50 hover:border-slate-200'}
                     ${isWeekend ? 'bg-slate-50/50' : ''}
                   `}
                 >
-                  <div className={`
-                    text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full
-                    ${isToday ? 'bg-indigo-600 text-white' : isSelected ? 'text-indigo-700' : 'text-slate-600'}
-                  `}>
+                  <div className={`text-xs font-semibold mb-0.5 w-6 h-6 flex items-center justify-center rounded-full
+                    ${isToday ? 'bg-indigo-600 text-white' : isSelected ? 'text-indigo-700' : 'text-slate-600'}`}>
                     {d.getDate()}
                   </div>
 
-                  {/* Dots */}
-                  <div className="flex flex-wrap gap-0.5">
+                  <div className="flex flex-wrap gap-0.5 mb-0.5">
                     {actual.slice(0, 3).map((v, j) => (
-                      <span key={j} className={`w-2 h-2 rounded-full ${VISIT_TYPE_COLORS[v.visit_type] ?? 'bg-purple-500'}`} />
+                      <span key={j} className={`w-2 h-2 rounded-full ${getRepColor(v.owner_name ?? '').dot}`} />
                     ))}
                     {planned.slice(0, 2).map((v, j) => (
-                      <span key={`p${j}`} className={`w-2 h-2 rounded-full ${v.is_fixed_appointment ? 'bg-green-500' : 'bg-blue-400'}`} />
+                      <span key={`p${j}`} className={`w-2 h-2 rounded-full ${v.is_fixed_appointment ? 'bg-green-500' : getRepColor(v.owner_name ?? '').dot}`} />
                     ))}
                     {total > 5 && <span className="text-xs text-slate-400 leading-none">+{total - 5}</span>}
                   </div>
 
-                  {/* Quick add */}
+                  {cities.length > 0 && (
+                    <div className="flex flex-col gap-0.5">
+                      {cities.map(({ city, ownerName }) => (
+                        <span key={city} className={`${getRepColor(ownerName).city} truncate leading-tight`} style={{ fontSize: '9px' }}>{city}</span>
+                      ))}
+                    </div>
+                  )}
+
                   {isSelected && (
                     <button
-                      onClick={e => { e.stopPropagation(); openAddForDay(d); }}
+                      onClick={e => { e.stopPropagation(); openAdd(d); }}
                       className="absolute top-1 right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700"
                     >
                       <Plus className="w-2.5 h-2.5" />
@@ -298,96 +448,101 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
         </div>
 
         {/* Day detail panel */}
-        {selectedDay && !showAddPlanned && (
+        {selectedDay && !formMode && (
           <div className="border-t border-slate-100 px-6 py-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-slate-800">
                 {selectedDay.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long' })}
               </h3>
-              <button
-                onClick={() => openAddForDay(selectedDay)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700"
-              >
+              <button onClick={() => openAdd(selectedDay)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700">
                 <Plus className="w-3.5 h-3.5" /> Προγραμ. Επίσκεψη
               </button>
             </div>
 
             {selectedActual.length === 0 && selectedPlanned.length === 0 && (
-              <div className="text-sm text-slate-400 italic">Καμία επίσκεψη αυτή την ημέρα</div>
+              <div className="text-sm text-slate-400 italic">Καμία επίσκεψη αυτή την ημέρα{hasActiveFilters ? ' (με τα τρέχοντα φίλτρα)' : ''}</div>
             )}
 
-            {/* Actual visits */}
             {selectedActual.length > 0 && (
               <div className="mb-3">
                 <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Πραγματικές Επισκέψεις</div>
                 <div className="space-y-2">
-                  {selectedActual.map(v => (
-                    <div
-                        key={v.id}
-                        onClick={() => {
-                            const cust = customers.find(c => c.code === v.customer_code);
-                            if (cust && onSelectCustomer) onSelectCustomer(cust);
-                        }}
-                        className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors"
-                        >
-                      <CheckCircle className="w-4 h-4 text-purple-500 mt-0.5 shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-slate-700">
-                                        {customers.find(c => c.code === v.customer_code)?.name ?? v.customer_code}
-                                        </span>
-                                        <span className="text-xs font-mono text-slate-400">{v.customer_code}</span>
-                          {v.visit_type && (
-                            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">{v.visit_type}</span>
-                          )}
-                          {v.owner_name && <span className="text-xs text-slate-400">{v.owner_name}</span>}
+                  {selectedActual.map(v => {
+                    const cust = customers.find((c: any) => c.code === v.customer_code);
+                    const rc = getRepColor(v.owner_name ?? '');
+                    return (
+                      <div key={v.id}
+                        onClick={() => { if (cust && onSelectCustomer) onSelectCustomer(cust); }}
+                        className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors">
+                        <span className={`w-3 h-3 rounded-full mt-1 shrink-0 ${rc.dot}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-slate-700">{cust?.name ?? v.customer_code}</span>
+                            <span className="text-xs font-mono text-slate-400">{v.customer_code}</span>
+                            {v.visit_type && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">{v.visit_type}</span>}
+                            {v.owner_name && <span className={`text-xs font-medium ${rc.text}`}>{v.owner_name}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {cust?.area && (
+                              <span className="flex items-center gap-0.5 text-xs text-slate-400">
+                                <MapPin className="w-3 h-3" />{cust.area}{cust.city ? ` › ${cust.city}` : ''}
+                              </span>
+                            )}
+                            {cust?.address && <span className="text-xs text-slate-400 truncate max-w-xs">{cust.address}</span>}
+                          </div>
+                          {v.notes && <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</p>}
                         </div>
-                        {v.notes && <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</p>}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Planned visits */}
             {selectedPlanned.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Προγραμματισμένες</div>
                 <div className="space-y-2">
                   {selectedPlanned.map(v => {
-                    const cust = customers.find(c => c.code === v.customer_code);
+                    const cust = customers.find((c: any) => c.code === v.customer_code);
                     return (
                       <div key={v.id} className={`flex items-start gap-3 p-3 rounded-lg border ${v.is_fixed_appointment ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-100'}`}>
                         <Clock className={`w-4 h-4 mt-0.5 shrink-0 ${v.is_fixed_appointment ? 'text-green-500' : 'text-blue-400'}`} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             {v.customer_code ? (
-                              <span className="text-sm font-medium text-slate-700">
-                                {cust?.name ?? v.customer_code}
-                              </span>
+                              <>
+                                <span className="text-sm font-medium text-slate-700">{cust?.name ?? v.customer_code}</span>
+                                <span className="text-xs font-mono text-slate-400">{v.customer_code}</span>
+                              </>
                             ) : (
                               <span className="text-sm text-slate-500 italic">Χωρίς συγκεκριμένο πελάτη</span>
                             )}
-                            {v.is_fixed_appointment && (
-                              <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded font-medium">Ραντεβού</span>
-                            )}
-                            {v.time_segment && (
-                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">{v.time_segment}</span>
-                            )}
-                            {v.planned_time && (
-                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">{v.planned_time.slice(0, 5)}</span>
-                            )}
+                            {v.is_fixed_appointment && <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded font-medium">Ραντεβού</span>}
+                            {v.time_segment && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">{v.time_segment}</span>}
+                            {v.planned_time && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">{v.planned_time.slice(0, 5)}</span>}
                           </div>
-                          {v.area && <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-400"><MapPin className="w-3 h-3" />{v.area}{v.city ? ` › ${v.city}` : ''}</div>}
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {(cust?.area || v.area) && (
+                              <span className="flex items-center gap-0.5 text-xs text-slate-400">
+                                <MapPin className="w-3 h-3" />{cust?.area ?? v.area}{(cust?.city || v.city) ? ` › ${cust?.city ?? v.city}` : ''}
+                              </span>
+                            )}
+                            {cust?.address && <span className="text-xs text-slate-400 truncate max-w-xs">{cust.address}</span>}
+                          </div>
                           {v.notes && <p className="text-xs text-slate-500 mt-0.5">{v.notes}</p>}
                         </div>
-                        <button
-                          onClick={() => handleDeletePlanned(v.id)}
-                          className="p-1 hover:bg-red-100 rounded text-slate-400 hover:text-red-500 transition-colors shrink-0"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openEdit(v)}
+                            className="p-1 hover:bg-blue-100 rounded text-slate-400 hover:text-blue-600 transition-colors" title="Επεξεργασία">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeletePlanned(v.id)}
+                            className="p-1 hover:bg-red-100 rounded text-slate-400 hover:text-red-500 transition-colors" title="Διαγραφή">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -397,58 +552,47 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
           </div>
         )}
 
-        {/* Add planned visit form */}
-        {showAddPlanned && (
+        {/* Add / Edit form */}
+        {formMode && (
           <div className="border-t border-slate-100 px-6 py-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-800">Προγραμματισμός Επίσκεψης</h3>
-              <button onClick={() => setShowAddPlanned(false)} className="text-slate-400 hover:text-slate-600">
+              <h3 className="font-semibold text-slate-800">
+                {formMode === 'edit' ? 'Επεξεργασία Προγραμματισμένης' : 'Προγραμματισμός Επίσκεψης'}
+              </h3>
+              <button onClick={() => { setFormMode(null); setEditingId(null); setForm(blankForm()); }} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-3">
-              {/* Date */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Ημερομηνία</label>
-                <input
-                  type="date"
-                  value={formDate}
-                  onChange={e => setFormDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                />
+                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
               </div>
 
-              {/* Customer search */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Πελάτης (προαιρετικό)</label>
-                {formCustomerCode ? (
+                {form.customerCode ? (
                   <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
                     <Building2 className="w-4 h-4 text-indigo-500" />
-                    <span className="text-sm text-indigo-700 flex-1">
-                      {customers.find(c => c.code === formCustomerCode)?.name ?? formCustomerCode}
-                    </span>
-                    <button onClick={() => { setFormCustomerCode(''); setFormCustomerSearch(''); }} className="text-slate-400 hover:text-red-500">
+                    <span className="text-sm text-indigo-700 flex-1">{customers.find((c: any) => c.code === form.customerCode)?.name ?? form.customerCode}</span>
+                    <button onClick={() => setForm(f => ({ ...f, customerCode: '', customerSearch: '' }))} className="text-slate-400 hover:text-red-500">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : (
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={formCustomerSearch}
-                      onChange={e => setFormCustomerSearch(e.target.value)}
+                    <input type="text" value={form.customerSearch}
+                      onChange={e => setForm(f => ({ ...f, customerSearch: e.target.value }))}
                       placeholder="Αναζήτηση πελάτη..."
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                    />
-                    {formCustomerSearch && filteredCustomers.length > 0 && (
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
+                    {form.customerSearch && filteredCustomers.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                        {filteredCustomers.map(c => (
-                          <button
-                            key={c.code}
-                            onClick={() => { setFormCustomerCode(c.code); setFormCustomerSearch(''); }}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left"
-                          >
+                        {filteredCustomers.map((c: any) => (
+                          <button key={c.code}
+                            onClick={() => setForm(f => ({ ...f, customerCode: c.code, customerSearch: '' }))}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left">
                             <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <div className="min-w-0">
                               <div className="text-sm text-slate-700 truncate">{c.name}</div>
@@ -462,77 +606,51 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
                 )}
               </div>
 
-              {/* Time segment */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Χρονικό Τμήμα</label>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setFormTimeSegment('')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${formTimeSegment === '' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'}`}
-                  >
+                  <button onClick={() => setForm(f => ({ ...f, timeSegment: '' }))}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${form.timeSegment === '' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'}`}>
                     Οποιαδήποτε ώρα
                   </button>
                   {TIME_SEGMENTS.map(seg => (
-                    <button
-                      key={seg}
-                      onClick={() => setFormTimeSegment(seg)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${formTimeSegment === seg ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'}`}
-                    >
+                    <button key={seg} onClick={() => setForm(f => ({ ...f, timeSegment: seg }))}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${form.timeSegment === seg ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'}`}>
                       {seg}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Precise time */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Ακριβής Ώρα (προαιρετικό)</label>
-                <input
-                  type="time"
-                  value={formPreciseTime}
-                  onChange={e => setFormPreciseTime(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                />
+                <input type="time" value={form.preciseTime} onChange={e => setForm(f => ({ ...f, preciseTime: e.target.value }))}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
               </div>
 
-              {/* Fixed appointment */}
               <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="fixed-appt"
-                  checked={formIsFixed}
-                  onChange={e => setFormIsFixed(e.target.checked)}
-                  className="w-4 h-4 text-indigo-600 rounded"
-                />
+                <input type="checkbox" id="fixed-appt" checked={form.isFixed}
+                  onChange={e => setForm(f => ({ ...f, isFixed: e.target.checked }))}
+                  className="w-4 h-4 text-indigo-600 rounded" />
                 <label htmlFor="fixed-appt" className="text-sm text-slate-600">
                   Σταθερό ραντεβού <span className="text-xs text-slate-400">(constraint για τον προγραμματισμό)</span>
                 </label>
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Σημειώσεις</label>
-                <textarea
-                  value={formNotes}
-                  onChange={e => setFormNotes(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                  placeholder="π.χ. Να συζητηθούν νέες κατηγορίες..."
-                />
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  placeholder="π.χ. Να συζητηθούν νέες κατηγορίες..." />
               </div>
 
               <div className="flex gap-2">
-                <button
-                  onClick={handleAddPlanned}
-                  disabled={!formDate || formSaving}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium"
-                >
+                <button onClick={handleSave} disabled={!form.date || formSaving}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
                   {formSaving ? 'Αποθήκευση...' : 'Αποθήκευση'}
                 </button>
-                <button
-                  onClick={() => setShowAddPlanned(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm"
-                >
+                <button onClick={() => { setFormMode(null); setEditingId(null); setForm(blankForm()); }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm">
                   Ακύρωση
                 </button>
               </div>
@@ -540,7 +658,7 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
           </div>
         )}
 
-        {/* Monthly summary footer */}
+        {/* Footer */}
         <div className="border-t border-slate-100 px-6 py-3 bg-slate-50 rounded-b-2xl flex items-center gap-6 text-sm text-slate-500">
           <span className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-purple-500" />
