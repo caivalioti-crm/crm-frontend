@@ -11,6 +11,7 @@ import { CustomerView } from '../customers/CustomerView';
 import { ProspectView } from '../customers/ProspectView';
 import { CustomerListSection } from '../customers/CustomerListSection';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { VisitCalendar } from '../planning/VisitCalendar';
 
 const NOT_VISITED_OPTIONS = [
   { label: 'All', value: null },
@@ -40,7 +41,9 @@ function MultiSelectFilterGroup({
   const [multiMode, setMultiMode] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
-  const [showCalendar, setShowCalendar] = useState(false);
+  
+  
+  
 
   const visibleItems = expanded ? items : items.slice(0, DEFAULT_VISIBLE_ITEMS);
   const hasMore = items.length > DEFAULT_VISIBLE_ITEMS;
@@ -283,6 +286,7 @@ export function DashboardFigma() {
 
   usePushNotifications(currentUser.id);
 
+  const [showCalendar, setShowCalendar] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
@@ -403,19 +407,23 @@ useEffect(() => {
 
           <div className="flex items-center gap-2 border-t border-white/20 pt-2">
             {[
-              { icon: <Search className="w-4 h-4" />, id: 'section-filter', roles: null },
-              { icon: <Users className="w-4 h-4" />, id: 'section-customers', roles: null },
-              { icon: <TrendingUp className="w-4 h-4" />, id: 'section-performance', roles: null },
-              { icon: <MapPin className="w-4 h-4" />, id: 'section-geo', roles: null },
-              { icon: <BarChart2 className="w-4 h-4" />, id: 'section-categories', roles: ['admin', 'manager', 'exec'] },
-              { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', roles: null },
-              { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null },
-              { icon: <CalendarDays className="w-4 h-4" />, id: 'section-visits', title: 'Ημερολόγιο', action: () => setShowCalendar(true) },
+              { icon: <Search className="w-4 h-4" />, id: 'section-filter', roles: null, action: null },
+              { icon: <Users className="w-4 h-4" />, id: 'section-customers', roles: null, action: null },
+              { icon: <TrendingUp className="w-4 h-4" />, id: 'section-performance', roles: null, action: null },
+              { icon: <MapPin className="w-4 h-4" />, id: 'section-geo', roles: null, action: null },
+              { icon: <BarChart2 className="w-4 h-4" />, id: 'section-categories', roles: ['admin', 'manager', 'exec'], action: null },
+              { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', roles: null, action: null },
+              { icon: <CalendarDays className="w-4 h-4" />, id: 'section-visits', roles: null, action: () => setShowCalendar(true), title: 'Ημερολόγιο' },
+              { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null, action: null },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
-              .map(({ icon, id }) => (
-                <button key={id}
-                  onClick={() => { const el = document.getElementById(id); if (el) { const top = el.getBoundingClientRect().top + window.scrollY - 120; window.scrollTo({ top, behavior: 'smooth' }); } }}
+              .map(({ icon, id, action }, idx) => (
+                <button key={`${id}-${idx}`}
+                  onClick={() => {
+                    if (action) { action(); return; }
+                    const el = document.getElementById(id);
+                    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
+                  }}
                   className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/25 rounded-lg transition-colors text-white/90 text-sm font-medium">
                   {icon}
                 </button>
@@ -1131,6 +1139,14 @@ useEffect(() => {
         onViewProspect={(_id) => { setShowUnifiedProspectDialog(false); }}
         onSaved={() => { setShowUnifiedProspectDialog(false); setProspectsRefreshKey(k => k + 1); }}
       />
+
+      {showCalendar && (
+        <VisitCalendar
+          currentUser={currentUser}
+          onClose={() => setShowCalendar(false)}
+          customers={customers}
+        />
+      )}
     </div>
   );
 }
