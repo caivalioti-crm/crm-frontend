@@ -4,6 +4,7 @@ import {
   CheckCircle, Clock, User, Building2, CalendarDays, Pencil, Filter,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import { SuggestionsPanel } from './SuggestionsPanel';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -98,7 +99,7 @@ const blankForm = () => ({
   isFixed: false,
 });
 
-export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: CalendarProps) {
+export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customers = [] }: CalendarProps) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -121,6 +122,7 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
   const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const lastDay = new Date(year, month + 1, 0).getDate();
   const to = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -288,6 +290,13 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
             <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
+            <button
+            onClick={() => setShowSuggestions(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showSuggestions ? 'bg-white text-indigo-700' : 'bg-white/20 hover:bg-white/30'}`}
+          >
+            <Calendar className="w-4 h-4" />
+            Προτάσεις
+          </button>
           </div>
         </div>
 
@@ -659,7 +668,7 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
         )}
 
         {/* Footer */}
-        <div className="border-t border-slate-100 px-6 py-3 bg-slate-50 rounded-b-2xl flex items-center gap-6 text-sm text-slate-500">
+        <div className={`border-t border-slate-100 px-6 py-3 bg-slate-50 flex items-center gap-6 text-sm text-slate-500 ${showSuggestions ? '' : 'rounded-b-2xl'}`}>
           <span className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-purple-500" />
             <span className="font-medium text-slate-700">{actualVisits.length}</span> επισκέψεις
@@ -673,6 +682,14 @@ export function VisitCalendar({ onSelectCustomer, onClose, customers = [] }: Cal
             <span className="font-medium text-slate-700">{plannedVisits.filter(v => v.is_fixed_appointment).length}</span> ραντεβού
           </span>
         </div>
+      {showSuggestions && (
+          <SuggestionsPanel
+            currentUser={currentUser}
+            onClose={() => setShowSuggestions(false)}
+            customers={customers}
+            areas={[...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort()}
+          />
+        )}
       </div>
     </div>
   );
