@@ -291,16 +291,19 @@ export function DashboardFigma() {
 
   usePushNotifications(currentUser.id);
   useEffect(() => {
-    if (!['admin', 'manager', 'exec'].includes(currentUser.role)) return;
-    const load = async () => {
-      const { data } = await supabase.from('crm_user_profiles')
-        .select('id, full_name, salesman_code, role')
-        .in('role', ['rep', 'manager', 'exec', 'admin'])
-        .order('full_name');
-      setRepList(data ?? []);
-    };
-    load().catch(console.error);
-  }, [currentUser.role]);
+  if (!['admin', 'manager', 'exec'].includes(currentUser.role)) return;
+  const load = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data } = await supabase.from('crm_user_profiles')
+      .select('id, full_name, salesman_code, role')
+      .in('role', ['rep', 'manager', 'exec', 'admin'])
+      .order('full_name');
+    setRepList(data ?? []);
+  };
+  load().catch(console.error);
+}, [currentUser.role]);
+  
 
   const [showCustomerMap, setShowCustomerMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
