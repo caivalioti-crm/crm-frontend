@@ -877,33 +877,7 @@ useEffect(() => {
                           const tier = TIER_LABELS[c.tier];
                           return (
                             <div key={c.code}>
-                            {idx > 0 && (
-                              <div className="flex items-center gap-2 px-4 py-1 bg-slate-50 border-b border-slate-100">
-                                <div className="w-px h-3 bg-slate-300 ml-5" />
-                                <span className="text-xs text-slate-400">🚗 Μετακίνηση:</span>
-                                {[5, 10, 15, 20, 30, 45].map(b => (
-                                  <button key={b}
-                                    onClick={() => {
-                                      setPlan(prev => {
-                                        const list = (prev[slot.date] ?? []).map((x, i) => i === idx ? { ...x, travel_buffer: b } : x);
-                                        let minutes = 9 * 60;
-                                        const recalculated = list.map((x, i) => {
-                                          if (i > 0) minutes += x.travel_buffer ?? 10;
-                                          const h = Math.floor(minutes / 60);
-                                          const m = minutes % 60;
-                                          const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                                          minutes += x.duration_minutes ?? 30;
-                                          return { ...x, suggested_time: time };
-                                        });
-                                        return { ...prev, [slot.date]: recalculated };
-                                      });
-                                    }}
-                                    className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${(c.travel_buffer ?? 10) === b ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-blue-400'}`}>
-                                    {b}'
-                                  </button>
-                                ))}
-                              </div>
-                            )}
+                            
                             <div className={`px-4 py-3 flex items-start gap-3 ${c.sos ? 'bg-amber-50' : ''}`}>
                               <div className="shrink-0 text-center w-14">
                                 <div className="text-lg font-bold text-indigo-600">#{idx + 1}</div>
