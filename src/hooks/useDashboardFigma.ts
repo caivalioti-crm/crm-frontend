@@ -105,7 +105,7 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
-export function useDashboardFigma() {
+export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
   /* ===================== SAVED FILTERS (session restore) ===================== */
   const savedFilters = useMemo(() => {
     try { return JSON.parse(sessionStorage.getItem('dashboardFilters') ?? '{}'); }
@@ -225,8 +225,8 @@ export function useDashboardFigma() {
   const fetchSales = useCallback(async (period: Period) => {
     setSalesLoading(true);
     try {
-      const salesmanParam = repModeOverride && currentUser.salesman_code
-        ? `&salesmanCode=${currentUser.salesman_code}` : '';
+      const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const [current, compare, areas] = await Promise.all([
         authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}`),
         authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
@@ -242,15 +242,15 @@ export function useDashboardFigma() {
     } finally {
       setSalesLoading(false);
     }
-  }, [repModeOverride, currentUser.salesman_code]);
+ }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
 
   const fetchMonthlySales = useCallback(async (period: Period) => {
   setMonthlySalesLoading(true);
   try {
-    const salesmanParam = repModeOverride && currentUser.salesman_code
-      ? `&salesmanCode=${currentUser.salesman_code}` : '';
+    const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
     const [current, compare] = await Promise.all([
       authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}`),
       authedFetch(`/api/erp/sales/monthly?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
@@ -262,7 +262,7 @@ export function useDashboardFigma() {
   } finally {
     setMonthlySalesLoading(false);
   }
-}, [repModeOverride, currentUser.salesman_code]);
+}, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   useEffect(() => {
     if (monthlySalesExpanded) fetchMonthlySales(selectedPeriod);
@@ -283,7 +283,8 @@ export function useDashboardFigma() {
       });
       if (areas.length === 1) params.set('area', areas[0]);
       if (cities.length === 1) params.set('city', cities[0]);
-      if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
+      const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
       const data = await authedFetch(`/api/erp/sales-by-category?${params.toString()}`);
       setSalesByCategory(data.grouped ?? []);
     } catch (err) {
@@ -291,7 +292,7 @@ export function useDashboardFigma() {
     } finally {
       setSalesByCategoryLoading(false);
     }
-  }, [repModeOverride, currentUser.salesman_code]);
+  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   useEffect(() => {
     if (salesByCategoryExpanded) {
@@ -315,7 +316,8 @@ export function useDashboardFigma() {
     const params = new URLSearchParams({ from: selectedPeriod.from, to: selectedPeriod.to });
     if (selectedAreas.length === 1) params.set('area', selectedAreas[0]);
     if (selectedCities.length === 1) params.set('city', selectedCities[0]);
-    if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
+    const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     setDashboardSkuLoading(prev => new Set(prev).add(categoryId));
     try {
       const data = await authedFetch(`/api/erp/skus-by-category?${params.toString()}&categoryId=${categoryId}`);
@@ -325,7 +327,7 @@ export function useDashboardFigma() {
     } finally {
       setDashboardSkuLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
     }
-  }, [selectedPeriod, selectedAreas, selectedCities, dashboardSkuData, dashboardSkuLoading, repModeOverride, currentUser.salesman_code]);
+  }, [selectedPeriod, selectedAreas, selectedCities, dashboardSkuData, dashboardSkuLoading, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   /* ===================== FETCH TOP CUSTOMERS ===================== */
   const fetchTopCustomers = useCallback(async (categoryId: string) => {
@@ -337,7 +339,8 @@ export function useDashboardFigma() {
     });
     if (selectedAreas.length === 1) params.set('area', selectedAreas[0]);
     if (selectedCities.length === 1) params.set('city', selectedCities[0]);
-    if (repModeOverride && currentUser.salesman_code) params.set('salesmanCode', currentUser.salesman_code);
+    const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     setTopCustomersLoading(prev => new Set(prev).add(categoryId));
     try {
       const data = await authedFetch(`/api/erp/top-customers-by-category?${params.toString()}`);
@@ -347,7 +350,7 @@ export function useDashboardFigma() {
     } finally {
       setTopCustomersLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
     }
-  }, [selectedPeriod, selectedAreas, selectedCities, topCustomersData, topCustomersLoading, repModeOverride, currentUser.salesman_code]);
+  }, [selectedPeriod, selectedAreas, selectedCities, topCustomersData, topCustomersLoading, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   /* ===================== PERIOD SETTER ===================== */
   const setSelectedPeriod = useCallback((periodKey: string) => {
@@ -377,8 +380,8 @@ export function useDashboardFigma() {
     setSelectedGeoArea(area);
     setCityLoading(true);
     try {
-      const salesmanParam = repModeOverride && currentUser.salesman_code
-        ? `&salesmanCode=${currentUser.salesman_code}` : '';
+      const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const data = await authedFetch(
         `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}${salesmanParam}`
       );
@@ -388,7 +391,7 @@ export function useDashboardFigma() {
     } finally {
       setCityLoading(false);
     }
-  }, [selectedPeriod, repModeOverride, currentUser.salesman_code]);
+  }, [selectedPeriod, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   const backToAreas = useCallback(() => { setSelectedGeoArea(null); setCityStats([]); }, []);
 
@@ -402,12 +405,11 @@ export function useDashboardFigma() {
   };
 
   /* ===================== CUSTOMER SCOPING ===================== */
-  const scopedCustomers = useMemo(() => {
-    if (repModeOverride && currentUser.salesman_code) {
-      return customers.filter(c => c.salesmanCode === currentUser.salesman_code);
-    }
-    return customers;
-  }, [customers, repModeOverride, currentUser.salesman_code]);
+const scopedCustomers = useMemo(() => {
+  const code = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+  if (code) return customers.filter(c => c.salesmanCode === code);
+  return customers;
+}, [customers, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   const customerByTrdrId = useMemo(() => {
     const map = new Map<string, Customer>();

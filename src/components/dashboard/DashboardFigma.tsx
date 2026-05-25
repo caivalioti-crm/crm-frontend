@@ -255,6 +255,9 @@ function generateJoinedPeriodOptions(): { label: string; value: string }[] {
 const JOINED_PERIOD_OPTIONS = generateJoinedPeriodOptions();
 
 export function DashboardFigma() {
+  const [viewAsRepId, setViewAsRepId] = useState<string>('');
+  const [repList, setRepList] = useState<any[]>([]);
+  const viewAsRep = repList.find(r => r.id === viewAsRepId) ?? null;
   const {
     customers, customersTotal, totalRevenue, compareRevenue, revenueGrowth,
     customersWithSales, salesLoading, areaStats, cityStats, cityLoading,
@@ -282,9 +285,20 @@ export function DashboardFigma() {
     taskFilter, setTaskFilter,
     commentFilter, setCommentFilter,
 
-  } = useDashboardFigma();
+  } = useDashboardFigma(viewAsRep?.salesman_code ?? null);
 
   usePushNotifications(currentUser.id);
+  useEffect(() => {
+    if (!['admin', 'manager', 'exec'].includes(currentUser.role)) return;
+    const load = async () => {
+      const { data } = await supabase.from('crm_user_profiles')
+        .select('id, full_name, salesman_code, role')
+        .in('role', ['rep', 'manager', 'exec', 'admin'])
+        .order('full_name');
+      setRepList(data ?? []);
+    };
+    load().catch(console.error);
+  }, [currentUser.role]);
 
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
@@ -388,11 +402,23 @@ useEffect(() => {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-3 py-1.5">
-                <User className="w-4 h-4" />
-                <span className="font-medium text-sm">{currentUser.name}</span>
-              </div>
-              {currentUser.role === 'manager' && (
-                <button onClick={() => { setRepModeOverride(v => !v); clearTopCustomersCache(); }}
+  <User className="w-4 h-4" />
+  <span className="font-medium text-sm">{currentUser.name}</span>
+</div>
+{['admin', 'manager', 'exec'].includes(currentUser.role) && repList.length > 0 && (
+  <select
+    value={viewAsRepId}
+    onChange={e => { setViewAsRepId(e.target.value); clearTopCustomersCache(); }}
+    className="px-3 py-1.5 rounded-lg text-sm bg-white/20 text-white border border-white/30 focus:outline-none cursor-pointer"
+  >
+    <option value="">👁 Δική μου προβολή</option>
+    {repList.filter(r => r.id !== currentUser.id).map(r => (
+      <option key={r.id} value={r.id}>{r.full_name}</option>
+    ))}
+  </select>
+)}
+{currentUser.role === 'manager' && (
+  <button onClick={() => { setRepModeOverride(v => !v); clearTopCustomersCache(); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${repModeOverride ? 'bg-white text-indigo-700 border-white' : 'bg-white/10 text-white/90 border-white/20 hover:bg-white/20'}`}>
                   <Users className="w-4 h-4" />
                   <span className="hidden sm:block">{repModeOverride ? 'My Customers' : 'All Customers'}</span>
@@ -1151,7 +1177,7 @@ useEffect(() => {
 
       {showCalendar && (
         <VisitCalendar
-          currentUser={currentUser}
+  currentUser={viewAsRep ? { ...currentUser, id: viewAsRep.id, name: viewAsRep.full_name, salesman_code: viewAsRep.salesman_code } : currentUser}
           onClose={() => setShowCalendar(false)}
           customers={customers}
           onSelectCustomer={(customer) => {
