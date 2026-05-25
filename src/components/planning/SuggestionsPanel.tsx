@@ -111,6 +111,8 @@ interface CustomerSelection {
   suggested_time?: string;
   duration_minutes?: number;
   travel_buffer?: number;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 interface SuggestionsPanelProps {
@@ -354,15 +356,25 @@ useEffect(() => {
   const buildGoogleMapsUrl = (date: string) => {
   const custs = plan[date] ?? [];
   if (custs.length === 0) return null;
-  const addresses = custs.map(c => {
-    if (c.address && c.city) return `${c.address}, ${c.city}, Greece`;
-    if (c.address) return `${c.address}, Greece`;
-    if (c.city) return `${c.city}, Greece`;
-    return null;
-  }).filter(Boolean) as string[];
-  if (addresses.length === 0) return null;
-  const parts = addresses.map(a => encodeURIComponent(a)).join('/');
-  return `https://www.google.com/maps/dir/${parts}`;
+
+  // Use coordinates if available, fall back to address
+  const hasCoords = custs.some((c: any) => c.lat && c.lng);
+
+  if (hasCoords) {
+    const points = custs.map((c: any) => {
+      if (c.lat && c.lng) return `${c.lat},${c.lng}`;
+      return encodeURIComponent([c.address, c.city, 'Greece'].filter(Boolean).join(', '));
+    });
+    // Google Maps dir with lat/lng waypoints
+    return `https://www.google.com/maps/dir/${points.join('/')}`;
+  }
+
+  // Fallback to addresses
+  const addresses = custs.map((c: any) =>
+    [c.address, c.city, 'Greece'].filter(Boolean).join(', ')
+  ).filter(Boolean);
+  if (!addresses.length) return null;
+  return `https://www.google.com/maps/dir/${addresses.map(a => encodeURIComponent(a)).join('/')}`;
 };
 
   const movePlanItem = (date: string, idx: number, dir: 'up' | 'down') => {
@@ -900,8 +912,10 @@ useEffect(() => {
                                   <span className="text-sm font-medium text-slate-700">{c.name}</span>
                                   <span className="text-xs font-mono text-slate-400">{c.code}</span>
                                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${tier.bg} ${tier.color}`}>T{c.tier}</span>
-                                  {(c.address || c.city) && (
-                                    <a href={`https://www.google.com/maps/search/${encodeURIComponent([c.address, c.city, 'Greece'].filter(Boolean).join(', '))}`}
+                                  {(c.lat || c.address || c.city) && (
+                                  <a href={c.lat
+                                    ? `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}`
+                                    : `https://www.google.com/maps/search/${encodeURIComponent([c.address, c.city, 'Greece'].filter(Boolean).join(', '))}`}
                                       target="_blank" rel="noopener noreferrer"
                                       className="p-0.5 text-slate-300 hover:text-blue-500 transition-colors"
                                       onClick={e => e.stopPropagation()}>
