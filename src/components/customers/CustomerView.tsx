@@ -681,6 +681,24 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
     <button
       onClick={async () => {
         if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+
+        // Check if rep-captured coordinates already exist
+        const { data: existingCoord } = await supabase
+          .from('crm_customer_coordinates')
+          .select('captured_by, captured_at')
+          .eq('customer_code', String(customer.code))
+          .single();
+
+        if (existingCoord?.captured_by) {
+          const capturedDate = existingCoord.captured_at
+            ? new Date(existingCoord.captured_at).toLocaleDateString('el-GR')
+            : '—';
+          const confirm = window.confirm(
+            `Υπάρχουν ήδη συντεταγμένες που καταγράφηκαν επιτόπου στις ${capturedDate}.\n\nΘέλετε να τις αντικαταστήσετε;`
+          );
+          if (!confirm) return;
+        }
+
         setLocationCapturing(true);
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
