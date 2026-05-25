@@ -156,6 +156,8 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [unscheduled, setUnscheduled] = useState<any[]>([]);
+const [showUnscheduled, setShowUnscheduled] = useState(false);
 
   // Load rep profiles for manager
 useEffect(() => {
@@ -306,6 +308,7 @@ useEffect(() => {
       }
 
       setPlan(newPlan);
+      setUnscheduled(result.unscheduled ?? []);
       setStep('plan');
     } catch (err) {
       alert('Αποτυχία δημιουργίας πλάνου');
@@ -978,6 +981,49 @@ useEffect(() => {
                 )}
               </button>
             </div>
+            {unscheduled.length > 0 && (
+  <div className="mt-4">
+    <button
+      onClick={() => setShowUnscheduled(v => !v)}
+      className="w-full flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+    >
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="w-4 h-4 text-amber-500" />
+        <span>{unscheduled.length} πελάτες δεν προγραμματίστηκαν αυτή την εβδομάδα</span>
+      </div>
+      <ChevronDown className={`w-4 h-4 text-amber-500 transition-transform ${showUnscheduled ? 'rotate-180' : ''}`} />
+    </button>
+    {showUnscheduled && (
+      <div className="mt-2 border border-amber-200 rounded-xl overflow-hidden">
+        <div className="max-h-64 overflow-y-auto divide-y divide-amber-100">
+          {unscheduled.map(c => {
+            const tier = TIER_LABELS[c.tier ?? 0];
+            return (
+              <div key={c.customer_code} className="flex items-center gap-3 px-4 py-2.5 bg-white hover:bg-amber-50">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-slate-700">{c.customer_name}</span>
+                    <span className="text-xs font-mono text-slate-400">{c.customer_code}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${tier.bg} ${tier.color}`}>T{c.tier ?? 0}</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-400">
+                    <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{c.city}</span>
+                    <span>Τελ. επίσκεψη: {fmtMonthYear(c.last_visit_date)}</span>
+                    {c.days_since_visit < 999 && (
+                      <span className={`font-medium ${c.days_since_visit > 60 ? 'text-red-500' : c.days_since_visit > 30 ? 'text-amber-500' : 'text-slate-500'}`}>
+                        {c.days_since_visit}μ αγ.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    )}
+  </div>
+)}
           </div>
         )}
 
