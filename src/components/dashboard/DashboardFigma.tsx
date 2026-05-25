@@ -292,15 +292,15 @@ export function DashboardFigma() {
   usePushNotifications(currentUser.id);
   useEffect(() => {
   if (!['admin', 'manager', 'exec'].includes(currentUser.role)) return;
-  const load = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const { data } = await supabase.from('crm_user_profiles')
-      .select('id, full_name, salesman_code, role')
-      .in('role', ['rep', 'manager', 'exec', 'admin'])
-      .order('full_name');
-    setRepList(data ?? []);
-  };
+const load = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/erp/reps`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  const data = await res.json();
+  setRepList(data ?? []);
+};
   load().catch(console.error);
 }, [currentUser.role]);
   
