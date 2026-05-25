@@ -11,6 +11,7 @@ type CustomerListSectionProps = {
   onSelectCustomer: (customer: any) => void;
   getDaysSinceVisit: (date: string | undefined | null) => number;
   getRepName?: (repId: string) => string | undefined;
+  onOpenMap?: () => void;
 };
 
 export function CustomerListSection({
@@ -20,6 +21,7 @@ export function CustomerListSection({
   onSelectCustomer,
   getDaysSinceVisit,
   getRepName,
+  onOpenMap,
 }: CustomerListSectionProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -30,12 +32,24 @@ export function CustomerListSection({
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
       {/* Header */}
       <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900">
-          {title}
-          <span className="ml-2 text-sm font-normal text-gray-500">
-            {expanded ? customers.length : Math.min(DEFAULT_VISIBLE, customers.length)} of {customers.length}
-          </span>
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+            {title}
+            <span className="ml-2 text-sm font-normal text-gray-500">
+              {expanded ? customers.length : Math.min(DEFAULT_VISIBLE, customers.length)} of {customers.length}
+            </span>
+          </h2>
+          {onOpenMap && (
+            <button
+              onClick={onOpenMap}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-medium transition-colors border border-indigo-200"
+              title="View on map"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              Map
+            </button>
+          )}
+        </div>
         {hasMore && (
           <button
             onClick={() => setExpanded(v => !v)}

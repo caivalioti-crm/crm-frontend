@@ -12,6 +12,7 @@ import { ProspectView } from '../customers/ProspectView';
 import { CustomerListSection } from '../customers/CustomerListSection';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { VisitCalendar } from '../planning/VisitCalendar';
+import { CustomerMap } from '../customers/CustomerMap';
 
 const NOT_VISITED_OPTIONS = [
   { label: 'All', value: null },
@@ -39,6 +40,7 @@ function MultiSelectFilterGroup({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [multiMode, setMultiMode] = useState(false);
+  
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
   
@@ -300,6 +302,7 @@ export function DashboardFigma() {
     load().catch(console.error);
   }, [currentUser.role]);
 
+  const [showCustomerMap, setShowCustomerMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
@@ -441,6 +444,7 @@ useEffect(() => {
               { icon: <BarChart2 className="w-4 h-4" />, id: 'section-categories', roles: ['admin', 'manager', 'exec'], action: null },
               { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', roles: null, action: null },
               { icon: <CalendarDays className="w-4 h-4" />, id: 'section-visits', roles: null, action: () => setShowCalendar(true), title: 'Ημερολόγιο' },
+              { icon: <MapPin className="w-4 h-4" />, id: 'section-map', roles: null, action: () => setShowCustomerMap(true), title: 'Χάρτης Πελατών' },
               { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null, action: null },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
@@ -767,6 +771,7 @@ useEffect(() => {
                 }}
                  
                 getDaysSinceVisit={getDaysSinceVisit}
+              onOpenMap={() => setShowCustomerMap(true)}
               />
             </div>
 
@@ -1131,6 +1136,7 @@ useEffect(() => {
       {selectedCustomer && (
         <CustomerView
           customer={selectedCustomer}
+          currentUser={currentUser}
           onBack={() => {
             setSelectedCustomer(null);
             if (cameFromCalendarRef.current) {
@@ -1174,6 +1180,18 @@ useEffect(() => {
         onViewProspect={(_id) => { setShowUnifiedProspectDialog(false); }}
         onSaved={() => { setShowUnifiedProspectDialog(false); setProspectsRefreshKey(k => k + 1); }}
       />
+
+      {showCustomerMap && (
+        <CustomerMap
+          currentUser={currentUser}
+          onClose={() => setShowCustomerMap(false)}
+          onSelectCustomer={(customer) => {
+            setShowCustomerMap(false);
+            setSelectedCustomer(customer);
+          }}
+          repList={repList}
+        />
+      )}
 
       {showCalendar && (
         <VisitCalendar

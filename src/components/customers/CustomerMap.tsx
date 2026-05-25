@@ -1,0 +1,488 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, MapPin, Search, Save, RotateCcw, Navigation, AlertCircle, CheckCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+async function authedFetch(url: string, options?: RequestInit) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const res = await fetch(`${BASE_URL}${url}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  });
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
+type CustomerCoord = {
+  customer_code: string;
+  customer_name: string;
+  city: string;
+  area: string;
+  address: string;
+  salesman_code: string;
+  lat: number | null;
+  lng: number | null;
+  accuracy_meters: number | null;
+  captured_by: string | null;
+  captured_at: string | null;
+  has_coords: boolean;
+};
+
+type Props = {
+  currentUser: { id: string; role: string; salesman_code: string | null; name: string };
+  initialCustomers?: any[];
+  singleCustomer?: { code: string; name: string; address?: string; city?: string; area?: string };
+  onClose: () => void;
+  onSelectCustomer?: (customer: any) => void;
+  repList?: { id: string; full_name: string; salesman_code: string }[];
+};
+
+const FULL_ACCESS_ROLES = ['admin', 'manager', 'exec'];
+
+export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCustomer, repList = [] }: Props) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMap = useRef<any>(null);
+  const markersRef = useRef<Map<string, any>>(new Map());
+  const dragMarkerRef = useRef<any>(null);
+
+  const isPrivileged = FULL_ACCESS_ROLES.includes(currentUser.role);
+
+  const [customers, setCustomers] = useState<CustomerCoord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filterRep, setFilterRep] = useState('');
+  const [filterArea, setFilterArea] = useState('');
+  const [filterCity, setFilterCity] = useState('');
+  const [showNoCoords, setShowNoCoords] = useState(false);
+  const [areas, setAreas] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+
+  const [editing, setEditing] = useState<CustomerCoord | null>(null);
+  const [editLat, setEditLat] = useState<number | null>(null);
+  const [editLng, setEditLng] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedCode, setSavedCode] = useState<string | null>(null);
+
+  const [popup, setPopup] = useState<CustomerCoord | null>(null);
+
+  // ── Init Leaflet ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current || leafletMap.current) return;
+    const L = (window as any).L;
+    if (!L) { console.error('Leaflet not loaded'); return; }
+
+    const map = L.map(mapRef.current, { zoomControl: true }).setView([39.5, 22.5], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(map);
+    leafletMap.current = map;
+
+    return () => {
+      map.remove();
+      leafletMap.current = null;
+    };
+  }, []);
+
+  // ── Load data ─────────────────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      if (singleCustomer) {
+        const data = await authedFetch(`/api/coordinates?customer_code=${singleCustomer.code}`);
+        setCustomers(Array.isArray(data) ? data : [data]);
+      } else {
+        const params = new URLSearchParams();
+        if (filterRep) params.set('salesman_code', filterRep);
+        if (filterArea) params.set('area', filterArea);
+        if (filterCity) params.set('city', filterCity);
+        const data: CustomerCoord[] = await authedFetch(`/api/coordinates?${params.toString()}`);
+        setCustomers(data ?? []);
+        const uniqueAreas = [...new Set(data.map(c => c.area).filter(Boolean))].sort();
+        setAreas(uniqueAreas);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [singleCustomer, filterRep, filterArea, filterCity]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Update cities when area changes
+  useEffect(() => {
+    if (filterArea) {
+      const areaCustomers = customers.filter(c => c.area === filterArea);
+      const uniqueCities = [...new Set(areaCustomers.map(c => c.city).filter(Boolean))].sort();
+      setCities(uniqueCities);
+      setFilterCity('');
+    } else {
+      setCities([]);
+      setFilterCity('');
+    }
+  }, [filterArea, customers]);
+
+  // ── Render markers ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const L = (window as any).L;
+    const map = leafletMap.current;
+    if (!L || !map) return;
+
+    // Clear existing markers
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current.clear();
+
+    const filtered = customers.filter(c => {
+      if (showNoCoords) return !c.has_coords;
+      if (!c.lat || !c.lng) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!c.customer_name?.toLowerCase().includes(q) &&
+            !c.customer_code?.includes(q) &&
+            !c.city?.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) return;
+
+    const bounds: [number, number][] = [];
+
+    filtered.forEach(c => {
+      if (!c.lat || !c.lng) return;
+
+      const color = c.captured_by ? '#E24B4A' : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27';
+      const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
+
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
+        iconSize: [10, 10],
+        iconAnchor: [5, 5],
+      });
+
+      const marker = L.marker([c.lat, c.lng], { icon })
+        .addTo(map)
+        .on('click', () => setPopup(c));
+
+      markersRef.current.set(c.customer_code, marker);
+      bounds.push([c.lat, c.lng]);
+    });
+
+    if (bounds.length && !singleCustomer) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    } else if (bounds.length === 1) {
+      map.setView(bounds[0], 15);
+    }
+  }, [customers, search, showNoCoords, isPrivileged, currentUser.salesman_code, singleCustomer]);
+
+  // ── Start editing ─────────────────────────────────────────────────────────
+  const startEdit = useCallback((c: CustomerCoord) => {
+    const L = (window as any).L;
+    const map = leafletMap.current;
+    if (!L || !map) return;
+
+    setEditing(c);
+    setPopup(null);
+
+    const lat = c.lat ?? 39.5;
+    const lng = c.lng ?? 22.5;
+    setEditLat(lat);
+    setEditLng(lng);
+
+    if (dragMarkerRef.current) dragMarkerRef.current.remove();
+
+    const dragIcon = L.divIcon({
+      className: '',
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:#378ADD;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);cursor:grab;"></div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+
+    const dragMarker = L.marker([lat, lng], { icon: dragIcon, draggable: true }).addTo(map);
+    dragMarker.on('dragend', (e: any) => {
+      const pos = e.target.getLatLng();
+      setEditLat(Math.round(pos.lat * 1000000) / 1000000);
+      setEditLng(Math.round(pos.lng * 1000000) / 1000000);
+    });
+
+    dragMarkerRef.current = dragMarker;
+    map.setView([lat, lng], 15);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    if (dragMarkerRef.current) { dragMarkerRef.current.remove(); dragMarkerRef.current = null; }
+    setEditing(null);
+    setEditLat(null);
+    setEditLng(null);
+  }, []);
+
+  const saveCoords = useCallback(async () => {
+    if (!editing || editLat === null || editLng === null) return;
+    setSaving(true);
+    try {
+      await authedFetch(`/api/coordinates/${editing.customer_code}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ lat: editLat, lng: editLng, accuracy_meters: 10 }),
+      });
+      setSavedCode(editing.customer_code);
+      setTimeout(() => setSavedCode(null), 2000);
+      cancelEdit();
+      loadData();
+    } catch (err) {
+      alert('Αποτυχία αποθήκευσης');
+    } finally {
+      setSaving(false);
+    }
+  }, [editing, editLat, editLng, cancelEdit, loadData]);
+
+  // ── Use current GPS for edit ───────────────────────────────────────────────
+  const useGPS = useCallback(() => {
+    if (!navigator.geolocation || !dragMarkerRef.current) return;
+    navigator.geolocation.getCurrentPosition(pos => {
+      const { latitude, longitude } = pos.coords;
+      dragMarkerRef.current.setLatLng([latitude, longitude]);
+      setEditLat(Math.round(latitude * 1000000) / 1000000);
+      setEditLng(Math.round(longitude * 1000000) / 1000000);
+      leafletMap.current?.setView([latitude, longitude], 17);
+    }, () => alert('Αδυναμία εντοπισμού τοποθεσίας'), { enableHighAccuracy: true });
+  }, []);
+
+  
+
+  const noCoordCount = customers.filter(c => !c.has_coords).length;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col">
+
+      {/* ── Top bar ── */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-slate-800 text-white shrink-0 flex-wrap">
+        <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors">
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="font-semibold text-sm shrink-0">
+          {singleCustomer ? singleCustomer.name : 'Customer Map'}
+        </div>
+
+        {!singleCustomer && (
+          <>
+            {/* Search */}
+            <div className="relative flex-1 min-w-[160px] max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Αναζήτηση..."
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+
+            {/* Rep filter — privileged only */}
+            {isPrivileged && repList.length > 0 && (
+              <select
+                value={filterRep}
+                onChange={e => setFilterRep(e.target.value)}
+                className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-400"
+              >
+                <option value="">Όλοι οι αντιπρόσωποι</option>
+                {repList.map(r => (
+                  <option key={r.id} value={r.salesman_code}>{r.full_name}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Area filter */}
+            {areas.length > 0 && (
+              <select
+                value={filterArea}
+                onChange={e => setFilterArea(e.target.value)}
+                className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-400"
+              >
+                <option value="">Όλες οι περιοχές</option>
+                {areas.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            )}
+
+            {/* City filter */}
+            {cities.length > 0 && (
+              <select
+                value={filterCity}
+                onChange={e => setFilterCity(e.target.value)}
+                className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-400"
+              >
+                <option value="">Όλες οι πόλεις</option>
+                {cities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+
+            {/* No coords toggle */}
+            {noCoordCount > 0 && (
+              <button
+                onClick={() => setShowNoCoords(v => !v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showNoCoords ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-700 text-slate-300 border-slate-600 hover:border-amber-400'}`}
+              >
+                <AlertCircle className="w-3.5 h-3.5 inline mr-1" />
+                {noCoordCount} χωρίς coords
+              </button>
+            )}
+          </>
+        )}
+
+        {loading && <span className="text-xs text-slate-400 ml-auto">Φόρτωση...</span>}
+        <span className="text-xs text-slate-400 ml-auto">{customers.length} πελάτες · {customers.filter(c => c.has_coords).length} με coords</span>
+      </div>
+
+      {/* ── Edit bar ── */}
+      {editing && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-700 text-white shrink-0 flex-wrap">
+          <MapPin className="w-4 h-4 shrink-0" />
+          <span className="text-sm font-medium shrink-0">Επεξεργασία: {editing.customer_name}</span>
+          <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
+          {editLat !== null && (
+            <span className="text-xs font-mono text-indigo-200">{editLat.toFixed(5)}, {editLng?.toFixed(5)}</span>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={useGPS}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              GPS
+            </button>
+            <button
+              onClick={cancelEdit}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-medium"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Ακύρωση
+            </button>
+            <button
+              onClick={saveCoords}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 rounded-lg text-xs font-medium"
+            >
+              {saving ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Αποθήκευση
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Map + sidebar ── */}
+      <div className="flex flex-1 min-h-0">
+
+        {/* Map */}
+        <div className="flex-1 relative">
+          <div ref={mapRef} className="w-full h-full" />
+
+          {/* Legend */}
+          <div className="absolute bottom-4 left-4 bg-slate-800/90 text-white rounded-lg px-3 py-2 text-xs space-y-1 pointer-events-none">
+            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1D9E75] inline-block" />Address-level</div>
+            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF9F27] inline-block" />City-level</div>
+            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#E24B4A] inline-block" />Rep-captured</div>
+          </div>
+
+          {/* Saved toast */}
+          {savedCode && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg">
+              <CheckCircle className="w-4 h-4" />
+              Αποθηκεύτηκε
+            </div>
+          )}
+        </div>
+
+        {/* Popup panel */}
+        {popup && (
+          <div className="w-72 bg-slate-800 text-white flex flex-col shrink-0 border-l border-slate-700">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+              <span className="font-medium text-sm truncate">{popup.customer_name}</span>
+              <button onClick={() => setPopup(null)} className="p-1 hover:bg-white/10 rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-4 py-3 space-y-2 flex-1">
+              <div className="text-xs text-slate-400">{popup.customer_code}</div>
+              {popup.address && <div className="text-xs text-slate-300">{popup.address}</div>}
+              <div className="text-xs text-slate-400">{popup.city} · {popup.area}</div>
+
+              <div className="pt-2 border-t border-slate-700">
+                {popup.has_coords ? (
+                  <div className="space-y-1">
+                    <div className="text-xs text-slate-400">
+                      {popup.captured_by ? '📍 Rep-captured' : popup.accuracy_meters && popup.accuracy_meters <= 50 ? '🏠 Address-level' : '🏙 City-level'}
+                      {popup.accuracy_meters && ` · ${popup.accuracy_meters}m`}
+                    </div>
+                    <div className="text-xs font-mono text-slate-400">
+                      {popup.lat?.toFixed(5)}, {popup.lng?.toFixed(5)}
+                    </div>
+                    {popup.captured_at && (
+                      <div className="text-xs text-slate-500">
+                        {new Date(popup.captured_at).toLocaleDateString('el-GR')}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-amber-400">Δεν υπάρχουν συντεταγμένες</div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-4 py-3 border-t border-slate-700 space-y-2">
+              {/* Edit coords button */}
+              {(isPrivileged || String(popup.salesman_code) === String(currentUser.salesman_code)) && (
+                <button
+                  onClick={() => startEdit(popup)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <MapPin className="w-4 h-4" />
+                  {popup.has_coords ? 'Διόρθωση θέσης' : 'Ορισμός θέσης'}
+                </button>
+              )}
+
+              {/* Open profile */}
+              {onSelectCustomer && (
+                <button
+                  onClick={() => {
+                    onSelectCustomer({ code: popup.customer_code, name: popup.customer_name, city: popup.city, area: popup.area, address: popup.address });
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Άνοιγμα προφίλ →
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* No-coords list (when toggle active) */}
+        {showNoCoords && !popup && (
+          <div className="w-72 bg-slate-800 text-white flex flex-col shrink-0 border-l border-slate-700 overflow-y-auto">
+            <div className="px-4 py-3 border-b border-slate-700 text-sm font-medium text-amber-400">
+              Χωρίς συντεταγμένες ({noCoordCount})
+            </div>
+            {customers.filter(c => !c.has_coords).map(c => (
+              <button
+                key={c.customer_code}
+                onClick={() => setPopup(c)}
+                className="flex flex-col items-start px-4 py-3 border-b border-slate-700/50 hover:bg-white/5 text-left"
+              >
+                <span className="text-sm font-medium text-white truncate w-full">{c.customer_name}</span>
+                <span className="text-xs text-slate-400">{c.city} · {c.area}</span>
+                <span className="text-xs text-slate-500 font-mono">{c.customer_code}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

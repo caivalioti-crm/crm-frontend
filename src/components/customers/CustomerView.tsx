@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { ProfileEditor } from '../ui/ProfileEditor';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategoryIntelligence } from './CategoryIntelligence';
+import { CustomerMap } from '../customers/CustomerMap';
 
 import type { CommercialEntityBase } from '../../types/commercialEntity';
 
@@ -45,6 +46,7 @@ export interface CustomerViewProps {
     warning?: string | null;
   };
   onBack: () => void;
+  currentUser?: { id: string; role: string; salesman_code: string | null; name: string };
 }
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
@@ -128,7 +130,7 @@ function getL1Label(l1Code: string, items: any[]): string {
   return l1Item ? l1Item.full_name : `Κατηγορία ${l1Code}`;
 }
 
-export function CustomerView({ customer, onBack }: CustomerViewProps) {
+export function CustomerView({ customer, onBack, currentUser: propCurrentUser }: CustomerViewProps) {
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -183,6 +185,8 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
   const [warning, setWarning] = useState<string | null>(null);
   const [locationCapturing, setLocationCapturing] = useState(false);
   const [locationCaptured, setLocationCaptured] = useState(false);  
+  const [showMap, setShowMap] = useState(false);
+  const currentUser = propCurrentUser ?? { id: '', role: 'rep', salesman_code: null, name: '' };
 
   const docsRef = useRef<HTMLDivElement>(null);
 
@@ -800,6 +804,15 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             <div className="space-y-2">
               <div className="font-medium text-slate-400 text-xs uppercase tracking-wide">Επικοινωνία</div>
               {customer.address && <div className="flex items-start gap-2"><Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" /><span>{customer.address}{customer.zip ? `, ${customer.zip}` : ''}{customer.city ? `, ${customer.city}` : ''}</span></div>}
+              {(customer.address || customer.city) && (
+                <button
+                  onClick={() => setShowMap(true)}
+                  className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  Προβολή/Επεξεργασία θέσης
+                </button>
+              )}
               {customer.email && <div className="flex items-center gap-2"><span>✉️</span><a href={`mailto:${customer.email}`} className="text-blue-600 hover:underline truncate">{customer.email}</a></div>}
               {customer.fax && <div>📠 {customer.fax}</div>}
               {customer.afm && <div className="inline-block font-mono text-xs bg-slate-100 px-2 py-1 rounded">ΑΦΜ: {customer.afm}</div>}
@@ -1599,6 +1612,14 @@ export function CustomerView({ customer, onBack }: CustomerViewProps) {
             </>
           )}
         </div>
+
+{showMap && (
+  <CustomerMap
+    currentUser={currentUser}
+    singleCustomer={{ code: customer.code, name: customer.name, address: customer.address, city: customer.city, area: customer.area }}
+    onClose={() => setShowMap(false)}
+  />
+)}
 
         {/* CATEGORY INTELLIGENCE */}
         {!salesLoading && (
