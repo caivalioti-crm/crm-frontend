@@ -57,7 +57,10 @@ function addDays(date: Date, n: number): Date {
 }
 
 function dateKey(d: Date): string {
-  return d.toISOString().split('T')[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function formatWeekLabel(monday: Date): string {
@@ -107,6 +110,7 @@ interface CustomerSelection {
   // suggested time
   suggested_time?: string;
   duration_minutes?: number;
+  travel_buffer?: number;
 }
 
 interface SuggestionsPanelProps {
@@ -131,7 +135,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
   const [daySlots, setDaySlots] = useState<DaySlot[]>([]);
 
   // Filters
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  
   const [filterNotVisitedDays, setFilterNotVisitedDays] = useState<number | null>(null);
   const [filterPerformance, setFilterPerformance] = useState<'all' | 'up' | 'down'>('all');
   const [filterTiers, setFilterTiers] = useState<number[]>([]);
@@ -275,13 +279,14 @@ useEffect(() => {
 
       const newPlan: Record<string, CustomerSelection[]> = {};
         for (const day of result.days ?? []) {
-        newPlan[day.date] = day.suggested.map((s: any) => ({
+            newPlan[day.date] = day.suggested.map((s: any, i: number, arr: any[]) => ({
             ...s,
             name: s.customer_name ?? s.name ?? s.code,
             code: s.customer_code ?? s.code,
             included: true,
             sos: false,
             duration_minutes: 30,
+            travel_buffer: i === 0 ? 0 : (arr[i-1].city === s.city ? 10 : 20),
         }));
         }
 
@@ -349,11 +354,13 @@ useEffect(() => {
   const buildGoogleMapsUrl = (date: string) => {
   const custs = plan[date] ?? [];
   if (custs.length === 0) return null;
-  const addresses = custs
-    .map(c => [c.address, c.city, 'Greece'].filter(Boolean).join(', '))
-    .filter(Boolean);
+  const addresses = custs.map(c => {
+    if (c.address && c.city) return `${c.address}, ${c.city}, Greece`;
+    if (c.address) return `${c.address}, Greece`;
+    if (c.city) return `${c.city}, Greece`;
+    return null;
+  }).filter(Boolean) as string[];
   if (addresses.length === 0) return null;
-  // Use the simple /maps/dir/ format which works without API key
   const parts = addresses.map(a => encodeURIComponent(a)).join('/');
   return `https://www.google.com/maps/dir/${parts}`;
 };
@@ -366,13 +373,14 @@ useEffect(() => {
       [list[idx], list[newIdx]] = [list[newIdx], list[idx]];
       // Recalculate times
       let minutes = 9 * 60;
-      const recalculated = list.map(c => {
-        const h = Math.floor(minutes / 60);
-        const m = minutes % 60;
-        const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        minutes += c.duration_minutes ?? 30;
-        return { ...c, suggested_time: time };
-      });
+        const recalculated = list.map((c, i) => {
+          if (i > 0) minutes += c.travel_buffer ?? 10;
+          const h = Math.floor(minutes / 60);
+          const m = minutes % 60;
+          const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+          minutes += c.duration_minutes ?? 30;
+          return { ...c, suggested_time: time };
+        });
       return { ...prev, [date]: recalculated };
     });
   };
@@ -381,7 +389,8 @@ useEffect(() => {
     setPlan(prev => {
       const list = (prev[date] ?? []).filter(c => c.code !== code);
       let minutes = 9 * 60;
-      const recalculated = list.map(c => {
+      const recalculated = list.map((c, i) => {
+        if (i > 0) minutes += c.travel_buffer ?? 10;
         const h = Math.floor(minutes / 60);
         const m = minutes % 60;
         const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -393,19 +402,20 @@ useEffect(() => {
   };
 
   const updateDuration = (date: string, code: string, duration: number) => {
-    setPlan(prev => {
-      const list = (prev[date] ?? []).map(c => c.code === code ? { ...c, duration_minutes: duration } : c);
-      let minutes = 9 * 60;
-      const recalculated = list.map(c => {
-        const h = Math.floor(minutes / 60);
-        const m = minutes % 60;
-        const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        minutes += c.duration_minutes ?? 30;
-        return { ...c, suggested_time: time };
-      });
-      return { ...prev, [date]: recalculated };
+  setPlan(prev => {
+    const list = (prev[date] ?? []).map(c => c.code === code ? { ...c, duration_minutes: duration } : c);
+    let minutes = 9 * 60;
+    const recalculated = list.map((c, i) => {
+      if (i > 0) minutes += c.travel_buffer ?? 10;
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      minutes += c.duration_minutes ?? 30;
+      return { ...c, suggested_time: time };
     });
-  };
+    return { ...prev, [date]: recalculated };
+  });
+};
 
   const totalPlanned = Object.values(plan).reduce((s, custs) => s + custs.length, 0);
 
@@ -577,59 +587,6 @@ useEffect(() => {
               <Plus className="w-3.5 h-3.5" /> Προσθήκη ημέρας (Σαβ/Κυρ)
             </button>
 
-            {/* Optional filters */}
-            <div className="mb-4">
-              <button onClick={() => setFiltersExpanded(v => !v)}
-                className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 mb-2 px-3 py-2 bg-indigo-50 rounded-lg w-full border border-indigo-100">
-                <ChevronDown className={`w-4 h-4 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`} />
-                Προαιρετικά φίλτρα πελατών
-                {(filterNotVisitedDays || filterPerformance !== 'all' || filterTiers.length > 0) && (
-                    <span className="ml-auto px-1.5 py-0.5 bg-indigo-600 text-white text-xs rounded-full">Ενεργά</span>
-                )}
-                </button>
-              {filtersExpanded && (
-                <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Δεν επισκέφθηκε από</label>
-                    <div className="flex flex-wrap gap-2">
-                      {[null, 30, 60, 180, 365].map(days => (
-                        <button key={days ?? 'all'} onClick={() => setFilterNotVisitedDays(days)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${filterNotVisitedDays === days ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
-                          {days === null ? 'Όλοι' : days === 30 ? '1 μήνα' : days === 60 ? '2 μήνες' : days === 180 ? '6 μήνες' : '1 χρόνο'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Απόδοση YTD</label>
-                    <div className="flex gap-2">
-                      {[['all', 'Όλοι'], ['up', '↑ Ανοδικοί'], ['down', '↓ Καθοδικοί']].map(([v, l]) => (
-                        <button key={v} onClick={() => setFilterPerformance(v as any)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${filterPerformance === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Tier Πελάτη</label>
-                    <div className="flex flex-wrap gap-2">
-                      {[1, 2, 3, 4].map(t => {
-                        const tier = TIER_LABELS[t];
-                        const selected = filterTiers.includes(t);
-                        return (
-                          <button key={t} onClick={() => setFilterTiers(prev => selected ? prev.filter(x => x !== t) : [...prev, t])}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${selected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
-                            {tier.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
             <button
               onClick={() => { setStep('select'); setSelectedDayForPool(validSlots[0]?.date ?? null); if (validSlots[0]) loadPoolForSlot(validSlots[0]); }}
               disabled={validSlots.length === 0}
@@ -687,19 +644,65 @@ useEffect(() => {
                 </div>
                 </div>
                 <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Tier</label>
-                <div className="flex gap-1">
-                    {[1, 2, 3, 4].map(t => {
-                    const selected = filterTiers.includes(t);
-                    return (
-                        <button key={t} onClick={() => { setFilterTiers(prev => selected ? prev.filter(x => x !== t) : [...prev, t]); if (selectedDayForPool) { const slot = validSlots.find(s => s.date === selectedDayForPool); if (slot) loadPoolForSlot(slot); }}}
-                        className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${selected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
-                        T{t}
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Tier</label>
+                  <div className="flex gap-1">
+                    <button onClick={() => {
+                      setFilterTiers([]);
+                      if (selectedDayForPool) { const slot = validSlots.find(s => s.date === selectedDayForPool); if (slot) loadPoolForSlot(slot); }
+                    }}
+                      className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${filterTiers.length === 0 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
+                      Όλοι
+                    </button>
+                    {[0, 1, 2, 3, 4].map(t => {
+                      const selected = filterTiers.includes(t);
+                      const newTiers = selected ? filterTiers.filter(x => x !== t) : [...filterTiers, t];
+                      return (
+                        <button key={t} onClick={() => {
+                          setFilterTiers(newTiers);
+                          if (selectedDayForPool) {
+                            const slot = validSlots.find(s => s.date === selectedDayForPool);
+                            if (slot) {
+                              setPoolLoading(true);
+                              setSelectedDayForPool(slot.date);
+                              authedFetch('/api/planning/suggest', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                  week_start: dateKey(selectedMonday),
+                                  target_user_id: targetUserId !== currentUser.id ? targetUserId : undefined,
+                                  day_slots: [{ date: slot.date, area: slot.area, city: slot.city || undefined }],
+                                  filters: { performance: filterPerformance, not_visited_since: filterNotVisitedDays, tiers: newTiers.length > 0 ? newTiers : null },
+                                  max_per_day: 50,
+                                }),
+                              }).then(result => {
+                                const dayResult = result.days?.[0];
+                                setCustomerPool(!dayResult ? [] : dayResult.suggested.map((s: any) => ({
+                                  ...s, name: s.customer_name ?? s.name ?? s.code, code: s.customer_code ?? s.code,
+                                  included: true, sos: false, duration_minutes: 30,
+                                })));
+                              }).catch(console.error).finally(() => setPoolLoading(false));
+                            }
+                          }
+                        }}
+                          className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${selected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
+                          T{t}
                         </button>
-                    );
+                      );
                     })}
-                </div>
-                </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {[
+                      { t: 0, label: 'Ανενεργός', sub: '0 τιμολ.' },
+                      { t: 1, label: 'Σπάνιος', sub: '<1/μήνα' },
+                      { t: 2, label: 'Περιστ.', sub: '1-3/μήνα' },
+                      { t: 3, label: 'Τακτικός', sub: '4+/μήνα' },
+                      { t: 4, label: 'Εβδομ.', sub: 'κάθε εβδ.' },
+                    ].map(({ t, label, sub }) => (
+                      <span key={t} className="text-xs text-slate-400">
+                        <span className={`font-medium ${TIER_LABELS[t].color}`}>T{t}</span> {label} ({sub})
+                      </span>
+                    ))}
+                  </div>
+                  </div>
             </div>
             </div>
 
@@ -826,7 +829,7 @@ useEffect(() => {
               {validSlots.map(slot => {
                 const custs = plan[slot.date] ?? [];
                 const mapsUrl = buildGoogleMapsUrl(slot.date);
-                const totalMinutes = custs.reduce((s, c) => s + (c.duration_minutes ?? 30), 0);
+                const totalMinutes = custs.reduce((s, c, i) => s + (c.duration_minutes ?? 30) + (i > 0 ? (c.travel_buffer ?? 10) : 0), 0);
                 const endHour = Math.floor((9 * 60 + totalMinutes) / 60);
                 const endMin = (9 * 60 + totalMinutes) % 60;
 
@@ -858,7 +861,35 @@ useEffect(() => {
                         {custs.map((c, idx) => {
                           const tier = TIER_LABELS[c.tier];
                           return (
-                            <div key={c.code} className={`px-4 py-3 flex items-start gap-3 ${c.sos ? 'bg-amber-50' : ''}`}>
+                            <div key={c.code}>
+                            {idx > 0 && (
+                              <div className="flex items-center gap-2 px-4 py-1 bg-slate-50 border-b border-slate-100">
+                                <div className="w-px h-3 bg-slate-300 ml-5" />
+                                <span className="text-xs text-slate-400">🚗 Μετακίνηση:</span>
+                                {[5, 10, 15, 20, 30, 45].map(b => (
+                                  <button key={b}
+                                    onClick={() => {
+                                      setPlan(prev => {
+                                        const list = (prev[slot.date] ?? []).map((x, i) => i === idx ? { ...x, travel_buffer: b } : x);
+                                        let minutes = 9 * 60;
+                                        const recalculated = list.map((x, i) => {
+                                          if (i > 0) minutes += x.travel_buffer ?? 10;
+                                          const h = Math.floor(minutes / 60);
+                                          const m = minutes % 60;
+                                          const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                                          minutes += x.duration_minutes ?? 30;
+                                          return { ...x, suggested_time: time };
+                                        });
+                                        return { ...prev, [slot.date]: recalculated };
+                                      });
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${(c.travel_buffer ?? 10) === b ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-blue-400'}`}>
+                                    {b}'
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            <div className={`px-4 py-3 flex items-start gap-3 ${c.sos ? 'bg-amber-50' : ''}`}>
                               <div className="shrink-0 text-center w-12">
                                 <div className="text-sm font-bold text-indigo-600">{c.suggested_time}</div>
                                 <div className="text-xs text-slate-400">#{idx + 1}</div>
@@ -869,6 +900,14 @@ useEffect(() => {
                                   <span className="text-sm font-medium text-slate-700">{c.name}</span>
                                   <span className="text-xs font-mono text-slate-400">{c.code}</span>
                                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${tier.bg} ${tier.color}`}>T{c.tier}</span>
+                                  {(c.address || c.city) && (
+                                    <a href={`https://www.google.com/maps/search/${encodeURIComponent([c.address, c.city, 'Greece'].filter(Boolean).join(', '))}`}
+                                      target="_blank" rel="noopener noreferrer"
+                                      className="p-0.5 text-slate-300 hover:text-blue-500 transition-colors"
+                                      onClick={e => e.stopPropagation()}>
+                                      <MapPin className="w-3 h-3" />
+                                    </a>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-400">
                                   {c.city && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{c.city}</span>}
@@ -899,6 +938,7 @@ useEffect(() => {
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
+                            </div>
                             </div>
                           );
                         })}
