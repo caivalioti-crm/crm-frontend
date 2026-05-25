@@ -644,6 +644,7 @@ useEffect(() => {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-medium text-slate-700">Επιλογή Πελατών</h4>
+              
               <button onClick={() => setStep('slots')} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
                 <ChevronLeft className="w-3.5 h-3.5" /> Πίσω
               </button>
@@ -658,6 +659,48 @@ useEffect(() => {
                   {GREEK_DAYS_SHORT[new Date(slot.date).getDay() === 0 ? 6 : new Date(slot.date).getDay() - 1]} · {slot.area}{slot.city ? ` › ${slot.city}` : ''}
                 </button>
               ))}
+            </div>
+
+            {/* Inline filters for selection step */}
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 mb-3">
+            <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Δεν επισκέφθηκε από</label>
+                <div className="flex flex-wrap gap-1">
+                    {[null, 30, 60, 180, 365].map(days => (
+                    <button key={days ?? 'all'} onClick={() => { setFilterNotVisitedDays(days); if (selectedDayForPool) { const slot = validSlots.find(s => s.date === selectedDayForPool); if (slot) loadPoolForSlot(slot); }}}
+                        className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${filterNotVisitedDays === days ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
+                        {days === null ? 'Όλοι' : days === 30 ? '1μ' : days === 60 ? '2μ' : days === 180 ? '6μ' : '1χ'}
+                    </button>
+                    ))}
+                </div>
+                </div>
+                <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Απόδοση</label>
+                <div className="flex gap-1">
+                    {[['all', 'Όλοι'], ['up', '↑'], ['down', '↓']].map(([v, l]) => (
+                    <button key={v} onClick={() => { setFilterPerformance(v as any); if (selectedDayForPool) { const slot = validSlots.find(s => s.date === selectedDayForPool); if (slot) loadPoolForSlot(slot); }}}
+                        className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${filterPerformance === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
+                        {l}
+                    </button>
+                    ))}
+                </div>
+                </div>
+                <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Tier</label>
+                <div className="flex gap-1">
+                    {[1, 2, 3, 4].map(t => {
+                    const selected = filterTiers.includes(t);
+                    return (
+                        <button key={t} onClick={() => { setFilterTiers(prev => selected ? prev.filter(x => x !== t) : [...prev, t]); if (selectedDayForPool) { const slot = validSlots.find(s => s.date === selectedDayForPool); if (slot) loadPoolForSlot(slot); }}}
+                        className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${selected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}>
+                        T{t}
+                        </button>
+                    );
+                    })}
+                </div>
+                </div>
+            </div>
             </div>
 
             {poolLoading ? (
