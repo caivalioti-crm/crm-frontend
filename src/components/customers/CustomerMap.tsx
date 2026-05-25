@@ -116,6 +116,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
 
   useEffect(() => { loadData(); }, [loadData]);
 
+
   // Update cities when area changes
   useEffect(() => {
     if (filterArea) {
@@ -216,6 +217,12 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     dragMarkerRef.current = dragMarker;
     map.setView([lat, lng], 15);
   }, []);
+
+  useEffect(() => {
+    if (singleCustomer && customers.length > 0 && !editing) {
+      startEdit(customers[0]);
+    }
+  }, [customers, singleCustomer, startEdit, editing]);
 
   const cancelEdit = useCallback(() => {
     if (dragMarkerRef.current) { dragMarkerRef.current.remove(); dragMarkerRef.current = null; }
@@ -347,8 +354,39 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
           <span className="text-sm font-medium shrink-0">Επεξεργασία: {editing.customer_name}</span>
           <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
           {editLat !== null && (
-            <span className="text-xs font-mono text-indigo-200">{editLat.toFixed(5)}, {editLng?.toFixed(5)}</span>
-          )}
+  <div className="flex items-center gap-1">
+    <input
+      type="number"
+      step="0.000001"
+      value={editLat ?? ''}
+      onChange={e => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v)) {
+          setEditLat(v);
+          dragMarkerRef.current?.setLatLng([v, editLng ?? 0]);
+          leafletMap.current?.setView([v, editLng ?? 0], leafletMap.current.getZoom());
+        }
+      }}
+      className="w-28 px-2 py-1 bg-indigo-800 border border-indigo-500 rounded text-xs font-mono text-white focus:outline-none focus:border-white"
+      placeholder="Lat"
+    />
+    <input
+      type="number"
+      step="0.000001"
+      value={editLng ?? ''}
+      onChange={e => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v)) {
+          setEditLng(v);
+          dragMarkerRef.current?.setLatLng([editLat ?? 0, v]);
+          leafletMap.current?.setView([editLat ?? 0, v], leafletMap.current.getZoom());
+        }
+      }}
+      className="w-28 px-2 py-1 bg-indigo-800 border border-indigo-500 rounded text-xs font-mono text-white focus:outline-none focus:border-white"
+      placeholder="Lng"
+    />
+  </div>
+)}
           <div className="flex items-center gap-2 ml-auto">
             <button
               onClick={useGPS}
