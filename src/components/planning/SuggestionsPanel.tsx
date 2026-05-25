@@ -905,9 +905,9 @@ useEffect(() => {
                               </div>
                             )}
                             <div className={`px-4 py-3 flex items-start gap-3 ${c.sos ? 'bg-amber-50' : ''}`}>
-                              <div className="shrink-0 text-center w-12">
-                                <div className="text-sm font-bold text-indigo-600">{c.suggested_time}</div>
-                                <div className="text-xs text-slate-400">#{idx + 1}</div>
+                              <div className="shrink-0 text-center w-14">
+                                <div className="text-lg font-bold text-indigo-600">#{idx + 1}</div>
+                                <div className="text-xs font-medium text-slate-500">{c.suggested_time}</div>
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
