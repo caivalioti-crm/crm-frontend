@@ -1,5 +1,12 @@
 self.addEventListener('push', event => {
-  const data = event.data?.json() ?? {};
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { title: 'CRM Alert', body: event.data.text() };
+    }
+  }
   const title = data.title ?? 'CRM Alert';
   const options = {
     body: data.body ?? '',
