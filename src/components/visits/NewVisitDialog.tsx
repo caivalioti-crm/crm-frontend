@@ -118,8 +118,16 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     return base.toISOString().split('T')[0];
   };
 
-  const handleAddTask = () => {
-    if (!newTaskDescription.trim()) return;
+ const handleAddTask = () => {
+  if (!newTaskDescription.trim()) return;
+  if (!newTaskReminderType) {
+    setError('Επιλέξτε ημερομηνία υπενθύμισης για την εργασία');
+    return;
+  }
+  if (newTaskReminderType === 'custom' && !newTaskCustomDate) {
+    setError('Επιλέξτε συγκεκριμένη ημερομηνία υπενθύμισης');
+    return;
+  }
     const task: Task = { description: newTaskDescription };
     if (newTaskReminderType === 'custom') {
       const reminderISO = newTaskCustomDate.match(/^\d{4}-\d{2}-\d{2}$/) ? newTaskCustomDate : dateToISO(newTaskCustomDate);
@@ -370,7 +378,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 onKeyDown={e => e.key === 'Enter' && handleAddTask()} />
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">Reminder (optional)</label>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Reminder <span className="text-red-500">*</span></label>
                 <div className="grid grid-cols-2 gap-2">
                   {(['1week', '2weeks', '1month', 'custom'] as const).map(type => (
                     <button key={type} onClick={() => setNewTaskReminderType(newTaskReminderType === type ? '' : type)}
@@ -393,7 +401,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
                   </div>
                 )}
               </div>
-              <button onClick={handleAddTask} disabled={!newTaskDescription.trim()}
+              <button onClick={handleAddTask} disabled={!newTaskDescription.trim() || !newTaskReminderType}
                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-medium">
                 <Plus className="w-4 h-4" />
                 Add Task

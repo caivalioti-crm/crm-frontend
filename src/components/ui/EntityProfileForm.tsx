@@ -21,6 +21,8 @@ const SHOP_TYPE_OPTIONS = [
   { value: 'cooperative', label: 'Συνεταιρισμός' },
   { value: 'company', label: 'Εταιρεία, π.χ. τεχνική' },
   { value: 'public_service', label: 'Δημόσια Υπηρεσία' },
+  { value: 'electronics_shop', label: 'Ηλεκτρονικό κατάστημα' },
+  { value: 'agricultural_machinery', label: 'Γεωργικά μηχανήματα' },
   { value: 'other', label: 'Άλλο' },
 ];
 

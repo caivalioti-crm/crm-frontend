@@ -26,6 +26,8 @@ const SHOP_TYPE_LABELS: Record<string, string> = {
   cooperative: 'Συνεταιρισμός',
   company: 'Εταιρεία, π.χ. τεχνική',
   public_service: 'Δημόσια Υπηρεσία',
+  electronics_shop: 'Ηλεκτρονικό κατάστημα',
+  agricultural_machinery: 'Γεωργικά μηχανήματα',
   other: 'Άλλο',
 };
 

@@ -11,7 +11,9 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { ProfileEditor } from '../ui/ProfileEditor';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
+import { CategorySelector } from '../ui/CategorySelector';
 import { CategoryIntelligence } from './CategoryIntelligence';
+
 import { CustomerMap } from '../customers/CustomerMap';
 
 import type { CommercialEntityBase } from '../../types/commercialEntity';
@@ -197,6 +199,8 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
   const [cvEditType, setCvEditType] = useState('');
   const [cvEditDate, setCvEditDate] = useState('');
   const [cvEditSaving, setCvEditSaving] = useState(false);
+  const [cvEditCategories, setCvEditCategories] = useState<any[]>([]);
+const [allCategories, setAllCategories] = useState<any[]>([]);
 
   const [cvPlayingMemoId, setCvPlayingMemoId] = useState<string | null>(null);
   const [cvMemoUrls, setCvMemoUrls] = useState<Record<string, string>>({});
@@ -294,6 +298,10 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
       .catch(console.error)
       .finally(() => setDocsLoading(false));
   }, [customer.code, docPeriodIdx]);
+
+  useEffect(() => {
+  authedFetch('/api/categories').then(setAllCategories).catch(console.error);
+}, []);
 
   function toggleDocExpand(findoc: number) {
     if (expandedDocId === findoc) { setExpandedDocId(null); return; }
@@ -521,12 +529,13 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
     );
   }
 
-  const startEditVisitInCustomer = (v: any) => {
-    setEditingVisitInCustomer(v.id);
-    setCvEditNotes(v.notes ?? '');
-    setCvEditType(v.visit_type ?? 'in-person');
-    setCvEditDate(isoToDisplay(v.visit_date));
-  };
+const startEditVisitInCustomer = (v: any) => {
+  setEditingVisitInCustomer(v.id);
+  setCvEditNotes(v.notes ?? '');
+  setCvEditType(v.visit_type ?? 'in-person');
+  setCvEditDate(isoToDisplay(v.visit_date));
+  setCvEditCategories(v.crm_visit_categories ?? []);
+};
 
   const saveEditVisitInCustomer = async (visitId: string) => {
     setCvEditSaving(true);
@@ -536,7 +545,12 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
       const res = await fetch(`${BASE_URL}/api/visits/${visitId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ notes: cvEditNotes, visit_type: cvEditType, visit_date: dateToISO(cvEditDate) }),
+        body: JSON.stringify({ 
+  notes: cvEditNotes, 
+  visit_type: cvEditType, 
+  visit_date: dateToISO(cvEditDate),
+  categories: cvEditCategories,
+}),
       });
       if (!res.ok) throw new Error('Failed');
       const updated = await res.json();
@@ -652,7 +666,7 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
                 const allTasks = visits.flatMap((v: any) => (v.crm_visit_tasks ?? []).map((t: any) => ({ ...t, visit_id: v.id })));
                 const overdue = allTasks.filter((t: any) => t.status !== 'completed' && t.reminder_date && t.reminder_date < today);
                 const todayDue = allTasks.filter((t: any) => t.status !== 'completed' && t.reminder_date === today);
-                const pending = allTasks.filter((t: any) => t.status !== 'completed');
+                const pending = allTasks.filter((t: any) => t.status !== 'completed' && t.reminder_date);
                 if (overdue.length > 0) return (
                   <span className="flex items-center gap-1 px-2.5 py-1.5 bg-red-800 text-white rounded-lg text-xs font-bold">
                     <Bell className="w-4 h-4" />{overdue.length} ληξιπρόθεσμες
@@ -1286,6 +1300,14 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
                               <textarea value={cvEditNotes} onChange={e => setCvEditNotes(e.target.value)}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 min-h-[80px]" />
                             </div>
+                            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Κατηγορίες</label>
+              <CategorySelector
+                allCategories={allCategories}
+                selected={cvEditCategories}
+                onChange={setCvEditCategories}
+              />
+            </div>
                             <div className="flex gap-2">
                               <button onClick={() => saveEditVisitInCustomer(v.id)} disabled={cvEditSaving}
                                 className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
