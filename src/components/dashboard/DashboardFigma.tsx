@@ -311,6 +311,7 @@ const load = async () => {
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
   const scrollPositionRef = useRef<number>(0);
+  const scrollAfterBackRef = useRef<number | null>(null);
   const cameFromCalendarRef = useRef(false);
   const [repOpen, setRepOpen] = useState(false);
   
@@ -334,6 +335,16 @@ useEffect(() => {
     }, 150);
   }
 }, []);
+
+useEffect(() => {
+  if (!selectedCustomer && !selectedProspect && scrollAfterBackRef.current !== null) {
+    const y = scrollAfterBackRef.current;
+    scrollAfterBackRef.current = null;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: y, behavior: 'instant' });
+    });
+  }
+}, [selectedCustomer, selectedProspect]);
 
   const handleBackToAreas = () => { backToAreas(); setGeoCitiesExpanded(false); };
 
@@ -1168,31 +1179,27 @@ useEffect(() => {
         <CustomerView
           customer={selectedCustomer}
           currentUser={currentUser}
-          onBack={() => {
-            setSelectedCustomer(null);
-            if (cameFromCalendarRef.current) {
-              cameFromCalendarRef.current = false;
-              setShowCalendar(true);
-            }
-            requestAnimationFrame(() => {
-              window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
-            });
-          }}
+            onBack={() => {
+              scrollAfterBackRef.current = scrollPositionRef.current;
+              setSelectedCustomer(null);
+              if (cameFromCalendarRef.current) {
+                cameFromCalendarRef.current = false;
+                setShowCalendar(true);
+              }
+            }}
         />
       )}
       {selectedProspect && (
         <ProspectView
           prospect={selectedProspect}
-          onBack={() => {
-            setSelectedProspect(null);
-            if (cameFromCalendarRef.current) {
-              cameFromCalendarRef.current = false;
-              setShowCalendar(true);
-            }
-            requestAnimationFrame(() => {
-              window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
-            });
-          }}
+            onBack={() => {
+              scrollAfterBackRef.current = scrollPositionRef.current;
+              setSelectedProspect(null);
+              if (cameFromCalendarRef.current) {
+                cameFromCalendarRef.current = false;
+                setShowCalendar(true);
+              }
+            }}
         />
       )}
 
