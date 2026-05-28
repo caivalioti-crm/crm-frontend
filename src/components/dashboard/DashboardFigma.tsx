@@ -274,7 +274,7 @@ export function DashboardFigma() {
     setSalesByCategoryExpanded, expandSalesByCategory,
     dashboardSkuData, dashboardSkuLoading, fetchDashboardSkus,
     topCustomersData, topCustomersLoading, fetchTopCustomers,
-    repModeOverride, setRepModeOverride, clearTopCustomersCache, PERIODS, displayedCustomers,
+    clearTopCustomersCache, PERIODS, displayedCustomers,
     notVisitedDays, setNotVisitedDays,
     salesFilter, setSalesFilter,
     performanceFilter, setPerformanceFilter,
@@ -420,7 +420,7 @@ useEffect(() => {
   >
     <Eye className="w-4 h-4" />
     <span className="hidden sm:block max-w-[120px] truncate">
-      {viewAsRep ? viewAsRep.full_name : 'Δική μου προβολή'}
+      {viewAsRepId === currentUser.id ? 'Οι πελάτες μου' : viewAsRep ? viewAsRep.full_name : 'Όλοι οι πελάτες'}
     </span>
     <ChevronDown className="w-3.5 h-3.5 opacity-70" />
   </button>
@@ -431,10 +431,19 @@ useEffect(() => {
         className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-slate-50 transition-colors ${!viewAsRepId ? 'text-indigo-600 font-medium' : 'text-slate-700'}`}
       >
         <Eye className="w-4 h-4 shrink-0" />
-        Δική μου προβολή
+        Όλοι οι πελάτες
       </button>
+      {currentUser.salesman_code && (
+        <button
+          onClick={() => { setViewAsRepId(currentUser.id); clearTopCustomersCache(); setRepOpen(false); }}
+          className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-slate-50 transition-colors ${viewAsRepId === currentUser.id ? 'text-indigo-600 font-medium' : 'text-slate-700'}`}
+        >
+          <User className="w-4 h-4 shrink-0" />
+          Οι πελάτες μου
+        </button>
+      )}
       <div className="border-t border-slate-100 my-1" />
-      {repList.filter(r => r.id !== currentUser.id).map(r => (
+      {repList.filter(r => r.id !== currentUser.id && r.salesman_code).map(r => (
         <button
           key={r.id}
           onClick={() => { setViewAsRepId(r.id); clearTopCustomersCache(); setRepOpen(false); }}
@@ -448,13 +457,7 @@ useEffect(() => {
   )}
 </div>
 )}
-{currentUser.role === 'manager' && (
-  <button onClick={() => { setRepModeOverride(v => !v); clearTopCustomersCache(); }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${repModeOverride ? 'bg-white text-indigo-700 border-white' : 'bg-white/10 text-white/90 border-white/20 hover:bg-white/20'}`}>
-                  <Users className="w-4 h-4" />
-                  <span className="hidden sm:block">{repModeOverride ? 'My Customers' : 'All Customers'}</span>
-                </button>
-              )}
+
               <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors">
                 <LogOut className="w-4 h-4" />
@@ -496,7 +499,7 @@ useEffect(() => {
           </div>
 
           {/* Context bar */}
-          {(selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays || searchQuery || repModeOverride || selectedCustomer || selectedProspect || salesFilter !== 'all' || activeFilter !== 'all' || joinedPeriod !== null) && (
+          {(selectedAreas.length > 0 || selectedCities.length > 0 || notVisitedDays || searchQuery || selectedCustomer || selectedProspect || salesFilter !== 'all' || activeFilter !== 'all' || joinedPeriod !== null) && (
             <div className="flex items-center gap-1.5 border-t border-white/10 pt-1.5 flex-wrap">
               {selectedCustomer ? (
                 <>
@@ -514,7 +517,7 @@ useEffect(() => {
               ) : (
                 <>
                   <span className="text-white/40 text-xs">Φίλτρα:</span>
-                  {repModeOverride && <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">Οι πελάτες μου</span>}
+                  
                   {selectedAreas.length > 0 && (
                     <span className="text-white/60 text-xs bg-white/10 px-1.5 py-0.5 rounded">
                       {selectedAreas.length === 1 ? selectedAreas[0] : `${selectedAreas.length} areas`}
