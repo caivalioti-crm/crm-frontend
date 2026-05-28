@@ -185,6 +185,7 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
   const [categoryMaster, setCategoryMaster] = useState<Map<string, string>>(new Map());
   const [payment, setPayment] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [salesman, setSalesman] = useState<{ code: string | null; name: string | null } | null>(null);
   const [locationCapturing, setLocationCapturing] = useState(false);
   const [locationCaptured, setLocationCaptured] = useState(false);  
   const [showMap, setShowMap] = useState(false);
@@ -254,6 +255,7 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
         if (data.lastInvoiceDate) setLastInvoiceDate(data.lastInvoiceDate);
         if (data.payment) setPayment(data.payment);
         if (data.warning) setWarning(data.warning);
+        if (data.salesman) setSalesman(data.salesman);
       })
       .catch(console.error)
       .finally(() => {
@@ -839,6 +841,12 @@ const startEditVisitInCustomer = (v: any) => {
             </div>
             <div className="space-y-2">
               <div className="font-medium text-slate-400 text-xs uppercase tracking-wide">Πληροφορίες</div>
+              {salesman?.name && (
+                <div className="flex items-center gap-1.5">
+                  <User className="w-4 h-4 text-slate-400" />
+                  Πωλητής: <span className="font-medium">{salesman.name}</span>
+                </div>
+              )}
               {customer.area && <div>Περιοχή: <span className="font-medium">{customer.area}</span></div>}
               {customer.lastVisitDate ? <div>Τελευταία επίσκεψη: <span className="font-medium">{formatDate(customer.lastVisitDate)}</span></div> : <div className="text-slate-400 text-xs italic">Καμία επίσκεψη ακόμα</div>}
               {customer.inserted_date && <div>Πελάτης από: <span className="font-medium">{formatDate(customer.inserted_date)}</span></div>}
