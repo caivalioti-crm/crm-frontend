@@ -18,6 +18,30 @@ import { CustomerMap } from '../customers/CustomerMap';
 
 import type { CommercialEntityBase } from '../../types/commercialEntity';
 
+const SHOP_TYPE_LABELS: Record<string, string> = {
+  auto_parts_retailer: 'Ανταλλακτικά - Γενικά',
+  auto_parts_jap: 'Ανταλλακτικά - JAP',
+  auto_parts_eur: 'Ανταλλακτικά - EUR',
+  auto_parts_korea: 'Ανταλλακτικά - KOREA',
+  used_parts_general: 'Μεταχειρισμένα - Γενικά',
+  used_parts_jap: 'Μεταχειρισμένα - JAP',
+  used_parts_eur: 'Μεταχειρισμένα - EUR',
+  accessories: 'Αξεσουάρ',
+  garage: 'Συνεργείο',
+  body_shop: 'Φανοποιείο',
+  electrician: 'Ηλεκτρολογείο',
+  specialist: 'Ειδικό - Ρεκτιφιέ/Τουρμπίνα/Diesel',
+  vertical_unit: 'Κάθετη μονάδα',
+  dealership: 'Αντιπροσωπεία',
+  car_rental: 'Ενοικιάσεις αυτοκινήτων',
+  cooperative: 'Συνεταιρισμός',
+  company: 'Εταιρεία, π.χ. τεχνική',
+  public_service: 'Δημόσια Υπηρεσία',
+  electronics_shop: 'Ηλεκτρονικό κατάστημα',
+  agricultural_machinery: 'Γεωργικά μηχανήματα',
+  other: 'Άλλο',
+};
+
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 async function authedFetch(url: string) {
@@ -1417,29 +1441,44 @@ const startEditVisitInCustomer = (v: any) => {
 
                         {!isEditing && (v.shop_profile || v.competitor_info) && (
                           <div className="space-y-2">
-                            {v.shop_profile && (v.shop_profile.shop_type || v.shop_profile.number_of_employees || v.shop_profile.shop_size_m2 || v.shop_profile.stock_behavior) && (
+                            {v.shop_profile && (v.shop_profile.shop_type || v.shop_profile.number_of_employees || v.shop_profile.shop_size_m2 || v.shop_profile.stock_behavior || v.shop_profile.vehicle_types?.length > 0 || v.shop_profile.vehicle_brands?.length > 0) && (
                               <div>
                                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Προφίλ Καταστήματος</div>
                                 <div className="space-y-1 text-xs text-slate-600">
-                                  {v.shop_profile.shop_type && <div className="flex justify-between"><span className="text-slate-400">Τύπος</span><span>{v.shop_profile.shop_type}</span></div>}
+                                  {v.shop_profile.shop_type && <div className="flex justify-between"><span className="text-slate-400">Τύπος</span><span>{SHOP_TYPE_LABELS[v.shop_profile.shop_type] ?? v.shop_profile.shop_type}</span></div>}
+                                  {v.shop_profile.vehicle_types?.length > 0 && <div className="flex justify-between gap-2"><span className="text-slate-400 shrink-0">Οχήματα</span><span className="text-right">{v.shop_profile.vehicle_types.join(', ')}</span></div>}
+                                  {v.shop_profile.vehicle_brands?.length > 0 && <div className="flex justify-between gap-2"><span className="text-slate-400 shrink-0">Μάρκες</span><span className="text-right">{v.shop_profile.vehicle_brands.join(', ')}</span></div>}
                                   {v.shop_profile.number_of_employees && <div className="flex justify-between"><span className="text-slate-400">Εργαζόμενοι</span><span>{v.shop_profile.number_of_employees}</span></div>}
                                   {v.shop_profile.shop_size_m2 && <div className="flex justify-between"><span className="text-slate-400">Εμβαδό</span><span>{v.shop_profile.shop_size_m2} m²</span></div>}
                                   {v.shop_profile.stock_behavior && <div className="flex justify-between"><span className="text-slate-400">Απόθεμα</span><span>{v.shop_profile.stock_behavior}</span></div>}
                                 </div>
                               </div>
                             )}
-                            {v.competitor_info && (v.competitor_info.main_competitor || v.competitor_info.other_competitors || v.competitor_info.estimated_monthly_spend || v.competitor_info.competitor_strengths || v.competitor_info.switch_reason) && (
-                              <div>
-                                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Ανταγωνισμός</div>
-                                <div className="space-y-1 text-xs text-slate-600">
-                                  {v.competitor_info.main_competitor && <div className="flex justify-between"><span className="text-slate-400">Κύριος</span><span className="font-medium">{v.competitor_info.main_competitor}</span></div>}
-                                  {v.competitor_info.other_competitors && <div className="flex justify-between"><span className="text-slate-400">Άλλοι</span><span>{v.competitor_info.other_competitors}</span></div>}
-                                  {v.competitor_info.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(v.competitor_info.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
-                                  {v.competitor_info.competitor_strengths && <div><div className="text-slate-400 mb-0.5">Δυνατά σημεία</div><div className="bg-white rounded p-1.5">{v.competitor_info.competitor_strengths}</div></div>}
-                                  {v.competitor_info.switch_reason && <div><div className="text-slate-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-white rounded p-1.5">{v.competitor_info.switch_reason}</div></div>}
+                            {v.competitor_info && (() => {
+                              const ci = v.competitor_info;
+                              const comps: any[] = Array.isArray(ci.competitors_v2) ? ci.competitors_v2 : [];
+                              const hasData = comps.length > 0 || ci.main_competitor || ci.other_competitors || ci.estimated_monthly_spend || ci.competitor_strengths || ci.switch_reason;
+                              if (!hasData) return null;
+                              return (
+                                <div>
+                                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Ανταγωνισμός</div>
+                                  <div className="space-y-1 text-xs text-slate-600">
+                                    {comps.length > 0 && comps.map((c: any) => (
+                                      <div key={c.name} className="flex items-center gap-1.5">
+                                        {c.isPrimary && <span className="text-amber-500">★</span>}
+                                        <span className={c.isPrimary ? 'font-medium' : ''}>{c.name}</span>
+                                        {c.notes && <span className="text-slate-400 truncate">— {c.notes}</span>}
+                                      </div>
+                                    ))}
+                                    {!comps.length && ci.main_competitor && <div className="flex justify-between"><span className="text-slate-400">Κύριος</span><span className="font-medium">{ci.main_competitor}</span></div>}
+                                    {!comps.length && ci.other_competitors && <div className="flex justify-between"><span className="text-slate-400">Άλλοι</span><span>{ci.other_competitors}</span></div>}
+                                    {ci.estimated_monthly_spend && <div className="flex justify-between"><span className="text-slate-400">Μηνιαία Δαπάνη</span><span className="font-medium text-green-600">€{Number(ci.estimated_monthly_spend).toLocaleString('el-GR')}</span></div>}
+                                    {ci.competitor_strengths && <div><div className="text-slate-400 mb-0.5">Δυνατά σημεία</div><div className="bg-white rounded p-1.5">{ci.competitor_strengths}</div></div>}
+                                    {ci.switch_reason && <div><div className="text-slate-400 mb-0.5">Λόγος αλλαγής</div><div className="bg-white rounded p-1.5">{ci.switch_reason}</div></div>}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         )}
 

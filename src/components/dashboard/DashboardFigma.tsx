@@ -283,9 +283,9 @@ export function DashboardFigma() {
     joinedPeriod, setJoinedPeriod,
     customerSortMode, setCustomerSortMode, monthlySales, monthlySalesCompare, monthlySalesLoading,
     monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, 
-    dueTasks, unreadCommentCount,
+    dueTasks, unreadCommentCount, allCustomers,
     taskFilter, setTaskFilter,
-    commentFilter, setCommentFilter,
+    commentFilter, setCommentFilter, 
 
   } = useDashboardFigma(viewAsRep?.salesman_code ?? null);
 
@@ -1147,7 +1147,7 @@ useEffect(() => {
               key={`visits-${visitsRefreshKey}`}
               currentUser={currentUser}
               onNewVisit={() => setShowNewVisitDialog(true)}
-              customers={customers}
+              customers={allCustomers} 
               taskFilter={taskFilter}
               commentFilter={commentFilter}
               dueTasks={dueTasks}

@@ -604,6 +604,7 @@ const areaStats = useMemo(() => {
   /* ===================== EXPORT ===================== */
   return {
     customers: customersWithGrowth,
+    allCustomers: scopedCustomers,
     displayedCustomers,
     customersTotal: scopedCustomers.length,
     totalRevenue, compareRevenue, revenueGrowth, customersWithSales,
