@@ -410,8 +410,7 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-slate-100">
       {/* ================= HEADER ================= */}
-      {!selectedCustomer && !selectedProspect && (
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white sticky top-0 z-50 shadow-lg">
+      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white sticky top-0 z-50 shadow-lg" style={{ display: (selectedCustomer || selectedProspect) ? 'none' : undefined }}>
         <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <div className="shrink-0 cursor-pointer" onClick={() => { setSelectedCustomer(null); setSelectedProspect(null); }}>
@@ -598,12 +597,10 @@ useEffect(() => {
           )}
         </div>
       </header>
-      )}
+      
 
       {/* ================= BODY ================= */}
-      <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        {!selectedCustomer && !selectedProspect && (
-          <>
+      <main className="max-w-7xl mx-auto px-6 py-6 space-y-6" style={{ display: (selectedCustomer || selectedProspect) ? 'none' : undefined }}>
             <div className="text-sm text-slate-600">
               You have access to <span className="font-semibold text-slate-900">{customersTotal}</span> customers across <span className="font-semibold text-slate-900">{areas.length}</span> areas
             </div>
@@ -1171,8 +1168,7 @@ useEffect(() => {
                 setSelectedProspect(prospect);
               }} />
             </div>
-          </>
-        )}
+          
       </main>
 
       {selectedCustomer && (
