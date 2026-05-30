@@ -96,6 +96,8 @@ const blankForm = () => ({
   customerCode: '',
   customerSearch: '',
   date: '',
+  area: '',
+  city: '',
   timeSegment: '',
   preciseTime: '',
   notes: '',
@@ -224,6 +226,8 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
       customerCode: v.customer_code ?? '',
       customerSearch: '',
       date: v.planned_date ?? '',
+      area: v.area ?? '',
+      city: v.city ?? '',
       timeSegment: v.time_segment ?? '',
       preciseTime: v.planned_time?.slice(0, 5) ?? '',
       notes: v.notes ?? '',
@@ -239,6 +243,8 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
         planned_date: form.date,
         week_start: getMondayOfWeek(new Date(form.date)),
         customer_code: form.customerCode || null,
+        area: form.area || null,
+        city: form.city || null,
         time_segment: form.timeSegment || null,
         planned_time: form.preciseTime || null,
         notes: form.notes || null,
@@ -603,7 +609,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                         {filteredCustomers.map((c: any) => (
                           <button key={c.code}
-                            onClick={() => setForm(f => ({ ...f, customerCode: c.code, customerSearch: '' }))}
+                            onClick={() => setForm(f => ({ ...f, customerCode: c.code, customerSearch: '', area: c.area || f.area, city: c.city || f.city }))}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left">
                             <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <div className="min-w-0">
@@ -616,6 +622,26 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                     )}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Περιοχή / Πόλη</label>
+                <div className="flex gap-2">
+                  <select value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value, city: '' }))}
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                    <option value="">— Περιοχή —</option>
+                    {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  {form.area && (
+                    <select value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
+                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                      <option value="">Όλες οι πόλεις</option>
+                      {[...new Set(customers.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city))].sort().map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               <div>

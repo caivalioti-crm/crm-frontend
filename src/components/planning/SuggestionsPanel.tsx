@@ -501,7 +501,7 @@ useEffect(() => {
 
             {/* Week navigator */}
             <div className="flex items-center justify-between mb-3">
-              <button onClick={() => setCalendarWeekOffset(o => o - 1)}
+              <button onClick={() => { setCalendarWeekOffset(o => o - 1); setSelectedMonday(prev => addDays(prev, -7)); }}
                 className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
                 <ChevronLeft className="w-5 h-5 text-slate-600" />
               </button>
@@ -511,7 +511,7 @@ useEffect(() => {
                   {formatWeekLabel(selectedMonday)}
                 </div>
               </div>
-              <button onClick={() => setCalendarWeekOffset(o => o + 1)}
+              <button onClick={() => { setCalendarWeekOffset(o => o + 1); setSelectedMonday(prev => addDays(prev, 7)); }}
                 className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
                 <ChevronRight className="w-5 h-5 text-slate-600" />
               </button>
@@ -558,7 +558,7 @@ useEffect(() => {
                 const isSelected = dateKey(monday) === dateKey(selectedMonday);
                 return (
                   <button key={offset}
-                    onClick={() => setSelectedMonday(monday)}
+                    onClick={() => { setSelectedMonday(monday); setCalendarWeekOffset(offset); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${isSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'}`}>
                     {label}
                   </button>
