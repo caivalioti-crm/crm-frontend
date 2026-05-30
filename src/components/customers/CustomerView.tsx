@@ -331,12 +331,12 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
 }, []);
 
 useEffect(() => {
-    supabase
-      .from('crm_customer_coordinates')
-      .select('lat, lng, captured_by, captured_at, coord_source')
-      .eq('customer_code', String(customer.code))
-      .maybeSingle()
-      .then(({ data }) => setCoordStatus(data ?? null));
+    authedFetch(`/api/coordinates?customer_code=${customer.code}`)
+      .then((data: any[]) => {
+        const row = Array.isArray(data) ? (data[0] ?? null) : null;
+        setCoordStatus(row);
+      })
+      .catch(() => setCoordStatus(null));
   }, [customer.code, locationCaptured]);
 
   function toggleDocExpand(findoc: number) {
