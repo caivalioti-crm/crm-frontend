@@ -39,6 +39,8 @@ const SHOP_TYPE_LABELS: Record<string, string> = {
   public_service: 'Δημόσια Υπηρεσία',
   electronics_shop: 'Ηλεκτρονικό κατάστημα',
   agricultural_machinery: 'Γεωργικά μηχανήματα',
+  battery_oil: 'Μπαταρίες/Λιπαντικά',
+  bosch_car_service: 'Bosch Car Service',
   other: 'Άλλο',
 };
 
