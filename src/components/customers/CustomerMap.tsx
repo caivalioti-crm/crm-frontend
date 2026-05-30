@@ -268,6 +268,12 @@ useEffect(() => {
   
 
   const noCoordCount = customers.filter(c => !c.has_coords).length;
+  const mapsSearchUrl = editing
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        [editing.customer_name, editing.address, editing.city, editing.area, 'Greece']
+          .filter(Boolean).join(', ')
+      )}`
+    : '';
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col">
@@ -355,7 +361,17 @@ useEffect(() => {
         <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-700 text-white shrink-0 flex-wrap">
           <MapPin className="w-4 h-4 shrink-0" />
           <span className="text-sm font-medium shrink-0">Επεξεργασία: {editing.customer_name}</span>
-          <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
+        
+<a href={mapsSearchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs text-indigo-200 hover:text-white transition-colors shrink-0"
+          title="Αναζήτηση στο Google Maps"
+        >
+          <MapPin className="w-3 h-3" />
+          Google Maps ↗
+        </a>
+        <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
           {editLat !== null && (
   <div className="flex items-center gap-1">
     <input
