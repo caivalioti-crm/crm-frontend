@@ -373,7 +373,21 @@ useEffect(() => {
         </a>
         <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
           {editLat !== null && (
-  <div className="flex items-center gap-1">
+  <div className="flex items-center gap-1 flex-wrap gap-y-1">
+    <input
+      type="text"
+      placeholder="Paste: 37.065, 22.433"
+      className="w-44 px-2 py-1 bg-indigo-900 border border-indigo-400 rounded text-xs font-mono text-white focus:outline-none focus:border-white placeholder:text-indigo-400"
+      onChange={e => {
+        const parts = e.target.value.trim().split(',').map(s => parseFloat(s.trim()));
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          setEditLat(Math.round(parts[0] * 1000000) / 1000000);
+          setEditLng(Math.round(parts[1] * 1000000) / 1000000);
+          dragMarkerRef.current?.setLatLng([parts[0], parts[1]]);
+          leafletMap.current?.setView([parts[0], parts[1]], leafletMap.current.getZoom());
+        }
+      }}
+    />
     <input
       type="number"
       step="0.000001"
