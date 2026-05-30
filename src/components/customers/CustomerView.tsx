@@ -213,6 +213,7 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser }:
   const [locationCapturing, setLocationCapturing] = useState(false);
   const [locationCaptured, setLocationCaptured] = useState(false);  
   const [showMap, setShowMap] = useState(false);
+  const [coordStatus, setCoordStatus] = useState<{ lat: number | null; captured_by: string | null; captured_at: string | null; coord_source: string | null } | null>(null);
   const currentUser = propCurrentUser ?? { id: '', role: 'rep', salesman_code: null, name: '' };
 
   const docsRef = useRef<HTMLDivElement>(null);
@@ -328,6 +329,15 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
   useEffect(() => {
   authedFetch('/api/categories').then(setAllCategories).catch(console.error);
 }, []);
+
+useEffect(() => {
+    supabase
+      .from('crm_customer_coordinates')
+      .select('lat, lng, captured_by, captured_at, coord_source')
+      .eq('customer_code', String(customer.code))
+      .maybeSingle()
+      .then(({ data }) => setCoordStatus(data ?? null));
+  }, [customer.code, locationCaptured]);
 
   function toggleDocExpand(findoc: number) {
     if (expandedDocId === findoc) { setExpandedDocId(null); return; }
@@ -845,13 +855,36 @@ const startEditVisitInCustomer = (v: any) => {
               <div className="font-medium text-slate-400 text-xs uppercase tracking-wide">Επικοινωνία</div>
               {customer.address && <div className="flex items-start gap-2"><Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" /><span>{customer.address}{customer.zip ? `, ${customer.zip}` : ''}{customer.city ? `, ${customer.city}` : ''}</span></div>}
               {(customer.address || customer.city) && (
-                <button
-                  onClick={() => setShowMap(true)}
-                  className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  Προβολή/Επεξεργασία θέσης
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setShowMap(true)}
+                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    Προβολή/Επεξεργασία θέσης
+                  </button>
+                  {coordStatus?.coord_source === 'gps' ? (
+                    <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                      <Navigation className="w-3 h-3" />
+                      Επιτόπου GPS{coordStatus.captured_at ? ` · ${new Date(coordStatus.captured_at).toLocaleDateString('el-GR')}` : ''}
+                    </span>
+                  ) : coordStatus?.coord_source === 'map' ? (
+                    <span className="flex items-center gap-1 text-xs text-indigo-500 font-medium">
+                      <MapPin className="w-3 h-3" />
+                      Χάρτης{coordStatus.captured_at ? ` · ${new Date(coordStatus.captured_at).toLocaleDateString('el-GR')}` : ''}
+                    </span>
+                  ) : coordStatus?.lat ? (
+                    <span className="flex items-center gap-1 text-xs text-amber-500 font-medium">
+                      <TriangleAlert className="w-3 h-3" />
+                      Αυτόματη θέση — χωρίς επαλήθευση
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-slate-400">
+                      <MapPin className="w-3 h-3" />
+                      Χωρίς συντεταγμένες
+                    </span>
+                  )}
+                </div>
               )}
               {customer.email && <div className="flex items-center gap-2"><span>✉️</span><a href={`mailto:${customer.email}`} className="text-blue-600 hover:underline truncate">{customer.email}</a></div>}
               {customer.fax && <div>📠 {customer.fax}</div>}
