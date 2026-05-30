@@ -218,9 +218,12 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     map.setView([lat, lng], 15);
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (singleCustomer && customers.length > 0 && !editing) {
-      startEdit(customers[0]);
+      const match = customers.find(
+        c => String(c.customer_code) === String(singleCustomer.code)
+      );
+      if (match) startEdit(match);
     }
   }, [customers, singleCustomer, startEdit, editing]);
 
