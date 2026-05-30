@@ -81,6 +81,9 @@ interface DaySlot {
   dayName: string;
   area: string;
   city: string;
+  starting_lat?: number | null;
+  starting_lng?: number | null;
+  starting_label?: string;
 }
 
 interface CustomerSelection {
@@ -216,6 +219,19 @@ useEffect(() => {
     setDaySlots(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const updateSlotStarting = (idx: number, lat: number | null, lng: number | null, label: string) => {
+    setDaySlots(prev => prev.map((s, i) =>
+      i !== idx ? s : { ...s, starting_lat: lat, starting_lng: lng, starting_label: label }
+    ));
+  };
+
+  const copyStartingToDay = (fromIdx: number, toIdx: number) => {
+    const from = daySlots[fromIdx];
+    setDaySlots(prev => prev.map((s, i) =>
+      i !== toIdx ? s : { ...s, starting_lat: from.starting_lat, starting_lng: from.starting_lng, starting_label: from.starting_label }
+    ));
+  };
+
   const validSlots = daySlots.filter(s => s.area && s.area !== 'SKIP');
 
   // Load customer pool for a specific day slot
@@ -226,7 +242,7 @@ useEffect(() => {
       const body = {
         week_start: dateKey(selectedMonday),
         target_user_id: targetUserId !== currentUser.id ? targetUserId : undefined,
-        day_slots: [{ date: slot.date, area: slot.area, city: slot.city || undefined }],
+        day_slots: [{ date: slot.date, area: slot.area, city: slot.city || undefined, starting_lat: slot.starting_lat || undefined, starting_lng: slot.starting_lng || undefined, starting_label: slot.starting_label || undefined }],
         filters: {
           performance: filterPerformance,
           not_visited_since: filterNotVisitedDays,
@@ -267,7 +283,7 @@ useEffect(() => {
       const body = {
         week_start: dateKey(selectedMonday),
         target_user_id: targetUserId !== currentUser.id ? targetUserId : undefined,
-        day_slots: validSlots.map(s => ({ date: s.date, area: s.area, city: s.city || undefined })),
+        day_slots: validSlots.map(s => ({ date: s.date, area: s.area, city: s.city || undefined, starting_lat: s.starting_lat || undefined, starting_lng: s.starting_lng || undefined, starting_label: s.starting_label || undefined })),
         filters: {
           performance: filterPerformance,
           not_visited_since: filterNotVisitedDays,
@@ -360,7 +376,11 @@ useEffect(() => {
   const custs = plan[date] ?? [];
   if (custs.length === 0) return null;
 
-  // Use coordinates if available, fall back to address
+  const slot = daySlots.find(s => s.date === date);
+  const startCoord = slot?.starting_lat && slot?.starting_lng
+    ? `${slot.starting_lat},${slot.starting_lng}`
+    : null;
+
   const hasCoords = custs.some((c: any) => c.lat && c.lng);
 
   if (hasCoords) {
@@ -368,16 +388,18 @@ useEffect(() => {
       if (c.lat && c.lng) return `${c.lat},${c.lng}`;
       return encodeURIComponent([c.address, c.city, 'Greece'].filter(Boolean).join(', '));
     });
-    // Google Maps dir with lat/lng waypoints
-    return `https://www.google.com/maps/dir/${points.join('/')}`;
+    const allPoints = startCoord ? [startCoord, ...points] : points;
+    return `https://www.google.com/maps/dir/${allPoints.join('/')}`;
   }
 
-  // Fallback to addresses
   const addresses = custs.map((c: any) =>
     [c.address, c.city, 'Greece'].filter(Boolean).join(', ')
   ).filter(Boolean);
   if (!addresses.length) return null;
-  return `https://www.google.com/maps/dir/${addresses.map(a => encodeURIComponent(a)).join('/')}`;
+  const allPoints = startCoord
+    ? [startCoord, ...addresses.map(a => encodeURIComponent(a))]
+    : addresses.map(a => encodeURIComponent(a));
+  return `https://www.google.com/maps/dir/${allPoints.join('/')}`;
 };
 
   const movePlanItem = (date: string, idx: number, dir: 'up' | 'down') => {
@@ -568,30 +590,69 @@ useEffect(() => {
 
             <div className="text-xs text-indigo-600 font-medium mb-3">{formatWeekLabel(selectedMonday)}</div>
 
-            <div className="space-y-2 mb-4">
+<div className="space-y-2 mb-4">
               {daySlots.map((slot, idx) => (
-                <div key={slot.date} className={`flex items-center gap-2 p-3 rounded-lg border ${slot.area === 'SKIP' ? 'bg-slate-100 border-slate-200 opacity-60' : 'bg-white border-slate-200'}`}>
-                <div className="w-12 shrink-0">
-                    <div className="text-xs font-bold text-slate-600">{slot.dayName.slice(0, 3)}</div>
-                    <div className="text-xs text-slate-400">{new Date(slot.date).getDate()}/{new Date(slot.date).getMonth() + 1}</div>
-                </div>
-                <select value={slot.area} onChange={e => updateSlot(idx, 'area', e.target.value)}
-                    className={`flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 ${slot.area === 'SKIP' ? 'text-slate-400 italic' : ''}`}>
-                    <option value="">— Περιοχή —</option>
-                    <option value="SKIP">🚫 Δεν εργάζομαι αυτή την ημέρα</option>
-                    {areas.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-                  {slot.area && (
-                    <select value={slot.city} onChange={e => updateSlot(idx, 'city', e.target.value)}
-                      className="flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                      <option value="">Όλες οι πόλεις</option>
-                      {citiesForArea(slot.area).map(c => <option key={c} value={c}>{c}</option>)}
+                <div key={slot.date} className="space-y-1">
+                  <div className={`flex items-center gap-2 p-3 rounded-lg border ${slot.area === 'SKIP' ? 'bg-slate-100 border-slate-200 opacity-60' : 'bg-white border-slate-200'}`}>
+                    <div className="w-12 shrink-0">
+                      <div className="text-xs font-bold text-slate-600">{slot.dayName.slice(0, 3)}</div>
+                      <div className="text-xs text-slate-400">{new Date(slot.date).getDate()}/{new Date(slot.date).getMonth() + 1}</div>
+                    </div>
+                    <select value={slot.area} onChange={e => updateSlot(idx, 'area', e.target.value)}
+                      className={`flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 ${slot.area === 'SKIP' ? 'text-slate-400 italic' : ''}`}>
+                      <option value="">— Περιοχή —</option>
+                      <option value="SKIP">🚫 Δεν εργάζομαι αυτή την ημέρα</option>
+                      {areas.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
-                  )}
-                  {idx >= 5 && (
-                    <button onClick={() => removeSlot(idx)} className="p-1 text-slate-400 hover:text-red-500">
-                      <X className="w-4 h-4" />
-                    </button>
+                    {slot.area && slot.area !== 'SKIP' && (
+                      <select value={slot.city} onChange={e => updateSlot(idx, 'city', e.target.value)}
+                        className="flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Όλες οι πόλεις</option>
+                        {citiesForArea(slot.area).map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    )}
+                    {idx >= 5 && (
+                      <button onClick={() => removeSlot(idx)} className="p-1 text-slate-400 hover:text-red-500">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {slot.area && slot.area !== 'SKIP' && (
+                    <div className="pl-14">
+                      <input
+                        type="text"
+                        placeholder="Αφετηρία: 40.123, 22.456 (paste από Google Maps)"
+                        value={slot.starting_label ?? ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          const parts = val.trim().split(',').map(s => parseFloat(s.trim()));
+                          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                            updateSlotStarting(idx, parts[0], parts[1], val);
+                          } else {
+                            updateSlotStarting(idx, null, null, val);
+                          }
+                        }}
+                        className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 focus:outline-none placeholder:text-slate-300"
+                      />
+                      {slot.starting_lat && (
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="text-xs text-slate-400">Αντιγραφή σε:</span>
+                          {daySlots.map((other, otherIdx) => otherIdx !== idx ? (
+                            <button
+                              key={otherIdx}
+                              onClick={() => copyStartingToDay(idx, otherIdx)}
+                              className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
+                                other.starting_lat === slot.starting_lat && other.starting_lng === slot.starting_lng
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'
+                              }`}
+                            >
+                              {other.dayName.slice(0, 3)}
+                            </button>
+                          ) : null)}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}
@@ -684,7 +745,7 @@ useEffect(() => {
                                 body: JSON.stringify({
                                   week_start: dateKey(selectedMonday),
                                   target_user_id: targetUserId !== currentUser.id ? targetUserId : undefined,
-                                  day_slots: [{ date: slot.date, area: slot.area, city: slot.city || undefined }],
+                                  day_slots: [{ date: slot.date, area: slot.area, city: slot.city || undefined, starting_lat: slot.starting_lat || undefined, starting_lng: slot.starting_lng || undefined, starting_label: slot.starting_label || undefined }],
                                   filters: { performance: filterPerformance, not_visited_since: filterNotVisitedDays, tiers: newTiers.length > 0 ? newTiers : null },
                                   max_per_day: 50,
                                 }),
