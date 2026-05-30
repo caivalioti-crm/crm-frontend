@@ -23,7 +23,7 @@ const SHOP_TYPE_OPTIONS = [
   { value: 'public_service', label: 'Δημόσια Υπηρεσία' },
   { value: 'electronics_shop', label: 'Ηλεκτρονικό κατάστημα' },
   { value: 'agricultural_machinery', label: 'Γεωργικά μηχανήματα' },
-  { value: 'battery_oil', label: 'Μπαταρίες/Λιπαντικά' },
+  { value: 'battery_lubs', label: 'Μπαταρίες/Λιπαντικά' },
   { value: 'bosch_car_service', label: 'Bosch Car Service' },
   { value: 'other', label: 'Άλλο' },
 ];
