@@ -356,90 +356,82 @@ useEffect(() => {
         <span className="text-xs text-slate-400 ml-auto">{customers.length} πελάτες · {customers.filter(c => c.has_coords).length} με coords</span>
       </div>
 
-      {/* ── Edit bar ── */}
+{/* ── Edit bar ── */}
       {editing && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-700 text-white shrink-0 flex-wrap">
           <MapPin className="w-4 h-4 shrink-0" />
           <span className="text-sm font-medium shrink-0">Επεξεργασία: {editing.customer_name}</span>
-        
-<a href={mapsSearchUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs text-indigo-200 hover:text-white transition-colors shrink-0"
-          title="Αναζήτηση στο Google Maps"
-        >
-          <MapPin className="w-3 h-3" />
-          Google Maps ↗
-        </a>
-        <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
+          {(editing.address || editing.city) && (
+            <span className="text-xs text-indigo-300 font-mono shrink-0">
+              {[editing.address, editing.city, editing.area].filter(Boolean).join(', ')}
+            </span>
+          )}
+          <a href={mapsSearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs text-indigo-200 hover:text-white transition-colors shrink-0"
+            title="Αναζήτηση στο Google Maps"
+          >
+            <MapPin className="w-3 h-3" />
+            Google Maps ↗
+          </a>
+          <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
           {editLat !== null && (
-  <div className="flex items-center gap-1 flex-wrap gap-y-1">
-    <input
-      type="text"
-      placeholder="Paste: 37.065, 22.433"
-      className="w-44 px-2 py-1 bg-indigo-900 border border-indigo-400 rounded text-xs font-mono text-white focus:outline-none focus:border-white placeholder:text-indigo-400"
-      onChange={e => {
-        const parts = e.target.value.trim().split(',').map(s => parseFloat(s.trim()));
-        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-          setEditLat(Math.round(parts[0] * 1000000) / 1000000);
-          setEditLng(Math.round(parts[1] * 1000000) / 1000000);
-          dragMarkerRef.current?.setLatLng([parts[0], parts[1]]);
-          leafletMap.current?.setView([parts[0], parts[1]], leafletMap.current.getZoom());
-        }
-      }}
-    />
-    <input
-      type="number"
-      step="0.000001"
-      value={editLat ?? ''}
-      onChange={e => {
-        const v = parseFloat(e.target.value);
-        if (!isNaN(v)) {
-          setEditLat(v);
-          dragMarkerRef.current?.setLatLng([v, editLng ?? 0]);
-          leafletMap.current?.setView([v, editLng ?? 0], leafletMap.current.getZoom());
-        }
-      }}
-      className="w-28 px-2 py-1 bg-indigo-800 border border-indigo-500 rounded text-xs font-mono text-white focus:outline-none focus:border-white"
-      placeholder="Lat"
-    />
-    <input
-      type="number"
-      step="0.000001"
-      value={editLng ?? ''}
-      onChange={e => {
-        const v = parseFloat(e.target.value);
-        if (!isNaN(v)) {
-          setEditLng(v);
-          dragMarkerRef.current?.setLatLng([editLat ?? 0, v]);
-          leafletMap.current?.setView([editLat ?? 0, v], leafletMap.current.getZoom());
-        }
-      }}
-      className="w-28 px-2 py-1 bg-indigo-800 border border-indigo-500 rounded text-xs font-mono text-white focus:outline-none focus:border-white"
-      placeholder="Lng"
-    />
-  </div>
-)}
+            <div className="flex items-center gap-1 flex-wrap gap-y-1">
+              <input
+                type="text"
+                placeholder="Paste: 37.065, 22.433"
+                className="w-44 px-2 py-1 bg-indigo-900 border border-indigo-400 rounded text-xs font-mono text-white focus:outline-none focus:border-white placeholder:text-indigo-400"
+                onChange={e => {
+                  const parts = e.target.value.trim().split(',').map(s => parseFloat(s.trim()));
+                  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                    setEditLat(Math.round(parts[0] * 1000000) / 1000000);
+                    setEditLng(Math.round(parts[1] * 1000000) / 1000000);
+                    dragMarkerRef.current?.setLatLng([parts[0], parts[1]]);
+                    leafletMap.current?.setView([parts[0], parts[1]], leafletMap.current.getZoom());
+                  }
+                }}
+              />
+              <input
+                type="number"
+                step="0.000001"
+                value={editLat ?? ''}
+                onChange={e => {
+                  const v = parseFloat(e.target.value);
+                  if (!isNaN(v)) {
+                    setEditLat(v);
+                    dragMarkerRef.current?.setLatLng([v, editLng ?? 0]);
+                    leafletMap.current?.setView([v, editLng ?? 0], leafletMap.current.getZoom());
+                  }
+                }}
+                className="w-28 px-2 py-1 bg-indigo-800 border border-indigo-500 rounded text-xs font-mono text-white focus:outline-none focus:border-white"
+                placeholder="Lat"
+              />
+              <input
+                type="number"
+                step="0.000001"
+                value={editLng ?? ''}
+                onChange={e => {
+                  const v = parseFloat(e.target.value);
+                  if (!isNaN(v)) {
+                    setEditLng(v);
+                    dragMarkerRef.current?.setLatLng([editLat ?? 0, v]);
+                    leafletMap.current?.setView([editLat ?? 0, v], leafletMap.current.getZoom());
+                  }
+                }}
+                className="w-28 px-2 py-1 bg-indigo-800 border border-indigo-500 rounded text-xs font-mono text-white focus:outline-none focus:border-white"
+                placeholder="Lng"
+              />
+            </div>
+          )}
           <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={useGPS}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium"
-            >
-              <Navigation className="w-3.5 h-3.5" />
-              GPS
+            <button onClick={useGPS} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium">
+              <Navigation className="w-3.5 h-3.5" />GPS
             </button>
-            <button
-              onClick={cancelEdit}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-medium"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Ακύρωση
+            <button onClick={cancelEdit} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-medium">
+              <RotateCcw className="w-3.5 h-3.5" />Ακύρωση
             </button>
-            <button
-              onClick={saveCoords}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 rounded-lg text-xs font-medium"
-            >
+            <button onClick={saveCoords} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 rounded-lg text-xs font-medium">
               {saving ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Αποθήκευση
             </button>
