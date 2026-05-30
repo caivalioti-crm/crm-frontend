@@ -337,7 +337,7 @@ useEffect(() => {
         setCoordStatus(row);
       })
       .catch(() => setCoordStatus(null));
-  }, [customer.code, locationCaptured]);
+  }, [customer.code, locationCaptured, refreshKey]);
 
   function toggleDocExpand(findoc: number) {
     if (expandedDocId === findoc) { setExpandedDocId(null); return; }
