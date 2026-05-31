@@ -64,6 +64,7 @@ interface CalendarProps {
   onOpenCustomerMap?: (customer: any) => void;
   customers?: any[];
   repList?: { id: string; full_name: string; salesman_code: string }[];
+  hidden?: boolean;
 }
 
 function getMonthDays(year: number, month: number): (Date | null)[] {
@@ -104,7 +105,7 @@ const blankForm = () => ({
   isFixed: false,
 });
 
-export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap, onClose, customers = [], repList = [] }: CalendarProps) {
+export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap, onClose, customers = [], repList = [], hidden = false }: CalendarProps) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -297,7 +298,7 @@ const repNameForUserId = (userId: string) =>
 
     
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-4 px-2">
+    <div className={`fixed inset-0 z-50${hidden ? ' invisible pointer-events-none' : ''} bg-black/40 flex items-start justify-center overflow-y-auto py-4 px-2`}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl">
 
         {/* Header */}
