@@ -193,20 +193,25 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
       c.code?.includes(form.customerSearch))
   ).slice(0, 20);
 
+const repNameForUserId = (userId: string) =>
+    repList.find(r => r.id === userId)?.full_name ?? '';
+
   const citiesForDay = (dk: string): { city: string; ownerName: string }[] => {
     const actual = (actualByDate.get(dk) ?? []).filter(v => filterVisit(v, true));
     const planned = (plannedByDate.get(dk) ?? []).filter(v => filterVisit(v, false));
     const seen = new Map<string, string>();
     for (const v of actual) {
       const cust = customers.find((c: any) => c.code === v.customer_code);
-      if (cust?.city && !seen.has(cust.city)) seen.set(cust.city, v.owner_name ?? '');
+      const label = cust?.city || cust?.area || v.city || v.area;
+      if (label && !seen.has(label)) seen.set(label, v.owner_name ?? '');
     }
     for (const v of planned) {
       const cust = customers.find((c: any) => c.code === v.customer_code);
-      const city = cust?.city ?? v.city;
-      if (city && !seen.has(city)) seen.set(city, v.owner_name ?? '');
+      const label = cust?.city || v.city || cust?.area || v.area;
+      const ownerName = repNameForUserId(v.user_id ?? '');
+      if (label && !seen.has(label)) seen.set(label, ownerName);
     }
-    return [...seen.entries()].slice(0, 2).map(([city, ownerName]) => ({ city, ownerName }));
+    return [...seen.entries()].slice(0, 3).map(([city, ownerName]) => ({ city, ownerName }));
   };
 
   const openAdd = (d: Date) => {
@@ -279,11 +284,18 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
 
   const hasActiveFilters = !!(filterArea || filterCity || filterRepId);
 
+  // Filter customers to selected rep when filterRepId is active
+  const selectedRep = filterRepId ? repList.find(r => r.id === filterRepId) : null;
+  const repFilteredCustomers = selectedRep
+    ? customers.filter((c: any) => String(c.salesman_code) === String(selectedRep.salesman_code))
+    : customers;
+
   // Cities available for the selected area in the form
   const formCities = form.area
-    ? [...new Set(customers.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city as string))].sort()
+    ? [...new Set(repFilteredCustomers.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city as string))].sort()
     : [];
 
+    
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-4 px-2">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl">
@@ -319,8 +331,10 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
                 <label className="block text-xs font-medium text-slate-500 mb-1">Περιοχή</label>
                 <select value={filterArea} onChange={e => { setFilterArea(e.target.value); setFilterCity(''); }}
                   className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                  <option value="">Όλες</option>
-                  {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                  <option value="">— Περιοχή —</option>
+                  {[...new Set(repFilteredCustomers.map((c: any) => c.area).filter(Boolean))].sort().map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
                 </select>
               </div>
               <div>
