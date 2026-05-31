@@ -25,6 +25,9 @@ interface RouteMapPanelProps {
   onReverseOrder?: () => void;
   onSetStart?: (lat: number, lng: number, label: string) => void;
   onSetFinish?: (lat: number, lng: number, label: string) => void;
+  customers?: any[];
+  onOpenCustomerMap?: (customer: any) => void;
+  savedHotels?: { id: string; name: string; area: string; lat: number; lng: number }[];
 }
 
 function createNumberedIcon(n: number, color = '#4f46e5') {
@@ -59,7 +62,7 @@ function createSpecialIcon(type: 'start' | 'finish') {
 
 export function RouteMapPanel({
   stops, startPoint, finishPoint, dayLabel, googleMapsUrl,
-  onClose, onRemove, onReorder, onReverseOrder, onSetStart, onSetFinish,
+  onClose, onRemove, onReorder, onReverseOrder, onSetStart, onSetFinish, customers = [], onOpenCustomerMap, savedHotels = [],
 }: RouteMapPanelProps) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -213,6 +216,31 @@ export function RouteMapPanel({
                 className="w-full px-2 py-1 text-xs border border-red-300 rounded focus:ring-1 focus:ring-red-400 focus:outline-none placeholder:text-slate-300"
               />
             )}
+            {savedHotels.length > 0 && (
+              <div>
+                <div className="text-xs text-slate-400 mb-1">🏨 Αποθηκευμένα:</div>
+                <div className="space-y-1 max-h-28 overflow-y-auto">
+                  {savedHotels.map(h => (
+                    <div key={h.id} className="flex items-center justify-between gap-1 p-1.5 bg-white border border-slate-200 rounded text-xs">
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-700 truncate">{h.name}</div>
+                        <div className="text-slate-400">{h.area}</div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {onSetStart && (
+                          <button onClick={() => { setStartInput(h.name); onSetStart(h.lat, h.lng, h.name); }}
+                            className="px-1.5 py-0.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs">▶</button>
+                        )}
+                        {onSetFinish && (
+                          <button onClick={() => { setFinishInput(h.name); onSetFinish(h.lat, h.lng, h.name); }}
+                            className="px-1.5 py-0.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs">🏁</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
             {stops.map((stop, idx) => {
@@ -273,8 +301,22 @@ export function RouteMapPanel({
               </div>
             )}
             {unlocated.length > 0 && (
-              <div className="text-xs text-amber-600">
-                ⚠ {unlocated.length} χωρίς συντεταγμένες
+              <div className="border-t border-amber-200 mt-1 pt-1">
+                <div className="text-xs text-amber-600 font-medium mb-1">⚠ Χωρίς συντεταγμένες:</div>
+                {unlocated.map(stop => {
+                  const fullCust = customers.find((c: any) => c.code === stop.code);
+                  return (
+                    <div key={stop.code} className="flex items-center justify-between gap-1 py-0.5">
+                      <span className="text-xs text-slate-600 truncate">{stop.name}</span>
+                      {onOpenCustomerMap && fullCust && (
+                        <button onClick={() => onOpenCustomerMap(fullCust)}
+                          className="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 shrink-0">
+                          Επεξ. θέση
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
