@@ -44,9 +44,7 @@ const REP_COLORS = [
 
 function hashColor(str: string): number {
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
   return Math.abs(hash) % REP_COLORS.length;
 }
 
@@ -97,7 +95,7 @@ const blankForm = () => ({
   customerSearch: '',
   date: '',
   area: '',
-  city: '',
+  cities: [] as string[],
   timeSegment: '',
   preciseTime: '',
   notes: '',
@@ -123,11 +121,11 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
   const [filterCity, setFilterCity] = useState('');
   const [filterRep, setFilterRep] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const lastDay = new Date(year, month + 1, 0).getDate();
   const to = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -184,9 +182,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
   const allReps = [...new Set(actualVisits.map(v => v.owner_name).filter(Boolean))].sort() as string[];
   const allAreas = [...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
   const allCities = [...new Set(
-    customers
-      .filter((c: any) => !filterArea || c.area === filterArea)
-      .map((c: any) => c.city).filter(Boolean)
+    customers.filter((c: any) => !filterArea || c.area === filterArea).map((c: any) => c.city).filter(Boolean)
   )].sort() as string[];
 
   const filteredCustomers = customers.filter((c: any) =>
@@ -227,7 +223,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
       customerSearch: '',
       date: v.planned_date ?? '',
       area: v.area ?? '',
-      city: v.city ?? '',
+      cities: v.city ? [v.city] : [],
       timeSegment: v.time_segment ?? '',
       preciseTime: v.planned_time?.slice(0, 5) ?? '',
       notes: v.notes ?? '',
@@ -239,21 +235,25 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
     if (!form.date) return;
     setFormSaving(true);
     try {
-      const body = {
-        planned_date: form.date,
-        week_start: getMondayOfWeek(new Date(form.date)),
-        customer_code: form.customerCode || null,
-        area: form.area || null,
-        city: form.city || null,
-        time_segment: form.timeSegment || null,
-        planned_time: form.preciseTime || null,
-        notes: form.notes || null,
-        is_fixed_appointment: form.isFixed,
-      };
-      if (formMode === 'edit' && editingId) {
-        await authedFetch(`/api/planning/planned-visits/${editingId}`, { method: 'PATCH', body: JSON.stringify(body) });
-      } else {
-        await authedFetch('/api/planning/planned-visits', { method: 'POST', body: JSON.stringify(body) });
+      // Create one record per selected city (or one without city if none selected)
+      const citiesToSave: (string | null)[] = form.cities.length > 0 ? form.cities : [null];
+      for (let i = 0; i < citiesToSave.length; i++) {
+        const body = {
+          planned_date: form.date,
+          week_start: getMondayOfWeek(new Date(form.date)),
+          customer_code: form.customerCode || null,
+          area: form.area || null,
+          city: citiesToSave[i],
+          time_segment: form.timeSegment || null,
+          planned_time: form.preciseTime || null,
+          notes: form.notes || null,
+          is_fixed_appointment: form.isFixed,
+        };
+        if (formMode === 'edit' && editingId && i === 0) {
+          await authedFetch(`/api/planning/planned-visits/${editingId}`, { method: 'PATCH', body: JSON.stringify(body) });
+        } else {
+          await authedFetch('/api/planning/planned-visits', { method: 'POST', body: JSON.stringify(body) });
+        }
       }
       setFormMode(null);
       setEditingId(null);
@@ -278,6 +278,11 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
 
   const hasActiveFilters = !!(filterArea || filterCity || filterRep);
 
+  // Cities available for the selected area in the form
+  const formCities = form.area
+    ? [...new Set(customers.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city as string))].sort()
+    : [];
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-4 px-2">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl">
@@ -291,75 +296,68 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowFilters(v => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showFilters || hasActiveFilters ? 'bg-white text-indigo-700' : 'bg-white/20 hover:bg-white/30'}`}
-            >
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showFilters || hasActiveFilters ? 'bg-white text-indigo-700' : 'bg-white/20 hover:bg-white/30'}`}>
               <Filter className="w-4 h-4" />
               {hasActiveFilters && <span className="w-2 h-2 bg-amber-400 rounded-full" />}
             </button>
             <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
-            <button
-            onClick={() => setShowSuggestions(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showSuggestions ? 'bg-white text-indigo-700' : 'bg-white/20 hover:bg-white/30'}`}
-          >
-            <Calendar className="w-4 h-4" />
-            Προτάσεις
-          </button>
+            <button onClick={() => setShowSuggestions(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showSuggestions ? 'bg-white text-indigo-700' : 'bg-white/20 hover:bg-white/30'}`}>
+              <Calendar className="w-4 h-4" /> Προτάσεις
+            </button>
           </div>
         </div>
 
         {/* Filters */}
         {showFilters && (
-        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Περιοχή</label>
-              <select value={filterArea} onChange={e => { setFilterArea(e.target.value); setFilterCity(''); }}
-                className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                <option value="">Όλες</option>
-                {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Πόλη</label>
-              <select value={filterCity} onChange={e => setFilterCity(e.target.value)}
-                className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                <option value="">Όλες</option>
-                {allCities.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            {allReps.length > 1 && (
+          <div className="px-6 py-3 border-b border-slate-100 bg-slate-50">
+            <div className="flex flex-wrap gap-3 items-end">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Εκπρόσωπος</label>
-                <select value={filterRep} onChange={e => setFilterRep(e.target.value)}
+                <label className="block text-xs font-medium text-slate-500 mb-1">Περιοχή</label>
+                <select value={filterArea} onChange={e => { setFilterArea(e.target.value); setFilterCity(''); }}
                   className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                  <option value="">Όλοι</option>
-                  {allReps.map(r => <option key={r} value={r}>{r}</option>)}
+                  <option value="">Όλες</option>
+                  {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
-            )}
-            {hasActiveFilters && (
-              <button onClick={() => { setFilterArea(''); setFilterCity(''); setFilterRep(''); }}
-                className="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 self-end">
-                × Καθαρισμός
-              </button>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Πόλη</label>
+                <select value={filterCity} onChange={e => setFilterCity(e.target.value)}
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                  <option value="">Όλες</option>
+                  {allCities.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              {allReps.length > 1 && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Εκπρόσωπος</label>
+                  <select value={filterRep} onChange={e => setFilterRep(e.target.value)}
+                    className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Όλοι</option>
+                    {allReps.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+              )}
+              {hasActiveFilters && (
+                <button onClick={() => { setFilterArea(''); setFilterCity(''); setFilterRep(''); }}
+                  className="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 self-end">
+                  × Καθαρισμός
+                </button>
+              )}
+            </div>
+            {allReps.length > 1 && (
+              <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
+                {allReps.map(r => (
+                  <span key={r} className="flex items-center gap-1 text-xs text-slate-600">
+                    <span className={`w-2.5 h-2.5 rounded-full inline-block ${getRepColor(r).dot}`} />{r}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
-          
-          {/* Rep color guide — below filters on same panel */}
-          {allReps.length > 1 && (
-            <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
-              {allReps.map(r => (
-                <span key={r} className="flex items-center gap-1 text-xs text-slate-600">
-                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${getRepColor(r).dot}`} />
-                  {r}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        )}
 
         {/* Month nav */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100">
@@ -375,14 +373,13 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
           </button>
         </div>
 
-        {/* Legend — rep colors */}
+        {/* Legend */}
         <div className="flex items-center gap-4 px-6 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-500 flex-wrap">
           {allReps.length > 0 ? (
             <>
               {allReps.map(rep => (
                 <span key={rep} className="flex items-center gap-1.5">
-                  <span className={`w-3 h-3 rounded-full inline-block ${getRepColor(rep).dot}`} />
-                  {rep}
+                  <span className={`w-3 h-3 rounded-full inline-block ${getRepColor(rep).dot}`} />{rep}
                 </span>
               ))}
               <span className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-200">
@@ -405,7 +402,6 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
               <div key={d} className="text-center text-xs font-medium text-slate-400 py-1">{d}</div>
             ))}
           </div>
-
           <div className="grid grid-cols-7 gap-0.5">
             {days.map((d, i) => {
               if (!d) return <div key={`empty-${i}`} />;
@@ -419,20 +415,11 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
               const cities = citiesForDay(dk);
 
               return (
-                <button
-                  key={dk}
-                  onClick={() => setSelectedDay(isSelected ? null : d)}
-                  className={`
-                    relative min-h-[64px] p-1.5 rounded-lg text-left transition-all border
-                    ${isSelected ? 'bg-indigo-50 border-indigo-300 shadow-sm' : 'border-transparent hover:bg-slate-50 hover:border-slate-200'}
-                    ${isWeekend ? 'bg-slate-50/50' : ''}
-                  `}
-                >
-                  <div className={`text-xs font-semibold mb-0.5 w-6 h-6 flex items-center justify-center rounded-full
-                    ${isToday ? 'bg-indigo-600 text-white' : isSelected ? 'text-indigo-700' : 'text-slate-600'}`}>
+                <button key={dk} onClick={() => setSelectedDay(isSelected ? null : d)}
+                  className={`relative min-h-[64px] p-1.5 rounded-lg text-left transition-all border ${isSelected ? 'bg-indigo-50 border-indigo-300 shadow-sm' : 'border-transparent hover:bg-slate-50 hover:border-slate-200'} ${isWeekend ? 'bg-slate-50/50' : ''}`}>
+                  <div className={`text-xs font-semibold mb-0.5 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-indigo-600 text-white' : isSelected ? 'text-indigo-700' : 'text-slate-600'}`}>
                     {d.getDate()}
                   </div>
-
                   <div className="flex flex-wrap gap-0.5 mb-0.5">
                     {actual.slice(0, 3).map((v, j) => (
                       <span key={j} className={`w-2 h-2 rounded-full ${getRepColor(v.owner_name ?? '').dot}`} />
@@ -442,7 +429,6 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                     ))}
                     {total > 5 && <span className="text-xs text-slate-400 leading-none">+{total - 5}</span>}
                   </div>
-
                   {cities.length > 0 && (
                     <div className="flex flex-col gap-0.5">
                       {cities.map(({ city, ownerName }) => (
@@ -450,12 +436,9 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                       ))}
                     </div>
                   )}
-
                   {isSelected && (
-                    <button
-                      onClick={e => { e.stopPropagation(); openAdd(d); }}
-                      className="absolute top-1 right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700"
-                    >
+                    <button onClick={e => { e.stopPropagation(); openAdd(d); }}
+                      className="absolute top-1 right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700">
                       <Plus className="w-2.5 h-2.5" />
                     </button>
                   )}
@@ -490,8 +473,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                     const cust = customers.find((c: any) => c.code === v.customer_code);
                     const rc = getRepColor(v.owner_name ?? '');
                     return (
-                      <div key={v.id}
-                        onClick={() => { if (cust && onSelectCustomer) onSelectCustomer(cust); }}
+                      <div key={v.id} onClick={() => { if (cust && onSelectCustomer) onSelectCustomer(cust); }}
                         className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors">
                         <span className={`w-3 h-3 rounded-full mt-1 shrink-0 ${rc.dot}`} />
                         <div className="min-w-0 flex-1">
@@ -502,11 +484,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                             {v.owner_name && <span className={`text-xs font-medium ${rc.text}`}>{v.owner_name}</span>}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            {cust?.area && (
-                              <span className="flex items-center gap-0.5 text-xs text-slate-400">
-                                <MapPin className="w-3 h-3" />{cust.area}{cust.city ? ` › ${cust.city}` : ''}
-                              </span>
-                            )}
+                            {cust?.area && <span className="flex items-center gap-0.5 text-xs text-slate-400"><MapPin className="w-3 h-3" />{cust.area}{cust.city ? ` › ${cust.city}` : ''}</span>}
                             {cust?.address && <span className="text-xs text-slate-400 truncate max-w-xs">{cust.address}</span>}
                           </div>
                           {v.notes && <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</p>}
@@ -552,12 +530,10 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                           {v.notes && <p className="text-xs text-slate-500 mt-0.5">{v.notes}</p>}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => openEdit(v)}
-                            className="p-1 hover:bg-blue-100 rounded text-slate-400 hover:text-blue-600 transition-colors" title="Επεξεργασία">
+                          <button onClick={() => openEdit(v)} className="p-1 hover:bg-blue-100 rounded text-slate-400 hover:text-blue-600 transition-colors" title="Επεξεργασία">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDeletePlanned(v.id)}
-                            className="p-1 hover:bg-red-100 rounded text-slate-400 hover:text-red-500 transition-colors" title="Διαγραφή">
+                          <button onClick={() => handleDeletePlanned(v.id)} className="p-1 hover:bg-red-100 rounded text-slate-400 hover:text-red-500 transition-colors" title="Διαγραφή">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -583,12 +559,14 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
             </div>
 
             <div className="space-y-3">
+              {/* Date */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Ημερομηνία</label>
                 <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
               </div>
 
+              {/* Customer */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Πελάτης (προαιρετικό)</label>
                 {form.customerCode ? (
@@ -609,7 +587,11 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                         {filteredCustomers.map((c: any) => (
                           <button key={c.code}
-                            onClick={() => setForm(f => ({ ...f, customerCode: c.code, customerSearch: '', area: c.area || f.area, city: c.city || f.city }))}
+                            onClick={() => setForm(f => ({
+                              ...f, customerCode: c.code, customerSearch: '',
+                              area: c.area || f.area,
+                              cities: c.city ? (f.cities.includes(c.city) ? f.cities : [...f.cities, c.city]) : f.cities,
+                            }))}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left">
                             <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <div className="min-w-0">
@@ -624,26 +606,35 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                 )}
               </div>
 
+              {/* Area + Cities (checkboxes) */}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Περιοχή / Πόλη</label>
-                <div className="flex gap-2">
-                  <select value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value, city: '' }))}
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <option value="">— Περιοχή —</option>
-                    {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                  {form.area && (
-                    <select value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
-                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                      <option value="">Όλες οι πόλεις</option>
-                      {[...new Set(customers.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city))].sort().map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Περιοχή / Πόλεις</label>
+                <select value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value, cities: [] }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 mb-2">
+                  <option value="">— Περιοχή —</option>
+                  {allAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+                {form.area && formCities.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {formCities.map(city => (
+                      <label key={city} className={`flex items-center gap-1.5 text-sm cursor-pointer px-2 py-1 border rounded-lg transition-colors ${form.cities.includes(city) ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300'}`}>
+                        <input type="checkbox" checked={form.cities.includes(city)}
+                          onChange={e => setForm(f => ({
+                            ...f,
+                            cities: e.target.checked ? [...f.cities, city] : f.cities.filter(c => c !== city),
+                          }))}
+                          className="w-3.5 h-3.5 text-indigo-600 rounded" />
+                        <span className={form.cities.includes(city) ? 'text-indigo-700 font-medium' : 'text-slate-600'}>{city}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {form.cities.length > 0 && (
+                  <div className="mt-1 text-xs text-indigo-600">{form.cities.length} πόλη/πόλεις επιλεγμένη/ες → {form.cities.length} εγγραφή/ες</div>
+                )}
               </div>
 
+              {/* Time segment */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Χρονικό Τμήμα</label>
                 <div className="flex flex-wrap gap-2">
@@ -660,12 +651,14 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                 </div>
               </div>
 
+              {/* Precise time */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Ακριβής Ώρα (προαιρετικό)</label>
                 <input type="time" value={form.preciseTime} onChange={e => setForm(f => ({ ...f, preciseTime: e.target.value }))}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
               </div>
 
+              {/* Fixed appointment */}
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="fixed-appt" checked={form.isFixed}
                   onChange={e => setForm(f => ({ ...f, isFixed: e.target.checked }))}
@@ -675,6 +668,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
                 </label>
               </div>
 
+              {/* Notes */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Σημειώσεις</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -711,12 +705,14 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
             <span className="font-medium text-slate-700">{plannedVisits.filter(v => v.is_fixed_appointment).length}</span> ραντεβού
           </span>
         </div>
-      {showSuggestions && (
+
+        {showSuggestions && (
           <SuggestionsPanel
             currentUser={currentUser}
             onClose={() => setShowSuggestions(false)}
             customers={customers}
             areas={[...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort()}
+            onSelectCustomer={onSelectCustomer}
           />
         )}
       </div>
