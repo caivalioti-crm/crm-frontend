@@ -736,6 +736,7 @@ const repNameForUserId = (userId: string) =>
             areas={[...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort()}
             onSelectCustomer={onSelectCustomer}
             onOpenCustomerMap={onOpenCustomerMap}
+            initialTargetUserId={filterRepId || undefined}
           />
         )}
       </div>

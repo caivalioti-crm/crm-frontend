@@ -121,11 +121,12 @@ interface SuggestionsPanelProps {
   areas?: string[];
   onSelectCustomer?: (customer: any) => void;
   onOpenCustomerMap?: (customer: any) => void;
+  initialTargetUserId?: string;
 }
 
 type Step = 'week' | 'slots' | 'select' | 'plan';
 
-export function SuggestionsPanel({ currentUser, onClose, customers = [], areas = [], onSelectCustomer, onOpenCustomerMap }: SuggestionsPanelProps) {
+export function SuggestionsPanel({ currentUser, onClose, customers = [], areas = [], onSelectCustomer, onOpenCustomerMap, initialTargetUserId }: SuggestionsPanelProps) {
   const isPrivileged = ['admin', 'manager', 'exec'].includes(currentUser.role);
 
   const [step, setStep] = useState<Step>('week');
@@ -135,7 +136,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
   const [filterNotVisitedDays, setFilterNotVisitedDays] = useState<number | null>(null);
   const [filterPerformance, setFilterPerformance] = useState<'all' | 'up' | 'down'>('all');
   const [filterTiers, setFilterTiers] = useState<number[]>([]);
-  const [targetUserId, setTargetUserId] = useState<string>(currentUser.id);
+  const [targetUserId, setTargetUserId] = useState<string>(initialTargetUserId || currentUser.id);
   const [repProfiles, setRepProfiles] = useState<any[]>([]);
   const [customerPool, setCustomerPool] = useState<CustomerSelection[]>([]);
   const [poolLoading, setPoolLoading] = useState(false);
