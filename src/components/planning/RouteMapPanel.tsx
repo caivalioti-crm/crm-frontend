@@ -109,7 +109,7 @@ export function RouteMapPanel({
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 overflow-hidden shadow-lg">
+    <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-600 text-white">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <span>🗺</span>
@@ -129,7 +129,7 @@ export function RouteMapPanel({
         </div>
       </div>
 
-      <div className="flex" style={{ height: '420px' }}>
+      <div className="flex flex-1 min-h-0">
         <div className="flex-1 min-w-0">
           <MapContainer
             center={[centerLat, centerLng]}

@@ -1185,6 +1185,15 @@ const buildGoogleMapsUrl = (date: string) => {
                                     {c.days_since_visit}μ αγ.
                                   </span>
                                 )}
+                              {(!c.lat && !c.lng) && onOpenCustomerMap && (() => {
+                                const fullCust = customers.find((cu: any) => cu.code === c.customer_code);
+                                return fullCust ? (
+                                  <button onClick={() => onOpenCustomerMap(fullCust)}
+                                    className="ml-1 px-2 py-0.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">
+                                    Επεξ. θέση
+                                  </button>
+                                ) : null;
+                              })()}
                               </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
@@ -1219,29 +1228,39 @@ const buildGoogleMapsUrl = (date: string) => {
             )}
 
             {/* Route map panel */}
+            {/* Route map panel — full-screen modal */}
             {mapDayOpen && (() => {
               const slot = daySlots.find(s => s.date === mapDayOpen);
               const custs = plan[mapDayOpen] ?? [];
               return (
-              <RouteMapPanel
-                  stops={custs}
-                  startPoint={slot?.starting_lat && slot?.starting_lng ? { lat: slot.starting_lat, lng: slot.starting_lng, label: slot.starting_label } : null}
-                  finishPoint={slot?.finishing_lat && slot?.finishing_lng ? { lat: slot.finishing_lat, lng: slot.finishing_lng, label: slot.finishing_label } : null}
-                  dayLabel={`${slot?.dayName ?? mapDayOpen} · ${slot?.area ?? ''}${slot?.city ? ' › ' + slot.city : ''}`}
-                  googleMapsUrl={buildGoogleMapsUrl(mapDayOpen)}
-                  onClose={() => setMapDayOpen(null)}
-                  onRemove={(code: string) => removePlanItem(mapDayOpen, code)}
-                  onReorder={(fromIdx: number, toIdx: number) => reorderPlanItems(mapDayOpen, fromIdx, toIdx)}
-                  onReverseOrder={() => reversePlanItems(mapDayOpen)}
-                  onSetStart={(lat, lng, label) => {
-                    const slotIdx = daySlots.findIndex(s => s.date === mapDayOpen);
-                    if (slotIdx >= 0) updateSlotStarting(slotIdx, lat, lng, label);
-                  }}
-                  onSetFinish={(lat, lng, label) => {
-                    const slotIdx = daySlots.findIndex(s => s.date === mapDayOpen);
-                    if (slotIdx >= 0) updateSlotFinishing(slotIdx, lat, lng, label);
-                  }}
-                />  
+                <div
+                  className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-3"
+                  onClick={() => setMapDayOpen(null)}>
+                  <div
+                    className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                    style={{ width: '96vw', height: '92vh' }}
+                    onClick={e => e.stopPropagation()}>
+                    <RouteMapPanel
+                      stops={custs}
+                      startPoint={slot?.starting_lat && slot?.starting_lng ? { lat: slot.starting_lat, lng: slot.starting_lng, label: slot.starting_label } : null}
+                      finishPoint={slot?.finishing_lat && slot?.finishing_lng ? { lat: slot.finishing_lat, lng: slot.finishing_lng, label: slot.finishing_label } : null}
+                      dayLabel={`${slot?.dayName ?? mapDayOpen} · ${slot?.area ?? ''}${slot?.city ? ' › ' + slot.city : ''}`}
+                      googleMapsUrl={buildGoogleMapsUrl(mapDayOpen)}
+                      onClose={() => setMapDayOpen(null)}
+                      onRemove={(code: string) => removePlanItem(mapDayOpen, code)}
+                      onReorder={(fromIdx: number, toIdx: number) => reorderPlanItems(mapDayOpen, fromIdx, toIdx)}
+                      onReverseOrder={() => reversePlanItems(mapDayOpen)}
+                      onSetStart={(lat, lng, label) => {
+                        const slotIdx = daySlots.findIndex(s => s.date === mapDayOpen);
+                        if (slotIdx >= 0) updateSlotStarting(slotIdx, lat, lng, label);
+                      }}
+                      onSetFinish={(lat, lng, label) => {
+                        const slotIdx = daySlots.findIndex(s => s.date === mapDayOpen);
+                        if (slotIdx >= 0) updateSlotFinishing(slotIdx, lat, lng, label);
+                      }}
+                    />
+                  </div>
+                </div>
               );
             })()}
           </div>
