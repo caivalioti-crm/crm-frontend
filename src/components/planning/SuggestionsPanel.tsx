@@ -127,6 +127,7 @@ interface SuggestionsPanelProps {
 type Step = 'week' | 'slots' | 'select' | 'plan';
 
 export function SuggestionsPanel({ currentUser, onClose, customers = [], areas = [], onSelectCustomer, onOpenCustomerMap, initialTargetUserId }: SuggestionsPanelProps) {
+  console.log('customer sample:', customers[0]);
   const isPrivileged = ['admin', 'manager', 'exec'].includes(currentUser.role);
 
   const [step, setStep] = useState<Step>('week');
@@ -189,9 +190,8 @@ const repCustomers = targetSalesmanCode
       })
     : customers;
 
-  const repAreas = targetSalesmanCode
-    ? [...new Set(repCustomers.map((c: any) => c.area).filter(Boolean))].sort() as string[]
-    : areas;
+const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
+  const repAreas = (targetSalesmanCode && fromRepCustomers.length > 0) ? fromRepCustomers : areas;
 
   const citiesForArea = (area: string) =>
     [...new Set(repCustomers.filter((c: any) => c.area === area && c.city).map((c: any) => c.city))].sort();
