@@ -177,8 +177,20 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
     setExistingVisitsForWeek([]);
   }, [selectedMonday]);
 
+  const targetSalesmanCode =
+    repProfiles.find(p => p.id === targetUserId)?.salesman_code ??
+    (targetUserId === currentUser.id ? currentUser.salesman_code : null);
+
+  const repCustomers = targetSalesmanCode
+    ? customers.filter((c: any) => String(c.salesman_code) === String(targetSalesmanCode))
+    : customers;
+
+  const repAreas = targetSalesmanCode
+    ? [...new Set(repCustomers.map((c: any) => c.area).filter(Boolean))].sort() as string[]
+    : areas;
+
   const citiesForArea = (area: string) =>
-    [...new Set(customers.filter(c => c.area === area && c.city).map(c => c.city))].sort();
+    [...new Set(repCustomers.filter((c: any) => c.area === area && c.city).map((c: any) => c.city))].sort();
 
   const updateSlot = (idx: number, field: keyof DaySlot, value: string) => {
     setDaySlots(prev => prev.map((s, i) => {
@@ -221,7 +233,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
       const from = dateKey(selectedMonday);
       const to = dateKey(addDays(selectedMonday, 4));
       const [existing, hotels] = await Promise.all([
-        authedFetch(`/api/planning/planned-visits?from=${from}&to=${to}`),
+        authedFetch(`/api/planning/planned-visits?from=${from}&to=${to}&user_id=${targetUserId}`),
         authedFetch('/api/planning/hotels'),
       ]);
       const nonFixed = (existing ?? []).filter((v: any) => !v.is_fixed_appointment);
@@ -535,7 +547,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
                       className={`flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 ${slot.area === 'SKIP' ? 'text-slate-400 italic' : ''}`}>
                       <option value="">— Περιοχή —</option>
                       <option value="SKIP">🚫 Δεν εργάζομαι αυτή την ημέρα</option>
-                      {areas.map(a => <option key={a} value={a}>{a}</option>)}
+                      {repAreas.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                     {slot.area && slot.area !== 'SKIP' && (
                       <select value={slot.city} onChange={e => updateSlot(idx, 'city', e.target.value)}
