@@ -182,8 +182,11 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
     repProfiles.find(p => p.id === targetUserId)?.salesman_code ??
     (targetUserId === currentUser.id ? currentUser.salesman_code : null);
 
-  const repCustomers = targetSalesmanCode
-    ? customers.filter((c: any) => String(c.salesman_code) === String(targetSalesmanCode))
+const repCustomers = targetSalesmanCode
+    ? customers.filter((c: any) => {
+        const sc = c.salesman_code ?? c.salesman ?? c.salesman_id;
+        return sc != null && String(sc) === String(targetSalesmanCode);
+      })
     : customers;
 
   const repAreas = targetSalesmanCode
