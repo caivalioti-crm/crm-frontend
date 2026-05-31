@@ -127,7 +127,6 @@ interface SuggestionsPanelProps {
 type Step = 'week' | 'slots' | 'select' | 'plan';
 
 export function SuggestionsPanel({ currentUser, onClose, customers = [], areas = [], onSelectCustomer, onOpenCustomerMap, initialTargetUserId }: SuggestionsPanelProps) {
-  console.log('customer sample:', customers[0]);
   const isPrivileged = ['admin', 'manager', 'exec'].includes(currentUser.role);
 
   const [step, setStep] = useState<Step>('week');
@@ -184,10 +183,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
     (targetUserId === currentUser.id ? currentUser.salesman_code : null);
 
 const repCustomers = targetSalesmanCode
-    ? customers.filter((c: any) => {
-        const sc = c.salesman_code ?? c.salesman ?? c.salesman_id;
-        return sc != null && String(sc) === String(targetSalesmanCode);
-      })
+    ? customers.filter((c: any) => String(c.salesmanCode) === String(targetSalesmanCode))
     : customers;
 
 const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
@@ -237,10 +233,12 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
       const from = dateKey(selectedMonday);
       const to = dateKey(addDays(selectedMonday, 4));
       console.log('[planner] fetching visits for user:', targetUserId, 'range:', from, '-', to);
-      const [existing, hotels] = await Promise.all([
+      const [existingResult, hotelsResult] = await Promise.allSettled([
         authedFetch(`/api/planning/planned-visits?from=${from}&to=${to}&user_id=${targetUserId}`),
         authedFetch('/api/planning/hotels'),
       ]);
+      const existing = existingResult.status === 'fulfilled' ? existingResult.value : [];
+      const hotels = hotelsResult.status === 'fulfilled' ? hotelsResult.value : [];
       console.log('[planner] existing visits returned:', existing);
       const nonFixed = (existing ?? []).filter((v: any) => !v.is_fixed_appointment);
       setExistingVisitsForWeek(nonFixed);
