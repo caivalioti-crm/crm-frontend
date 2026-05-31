@@ -146,6 +146,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
   const [poolLoading, setPoolLoading] = useState(false);
   const [selectedDayForPool, setSelectedDayForPool] = useState<string | null>(null);
   const [plan, setPlan] = useState<Record<string, CustomerSelection[]>>({});
+  const [dayStartTimes, setDayStartTimes] = useState<Record<string, number>>({});
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -156,7 +157,9 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
   const [showNoCoordList, setShowNoCoordList] = useState(false);
   const [savedHotels, setSavedHotels] = useState<any[]>([]);
   const [savingHotelForIdx, setSavingHotelForIdx] = useState<number | null>(null);
-  const [hotelNameInput, setHotelNameInput] = useState('');
+const [hotelNameInput, setHotelNameInput] = useState('');
+  const [hotelAreaInput, setHotelAreaInput] = useState('');
+  const [hotelCoordsInput, setHotelCoordsInput] = useState('');
   const [mapDayOpen, setMapDayOpen] = useState<string | null>(null);
 
   // ── Load rep profiles ─────────────────────────────────────────────────────
@@ -397,8 +400,8 @@ const buildGoogleMapsUrl = (date: string) => {
   };
 
   // ── Plan item manipulation ────────────────────────────────────────────────
-  const recalcTimes = (list: CustomerSelection[]) => {
-    let minutes = 9 * 60;
+  const recalcTimes = (list: CustomerSelection[], startMinutes?: number) => {
+    let minutes = startMinutes ?? 9 * 60;
     return list.map((c, i) => {
       if (i > 0) minutes += c.travel_buffer ?? 10;
       const h = Math.floor(minutes / 60);
@@ -415,12 +418,12 @@ const buildGoogleMapsUrl = (date: string) => {
       const newIdx = dir === 'up' ? idx - 1 : idx + 1;
       if (newIdx < 0 || newIdx >= list.length) return prev;
       [list[idx], list[newIdx]] = [list[newIdx], list[idx]];
-      return { ...prev, [date]: recalcTimes(list) };
+      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date]) };
     });
   };
 
-  const removePlanItem = (date: string, code: string) => {
-    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).filter(c => c.code !== code)) }));
+const removePlanItem = (date: string, code: string) => {
+    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).filter(c => c.code !== code), dayStartTimes[date]) }));
   };
 
   const reorderPlanItems = (date: string, fromIdx: number, toIdx: number) => {
@@ -428,11 +431,25 @@ const buildGoogleMapsUrl = (date: string) => {
       const list = [...(prev[date] ?? [])];
       const [item] = list.splice(fromIdx, 1);
       list.splice(toIdx, 0, item);
-      return { ...prev, [date]: recalcTimes(list) };
+      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date]) };
     });
   };
 
-  const addCustomerToPlan = (date: string, customer: any, position: 'start' | 'end') => {
+  const addCustomerToPlan = async (date: string, customer: any, position: 'start' | 'end') => {
+    // Fetch verified coordinates for this customer
+    let lat: number | null = customer.lat ?? null;
+    let lng: number | null = customer.lng ?? null;
+    if (!lat || !lng) {
+      const { data: coord } = await supabase
+        .from('crm_customer_coordinates')
+        .select('lat, lng, coord_source, captured_by')
+        .eq('customer_code', customer.customer_code)
+        .maybeSingle();
+      if (coord && (coord.coord_source === 'gps' || coord.coord_source === 'map' || coord.captured_by) && coord.lat && coord.lng) {
+        lat = coord.lat;
+        lng = coord.lng;
+      }
+    }
     const newStop: CustomerSelection = {
       code: customer.customer_code,
       name: customer.customer_name,
@@ -451,13 +468,13 @@ const buildGoogleMapsUrl = (date: string) => {
       sos: false,
       duration_minutes: 30,
       travel_buffer: 20,
-      lat: null,
-      lng: null,
+      lat,
+      lng,
     };
     setPlan(prev => {
       const list = [...(prev[date] ?? [])];
       position === 'start' ? list.unshift(newStop) : list.push(newStop);
-      return { ...prev, [date]: recalcTimes(list) };
+      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date]) };
     });
     setUnscheduled(prev => prev.filter(c => c.customer_code !== customer.customer_code));
   };
@@ -465,12 +482,19 @@ const buildGoogleMapsUrl = (date: string) => {
   const reversePlanItems = (date: string) => {
     setPlan(prev => ({
       ...prev,
-      [date]: recalcTimes([...(prev[date] ?? [])].reverse()),
+      [date]: recalcTimes([...(prev[date] ?? [])].reverse(), dayStartTimes[date]),
+    }));
+  };
+
+  const updateStopCoords = (date: string, code: string, lat: number, lng: number) => {
+    setPlan(prev => ({
+      ...prev,
+      [date]: (prev[date] ?? []).map(c => c.code === code ? { ...c, lat, lng } : c),
     }));
   };
 
   const updateDuration = (date: string, code: string, duration: number) => {
-    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).map(c => c.code === code ? { ...c, duration_minutes: duration } : c)) }));
+    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).map(c => c.code === code ? { ...c, duration_minutes: duration } : c), dayStartTimes[date]) }));
   };
 
   const totalPlanned = Object.values(plan).reduce((s, custs) => s + custs.length, 0);
@@ -599,6 +623,80 @@ const buildGoogleMapsUrl = (date: string) => {
             </div>
 
             <div className="text-xs text-indigo-600 font-medium mb-3">{formatWeekLabel(selectedMonday)}</div>
+
+            {/* Hotels panel */}
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-amber-800">🏨 Αποθηκευμένα Ξενοδοχεία</span>
+                <button onClick={() => setSavingHotelForIdx(-1)} className="text-xs text-indigo-600 hover:text-indigo-800">+ Νέο</button>
+              </div>
+              {savingHotelForIdx === -1 && (
+                <div className="mb-2 space-y-1.5 p-2 bg-white rounded-lg border border-amber-200">
+                  <input type="text" placeholder="Όνομα ξενοδοχείου" value={hotelNameInput} onChange={e => setHotelNameInput(e.target.value)}
+                    className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 focus:outline-none" />
+                  <select value={hotelAreaInput} onChange={e => setHotelAreaInput(e.target.value)}
+                    className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 focus:outline-none text-slate-700">
+                    <option value="">— Επιλογή Περιοχής —</option>
+                    {repAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <input type="text" placeholder="Συντεταγμένες: 35.123, 24.456 (από Google Maps)" value={hotelCoordsInput} onChange={e => setHotelCoordsInput(e.target.value)}
+                    className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-400 focus:outline-none" />
+                  <div className="flex gap-1">
+                    <button
+                      disabled={!hotelNameInput.trim() || !hotelAreaInput.trim() || !hotelCoordsInput.trim()}
+                      onClick={async () => {
+                        const parts = hotelCoordsInput.trim().split(',').map(s => parseFloat(s.trim()));
+                        if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) { alert('Μη έγκυρες συντεταγμένες'); return; }
+                        const saved = await authedFetch('/api/planning/hotels', {
+                          method: 'POST',
+                          body: JSON.stringify({ area: hotelAreaInput.trim(), name: hotelNameInput.trim(), lat: parts[0], lng: parts[1] }),
+                        });
+                        setSavedHotels(prev => [saved, ...prev]);
+                        setSavingHotelForIdx(null); setHotelNameInput(''); setHotelAreaInput(''); setHotelCoordsInput('');
+                      }}
+                      className="px-2 py-1 bg-indigo-600 text-white text-xs rounded disabled:opacity-40 hover:bg-indigo-700">
+                      Αποθήκευση
+                    </button>
+                    <button onClick={() => { setSavingHotelForIdx(null); setHotelNameInput(''); setHotelAreaInput(''); setHotelCoordsInput(''); }}
+                      className="px-2 py-1 bg-slate-200 text-slate-600 text-xs rounded">Ακύρωση</button>
+                  </div>
+                </div>
+              )}
+              {savedHotels.length === 0 && savingHotelForIdx !== -1 && (
+                <div className="text-xs text-amber-600 italic">Δεν υπάρχουν αποθηκευμένα ξενοδοχεία.</div>
+              )}
+              {savedHotels.length > 0 && (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {savedHotels.map(h => (
+                    <div key={h.id} className="flex items-center gap-2 p-1.5 bg-white rounded border border-amber-100">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium text-slate-700">{h.name}</div>
+                        <div className="text-xs text-slate-400">{h.area} · {Number(h.lat).toFixed(4)}, {Number(h.lng).toFixed(4)}</div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 shrink-0">
+                        {daySlots.filter(s => s.area && s.area !== 'SKIP').map(s => {
+                          const idx = daySlots.indexOf(s);
+                          return (
+                            <button key={s.date} onClick={() => updateSlotStarting(idx, h.lat, h.lng, h.name)}
+                              className={`px-1.5 py-0.5 text-xs rounded border transition-colors ${s.starting_lat === h.lat && s.starting_lng === h.lng ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-600 border-slate-300 hover:border-green-400'}`}
+                              title={`Αφετηρία ${s.dayName}`}>
+                              ▶{s.dayName.slice(0, 3)}
+                            </button>
+                          );
+                        })}
+                        <button onClick={async () => {
+                          if (!confirm(`Διαγραφή "${h.name}";`)) return;
+                          await authedFetch(`/api/planning/hotels/${h.id}`, { method: 'DELETE' });
+                          setSavedHotels(prev => prev.filter(x => x.id !== h.id));
+                        }} className="p-0.5 text-slate-300 hover:text-red-400">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="space-y-2 mb-4">
               {daySlots.map((slot, idx) => (
@@ -935,7 +1033,7 @@ const buildGoogleMapsUrl = (date: string) => {
               <div className="text-sm text-slate-400 italic text-center py-8">Δεν βρέθηκαν πελάτες για αυτή την επιλογή</div>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {customerPool.filter(c => c.lat && c.lng).map(c => {
+                {customerPool.map(c => {
                   const tier = TIER_LABELS[c.tier];
                   return (
                     <div key={c.code} className={`p-3 rounded-lg border transition-colors ${c.sos ? 'border-amber-400 bg-amber-50' : c.included ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50 opacity-60'}`}>
@@ -962,6 +1060,20 @@ const buildGoogleMapsUrl = (date: string) => {
                           <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
                             {c.city && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{c.city}</span>}
                             {c.address && <span className="truncate max-w-xs">{c.address}</span>}
+                            {(!c.lat || !c.lng) && (
+                              <span className="flex items-center gap-1 text-amber-600 font-medium">
+                                ⚠ χωρίς θέση
+                                {onOpenCustomerMap && (() => {
+                                  const fullCust = customers.find((cu: any) => cu.code === c.code);
+                                  return fullCust ? (
+                                    <button onClick={() => onOpenCustomerMap(fullCust)}
+                                      className="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 ml-1">
+                                      Επεξ. θέση
+                                    </button>
+                                  ) : null;
+                                })()}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
                             <span>Τελ. επίσκεψη: <span className="font-medium text-slate-600">{fmtMonthYear(c.last_visit_date)}</span></span>
@@ -1043,9 +1155,10 @@ const buildGoogleMapsUrl = (date: string) => {
               {validSlots.map(slot => {
                 const custs = plan[slot.date] ?? [];
                 const mapsUrl = buildGoogleMapsUrl(slot.date);
+                const startMins = dayStartTimes[slot.date] ?? 9 * 60;
                 const totalMinutes = custs.reduce((s, c, i) => s + (c.duration_minutes ?? 30) + (i > 0 ? (c.travel_buffer ?? 10) : 0), 0);
-                const endHour = Math.floor((9 * 60 + totalMinutes) / 60);
-                const endMin = (9 * 60 + totalMinutes) % 60;
+                const endHour = Math.floor((startMins + totalMinutes) / 60);
+                const endMin = (startMins + totalMinutes) % 60;
 
                 return (
                   <div key={slot.date} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -1060,9 +1173,22 @@ const buildGoogleMapsUrl = (date: string) => {
                             🗺 Χάρτης
                           </button>
                         </div>
-                        <div className="text-xs text-slate-400 mt-0.5">
-                          {custs.length} πελάτες · 09:00–{String(endHour).padStart(2, '0')}:{String(endMin).padStart(2, '0')}
-                          {slot.starting_label && <span className="ml-2">· 🏨 {slot.starting_label}</span>}
+                        <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>{custs.length} πελάτες</span>
+                          <span className="flex items-center gap-1">
+                            Έναρξη:
+                            <input type="time"
+                              value={`${String(Math.floor((dayStartTimes[slot.date] ?? 9*60)/60)).padStart(2,'0')}:${String((dayStartTimes[slot.date] ?? 9*60)%60).padStart(2,'0')}`}
+                              onChange={e => {
+                                const [h, m] = e.target.value.split(':').map(Number);
+                                const mins = h * 60 + m;
+                                setDayStartTimes(prev => ({ ...prev, [slot.date]: mins }));
+                                setPlan(prev => ({ ...prev, [slot.date]: recalcTimes(prev[slot.date] ?? [], mins) }));
+                              }}
+                              className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600" />
+                          </span>
+                          <span>→ {String(endHour).padStart(2, '0')}:{String(endMin).padStart(2, '0')}</span>
+                          {slot.starting_label && <span>· 🏨 {slot.starting_label}</span>}
                         </div>
                       </div>
                       {mapsUrl && (
@@ -1258,6 +1384,10 @@ const buildGoogleMapsUrl = (date: string) => {
                         const slotIdx = daySlots.findIndex(s => s.date === mapDayOpen);
                         if (slotIdx >= 0) updateSlotFinishing(slotIdx, lat, lng, label);
                       }}
+                      customers={customers}
+                      onOpenCustomerMap={onOpenCustomerMap}
+                      savedHotels={savedHotels}
+                      onUpdateStopCoords={(code, lat, lng) => updateStopCoords(mapDayOpen, code, lat, lng)}
                     />
                   </div>
                 </div>
