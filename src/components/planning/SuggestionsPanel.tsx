@@ -904,7 +904,7 @@ const buildGoogleMapsUrl = (date: string) => {
               <div className="text-sm text-slate-400 italic text-center py-8">Δεν βρέθηκαν πελάτες για αυτή την επιλογή</div>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {customerPool.map(c => {
+                {customerPool.filter(c => c.lat && c.lng).map(c => {
                   const tier = TIER_LABELS[c.tier];
                   return (
                     <div key={c.code} className={`p-3 rounded-lg border transition-colors ${c.sos ? 'border-amber-400 bg-amber-50' : c.included ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50 opacity-60'}`}>
