@@ -236,10 +236,12 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
     try {
       const from = dateKey(selectedMonday);
       const to = dateKey(addDays(selectedMonday, 4));
+      console.log('[planner] fetching visits for user:', targetUserId, 'range:', from, '-', to);
       const [existing, hotels] = await Promise.all([
         authedFetch(`/api/planning/planned-visits?from=${from}&to=${to}&user_id=${targetUserId}`),
         authedFetch('/api/planning/hotels'),
       ]);
+      console.log('[planner] existing visits returned:', existing);
       const nonFixed = (existing ?? []).filter((v: any) => !v.is_fixed_appointment);
       setExistingVisitsForWeek(nonFixed);
       setSavedHotels(hotels ?? []);
