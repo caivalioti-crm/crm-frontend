@@ -84,6 +84,7 @@ interface DaySlot {
   starting_lng?: number | null;
   starting_label?: string;
   isPreExisting?: boolean;
+  isEditing?: boolean;
 }
 
 interface CustomerSelection {
@@ -210,6 +211,10 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
   };
 
   const removeSlot = (idx: number) => setDaySlots(prev => prev.filter((_, i) => i !== idx));
+
+  const unlockSlot = (idx: number) => {
+    setDaySlots(prev => prev.map((s, i) => i !== idx ? s : { ...s, isEditing: true }));
+  };
 
   const updateSlotStarting = (idx: number, lat: number | null, lng: number | null, label: string) => {
     setDaySlots(prev => prev.map((s, i) =>
@@ -547,18 +552,35 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
                       <div className="text-xs font-bold text-slate-600">{slot.dayName.slice(0, 3)}</div>
                       <div className="text-xs text-slate-400">{new Date(slot.date).getDate()}/{new Date(slot.date).getMonth() + 1}</div>
                     </div>
-                    <select value={slot.area} onChange={e => updateSlot(idx, 'area', e.target.value)}
-                      className={`flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 ${slot.area === 'SKIP' ? 'text-slate-400 italic' : ''}`}>
-                      <option value="">— Περιοχή —</option>
-                      <option value="SKIP">🚫 Δεν εργάζομαι αυτή την ημέρα</option>
-                      {repAreas.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                    {slot.area && slot.area !== 'SKIP' && (
-                      <select value={slot.city} onChange={e => updateSlot(idx, 'city', e.target.value)}
-                        className="flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                        <option value="">Όλες οι πόλεις</option>
-                        {citiesForArea(slot.area).map(c => <option key={c} value={c}>{c}</option>)}
+                    {slot.isPreExisting && !slot.isEditing ? (
+                      <div className="flex-1 flex items-center gap-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-slate-700">
+                        <span className="flex-1 font-medium">{slot.area}</span>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Αλλαγή περιοχής για ${slot.dayName}; Ο προγραμματισμός θα ενημερωθεί κατά την αποθήκευση.`)) {
+                              unlockSlot(idx);
+                            }
+                          }}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 shrink-0 flex items-center gap-1">
+                          🔓 Αλλαγή
+                        </button>
+                      </div>
+                    ) : (
+                      <select value={slot.area} onChange={e => updateSlot(idx, 'area', e.target.value)}
+                        className={`flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 ${slot.area === 'SKIP' ? 'text-slate-400 italic' : ''}`}>
+                        <option value="">— Περιοχή —</option>
+                        <option value="SKIP">🚫 Δεν εργάζομαι αυτή την ημέρα</option>
+                        {repAreas.map(a => <option key={a} value={a}>{a}</option>)}
                       </select>
+                    )}
+                    {slot.area && slot.area !== 'SKIP' && (
+                      slot.isPreExisting && !slot.isEditing ? null : (
+                        <select value={slot.city} onChange={e => updateSlot(idx, 'city', e.target.value)}
+                          className="flex-1 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                          <option value="">Όλες οι πόλεις</option>
+                          {citiesForArea(slot.area).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      )
                     )}
                     {slot.isPreExisting && (
                       <span className="text-xs text-amber-600 font-medium shrink-0 flex items-center gap-1">
@@ -572,10 +594,9 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
                     )}
                   </div>
 
-                  {/* Starting point + hotels */}
-                  {slot.area && slot.area !== 'SKIP' && (
+                {/* Starting point + hotels */}
+                  {slot.area && slot.area !== 'SKIP' && !(slot.isPreExisting && !slot.isEditing) && (
                     <div className="pl-14 space-y-1.5">
-                      {/* Saved hotels for this area */}
                       {savedHotels.filter(h => h.area === slot.area).length > 0 && (
                         <div className="flex flex-wrap gap-1.5 items-center">
                           <span className="text-xs text-slate-400">Αποθηκευμένα:</span>
