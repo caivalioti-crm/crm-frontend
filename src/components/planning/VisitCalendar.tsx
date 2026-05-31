@@ -61,6 +61,7 @@ interface CalendarProps {
   currentUser: { id: string; role: string; name: string; salesman_code?: string | null };
   onClose: () => void;
   onSelectCustomer?: (customer: any) => void;
+  onOpenCustomerMap?: (customer: any) => void;
   customers?: any[];
 }
 
@@ -102,7 +103,7 @@ const blankForm = () => ({
   isFixed: false,
 });
 
-export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customers = [] }: CalendarProps) {
+export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap, onClose, customers = [] }: CalendarProps) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -713,6 +714,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onClose, customer
             customers={customers}
             areas={[...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort()}
             onSelectCustomer={onSelectCustomer}
+            onOpenCustomerMap={onOpenCustomerMap}
           />
         )}
       </div>

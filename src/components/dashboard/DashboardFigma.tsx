@@ -314,6 +314,7 @@ const load = async () => {
   const scrollAfterBackRef = useRef<number | null>(null);
   const cameFromCalendarRef = useRef(false);
   const [repOpen, setRepOpen] = useState(false);
+  const [mapSingleCustomer, setMapSingleCustomer] = useState<any | null>(null);
   
   const [prospectsRefreshKey, setProspectsRefreshKey] = useState(0);
   const [geoAreasExpanded, setGeoAreasExpanded] = useState(false);
@@ -1215,12 +1216,14 @@ useEffect(() => {
         onSaved={() => { setShowUnifiedProspectDialog(false); setProspectsRefreshKey(k => k + 1); }}
       />
 
-      {showCustomerMap && (
+      {(showCustomerMap || mapSingleCustomer) && (
         <CustomerMap
           currentUser={currentUser}
-          onClose={() => setShowCustomerMap(false)}
+          singleCustomer={mapSingleCustomer ?? undefined}
+          onClose={() => { setShowCustomerMap(false); setMapSingleCustomer(null); }}
           onSelectCustomer={(customer) => {
             setShowCustomerMap(false);
+            setMapSingleCustomer(null);
             setSelectedCustomer(customer);
           }}
           repList={repList}
@@ -1237,6 +1240,7 @@ useEffect(() => {
             setShowCalendar(false);
             setSelectedCustomer(customer);
           }}
+          onOpenCustomerMap={(customer) => setMapSingleCustomer(customer)}
         />
       )}
     </div>

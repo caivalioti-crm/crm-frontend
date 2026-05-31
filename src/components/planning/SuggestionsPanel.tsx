@@ -120,11 +120,12 @@ interface SuggestionsPanelProps {
   customers?: any[];
   areas?: string[];
   onSelectCustomer?: (customer: any) => void;
+  onOpenCustomerMap?: (customer: any) => void;
 }
 
 type Step = 'week' | 'slots' | 'select' | 'plan';
 
-export function SuggestionsPanel({ currentUser, onClose, customers = [], areas = [], onSelectCustomer }: SuggestionsPanelProps) {
+export function SuggestionsPanel({ currentUser, onClose, customers = [], areas = [], onSelectCustomer, onOpenCustomerMap }: SuggestionsPanelProps) {
   const isPrivileged = ['admin', 'manager', 'exec'].includes(currentUser.role);
 
   const [step, setStep] = useState<Step>('week');
@@ -228,8 +229,10 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
       setSavedHotels(hotels ?? []);
       const byDate = new Map<string, { area: string; city: string }>();
       for (const v of nonFixed) {
-        if (!v.area || byDate.has(v.planned_date)) continue;
-        byDate.set(v.planned_date, { area: v.area, city: v.city || '' });
+        const area = v.area || customers.find((c: any) => c.code === v.customer_code)?.area;
+        const city = v.city || customers.find((c: any) => c.code === v.customer_code)?.city || '';
+        if (!area || byDate.has(v.planned_date)) continue;
+        byDate.set(v.planned_date, { area, city });
       }
       setDaySlots(prev => prev.map(s => {
         const pre = byDate.get(s.date);
@@ -327,6 +330,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
             customer_code: c.code, area: slot?.area || null, city: slot?.city || null,
             planned_time: c.suggested_time || null, time_segment: null,
             is_fixed_appointment: false, notes: c.sos ? 'SOS' : null, status: 'planned',
+            ...(targetUserId !== currentUser.id ? { user_id: targetUserId } : {}),
           });
         }
       }
@@ -795,8 +799,9 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
                             {c.name} <span className="text-slate-400 font-mono">{c.code}</span>
                             {c.address && <span className="text-slate-400 ml-1">· {c.address}</span>}
                           </span>
-                          {onSelectCustomer && fullCust && (
-                            <button onClick={() => onSelectCustomer(fullCust)}
+                          {(onOpenCustomerMap || onSelectCustomer) && fullCust && (
+                            <button
+                              onClick={() => onOpenCustomerMap ? onOpenCustomerMap(fullCust) : onSelectCustomer!(fullCust)}
                               className="ml-2 px-2 py-0.5 bg-indigo-600 text-white rounded text-xs shrink-0 hover:bg-indigo-700 transition-colors">
                               Επεξ. θέση
                             </button>
