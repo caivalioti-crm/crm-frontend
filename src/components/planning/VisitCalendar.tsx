@@ -63,6 +63,7 @@ interface CalendarProps {
   onSelectCustomer?: (customer: any) => void;
   onOpenCustomerMap?: (customer: any) => void;
   customers?: any[];
+  repList?: { id: string; full_name: string; salesman_code: string }[];
 }
 
 function getMonthDays(year: number, month: number): (Date | null)[] {
@@ -103,7 +104,7 @@ const blankForm = () => ({
   isFixed: false,
 });
 
-export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap, onClose, customers = [] }: CalendarProps) {
+export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap, onClose, customers = [], repList = [] }: CalendarProps) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -120,7 +121,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
 
   const [filterArea, setFilterArea] = useState('');
   const [filterCity, setFilterCity] = useState('');
-  const [filterRep, setFilterRep] = useState('');
+  const [filterRepId, setFilterRepId] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -133,7 +134,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
     try {
       const [actual, planned] = await Promise.allSettled([
         authedFetch(`/api/visits?from=${from}&to=${to}`),
-        authedFetch(`/api/planning/planned-visits?from=${from}&to=${to}`),
+        authedFetch(`/api/planning/planned-visits?from=${from}&to=${to}${filterRepId ? `&user_id=${filterRepId}` : ''}`),
       ]);
       setActualVisits(actual.status === 'fulfilled' ? (Array.isArray(actual.value) ? actual.value : []) : []);
       setPlannedVisits(planned.status === 'fulfilled' ? (Array.isArray(planned.value) ? planned.value : []) : []);
@@ -142,7 +143,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
     } finally {
       setLoading(false);
     }
-  }, [from, to, refreshKey]);
+  }, [from, to, refreshKey, filterRepId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -173,14 +174,13 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
     const cust = customers.find((c: any) => c.code === v.customer_code);
     if (filterArea && cust?.area !== filterArea) return false;
     if (filterCity && cust?.city !== filterCity) return false;
-    if (isActual && filterRep && v.owner_name !== filterRep) return false;
+    if (isActual && filterRepId && v.owner_id !== filterRepId) return false;
     return true;
   };
 
   const selectedActual = (selectedKey ? (actualByDate.get(selectedKey) ?? []) : []).filter(v => filterVisit(v, true));
   const selectedPlanned = (selectedKey ? (plannedByDate.get(selectedKey) ?? []) : []).filter(v => filterVisit(v, false));
 
-  const allReps = [...new Set(actualVisits.map(v => v.owner_name).filter(Boolean))].sort() as string[];
   const allAreas = [...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
   const allCities = [...new Set(
     customers.filter((c: any) => !filterArea || c.area === filterArea).map((c: any) => c.city).filter(Boolean)
@@ -277,7 +277,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
     }
   };
 
-  const hasActiveFilters = !!(filterArea || filterCity || filterRep);
+  const hasActiveFilters = !!(filterArea || filterCity || filterRepId);
 
   // Cities available for the selected area in the form
   const formCities = form.area
@@ -331,32 +331,39 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
                   {allCities.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              {allReps.length > 1 && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Εκπρόσωπος</label>
-                  <select value={filterRep} onChange={e => setFilterRep(e.target.value)}
-                    className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <option value="">Όλοι</option>
-                    {allReps.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-              )}
-              {hasActiveFilters && (
-                <button onClick={() => { setFilterArea(''); setFilterCity(''); setFilterRep(''); }}
+              {repList.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Εκπρόσωπος</label>
+                <select value={filterRepId} onChange={e => setFilterRepId(e.target.value)}
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                  <option value="">Όλοι</option>
+                  {currentUser.salesman_code && (
+                    <option value={currentUser.id}>Εγώ ({currentUser.name})</option>
+                  )}
+                  {repList.filter(r => r.id !== currentUser.id && r.salesman_code).map(r => (
+                    <option key={r.id} value={r.id}>{r.full_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+              
+                {hasActiveFilters && (
+              <button onClick={() => { setFilterArea(''); setFilterCity(''); setFilterRepId(''); }}
                   className="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 self-end">
                   × Καθαρισμός
                 </button>
               )}
             </div>
-            {allReps.length > 1 && (
-              <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
-                {allReps.map(r => (
-                  <span key={r} className="flex items-center gap-1 text-xs text-slate-600">
-                    <span className={`w-2.5 h-2.5 rounded-full inline-block ${getRepColor(r).dot}`} />{r}
-                  </span>
-                ))}
-              </div>
-            )}
+            {repList.length > 0 && (
+            <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
+              {repList.map(r => (
+                <span key={r.id} className="flex items-center gap-1 text-xs text-slate-600">
+                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${getRepColor(r.full_name).dot}`} />
+                  {r.full_name}
+                </span>
+              ))}
+            </div>
+          )}
           </div>
         )}
 
@@ -376,11 +383,11 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
 
         {/* Legend */}
         <div className="flex items-center gap-4 px-6 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-500 flex-wrap">
-          {allReps.length > 0 ? (
+          {repList.length > 0 ? (
             <>
-              {allReps.map(rep => (
-                <span key={rep} className="flex items-center gap-1.5">
-                  <span className={`w-3 h-3 rounded-full inline-block ${getRepColor(rep).dot}`} />{rep}
+              {repList.map(rep => (
+                <span key={rep.id} className="flex items-center gap-1.5">
+                  <span className={`w-3 h-3 rounded-full inline-block ${getRepColor(rep.full_name).dot}`} />{rep.full_name}
                 </span>
               ))}
               <span className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-200">

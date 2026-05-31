@@ -1235,6 +1235,7 @@ useEffect(() => {
   currentUser={viewAsRep ? { ...currentUser, id: viewAsRep.id, name: viewAsRep.full_name, salesman_code: viewAsRep.salesman_code } : currentUser}
           onClose={() => setShowCalendar(false)}
           customers={customers}
+          repList={repList}
           onSelectCustomer={(customer) => {
             cameFromCalendarRef.current = true;
             setShowCalendar(false);
