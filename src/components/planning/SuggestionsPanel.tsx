@@ -85,6 +85,9 @@ interface DaySlot {
   starting_label?: string;
   isPreExisting?: boolean;
   isEditing?: boolean;
+  finishing_lat?: number | null;
+  finishing_lng?: number | null;
+  finishing_label?: string;
 }
 
 interface CustomerSelection {
@@ -219,6 +222,12 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
   const updateSlotStarting = (idx: number, lat: number | null, lng: number | null, label: string) => {
     setDaySlots(prev => prev.map((s, i) =>
       i !== idx ? s : { ...s, starting_lat: lat, starting_lng: lng, starting_label: label }
+    ));
+  };
+
+  const updateSlotFinishing = (idx: number, lat: number | null, lng: number | null, label: string) => {
+    setDaySlots(prev => prev.map((s, i) =>
+      i !== idx ? s : { ...s, finishing_lat: lat, finishing_lng: lng, finishing_label: label }
     ));
   };
 
@@ -368,20 +377,21 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
   };
 
   // ── Google Maps URL ───────────────────────────────────────────────────────
-  const buildGoogleMapsUrl = (date: string) => {
+const buildGoogleMapsUrl = (date: string) => {
     const custs = plan[date] ?? [];
     if (custs.length === 0) return null;
     const slot = daySlots.find(s => s.date === date);
     const startCoord = slot?.starting_lat && slot?.starting_lng ? `${slot.starting_lat},${slot.starting_lng}` : null;
+    const endCoord = slot?.finishing_lat && slot?.finishing_lng ? `${slot.finishing_lat},${slot.finishing_lng}` : null;
     const hasCoords = custs.some((c: any) => c.lat && c.lng);
     if (hasCoords) {
       const points = custs.map((c: any) => c.lat && c.lng ? `${c.lat},${c.lng}` : encodeURIComponent([c.address, c.city, 'Greece'].filter(Boolean).join(', ')));
-      const allPoints = startCoord ? [startCoord, ...points] : points;
+      const allPoints = [...(startCoord ? [startCoord] : []), ...points, ...(endCoord ? [endCoord] : [])];
       return `https://www.google.com/maps/dir/${allPoints.join('/')}`;
     }
     const addresses = custs.map((c: any) => [c.address, c.city, 'Greece'].filter(Boolean).join(', ')).filter(Boolean);
     if (!addresses.length) return null;
-    const allPoints = startCoord ? [startCoord, ...addresses.map(a => encodeURIComponent(a))] : addresses.map(a => encodeURIComponent(a));
+    const allPoints = [...(startCoord ? [startCoord] : []), ...addresses.map(a => encodeURIComponent(a)), ...(endCoord ? [endCoord] : [])];
     return `https://www.google.com/maps/dir/${allPoints.join('/')}`;
   };
 
@@ -410,6 +420,15 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
 
   const removePlanItem = (date: string, code: string) => {
     setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).filter(c => c.code !== code)) }));
+  };
+
+  const reorderPlanItems = (date: string, fromIdx: number, toIdx: number) => {
+    setPlan(prev => {
+      const list = [...(prev[date] ?? [])];
+      const [item] = list.splice(fromIdx, 1);
+      list.splice(toIdx, 0, item);
+      return { ...prev, [date]: recalcTimes(list) };
+    });
   };
 
   const updateDuration = (date: string, code: string, duration: number) => {
@@ -689,12 +708,29 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
                             ) : null)}
                           </div>
                         </div>
-                      )}
-                    </div>
                   )}
+
+                  {/* Finishing point */}
+                  <input
+                    type="text"
+                    placeholder="Τελικό σημείο (προαιρετικό): 40.123, 22.456"
+                    value={slot.finishing_label ?? ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const parts = val.trim().split(',').map(s => parseFloat(s.trim()));
+                      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                        updateSlotFinishing(idx, parts[0], parts[1], val);
+                      } else {
+                        updateSlotFinishing(idx, null, null, val);
+                      }
+                    }}
+                    className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-red-400 focus:outline-none placeholder:text-slate-300"
+                  />
                 </div>
-              ))}
+              )}
             </div>
+          ))}
+        </div>
 
             <button onClick={addExtraDay}
               className="w-full py-2 border border-dashed border-slate-300 text-slate-500 text-sm rounded-lg hover:border-indigo-400 hover:text-indigo-600 transition-colors mb-4 flex items-center justify-center gap-1">
@@ -1127,16 +1163,17 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
               const slot = daySlots.find(s => s.date === mapDayOpen);
               const custs = plan[mapDayOpen] ?? [];
               return (
-                <RouteMapPanel
+              <RouteMapPanel
                   stops={custs}
                   startPoint={slot?.starting_lat && slot?.starting_lng ? { lat: slot.starting_lat, lng: slot.starting_lng, label: slot.starting_label } : null}
+                  finishPoint={slot?.finishing_lat && slot?.finishing_lng ? { lat: slot.finishing_lat, lng: slot.finishing_lng, label: slot.finishing_label } : null}
                   dayLabel={`${slot?.dayName ?? mapDayOpen} · ${slot?.area ?? ''}${slot?.city ? ' › ' + slot.city : ''}`}
                   googleMapsUrl={buildGoogleMapsUrl(mapDayOpen)}
                   onClose={() => setMapDayOpen(null)}
-                  onMoveUp={(idx: number) => movePlanItem(mapDayOpen, idx, 'up')}
-                  onMoveDown={(idx: number) => movePlanItem(mapDayOpen, idx, 'down')}
+                  
                   onRemove={(code: string) => removePlanItem(mapDayOpen, code)}
-                />
+                  onReorder={(fromIdx: number, toIdx: number) => reorderPlanItems(mapDayOpen, fromIdx, toIdx)}
+                />  
               );
             })()}
           </div>
