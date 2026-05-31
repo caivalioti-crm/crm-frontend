@@ -151,6 +151,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
   const [saved, setSaved] = useState(false);
   const [unscheduled, setUnscheduled] = useState<any[]>([]);
   const [showUnscheduled, setShowUnscheduled] = useState(false);
+  const [addToDate, setAddToDate] = useState<Record<string, string>>({});
   const [existingVisitsForWeek, setExistingVisitsForWeek] = useState<any[]>([]);
   const [showNoCoordList, setShowNoCoordList] = useState(false);
   const [savedHotels, setSavedHotels] = useState<any[]>([]);
@@ -429,6 +430,36 @@ const buildGoogleMapsUrl = (date: string) => {
       list.splice(toIdx, 0, item);
       return { ...prev, [date]: recalcTimes(list) };
     });
+  };
+
+  const addCustomerToPlan = (date: string, customer: any, position: 'start' | 'end') => {
+    const newStop: CustomerSelection = {
+      code: customer.customer_code,
+      name: customer.customer_name,
+      city: customer.city,
+      area: customer.area,
+      address: null,
+      tier: customer.tier ?? 0,
+      last_visit_date: customer.last_visit_date,
+      last_invoice_date: null,
+      days_since_visit: customer.days_since_visit ?? 999,
+      days_since_purchase: 999,
+      urgency_score: customer.urgency_score ?? 0,
+      total_invoices_6m: 0,
+      constraint: null,
+      included: true,
+      sos: false,
+      duration_minutes: 30,
+      travel_buffer: 20,
+      lat: null,
+      lng: null,
+    };
+    setPlan(prev => {
+      const list = [...(prev[date] ?? [])];
+      position === 'start' ? list.unshift(newStop) : list.push(newStop);
+      return { ...prev, [date]: recalcTimes(list) };
+    });
+    setUnscheduled(prev => prev.filter(c => c.customer_code !== customer.customer_code));
   };
 
   const reversePlanItems = (date: string) => {
@@ -1155,6 +1186,28 @@ const buildGoogleMapsUrl = (date: string) => {
                                   </span>
                                 )}
                               </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <select
+                                value={addToDate[c.customer_code] ?? validSlots[0]?.date ?? ''}
+                                onChange={e => setAddToDate(prev => ({ ...prev, [c.customer_code]: e.target.value }))}
+                                className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600">
+                                {validSlots.map(s => (
+                                  <option key={s.date} value={s.date}>{s.dayName.slice(0, 3)}</option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => addCustomerToPlan(addToDate[c.customer_code] ?? validSlots[0]?.date, c, 'start')}
+                                className="text-xs px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded"
+                                title="Προσθήκη στην αρχή">
+                                ↑
+                              </button>
+                              <button
+                                onClick={() => addCustomerToPlan(addToDate[c.customer_code] ?? validSlots[0]?.date, c, 'end')}
+                                className="text-xs px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded"
+                                title="Προσθήκη στο τέλος">
+                                ↓
+                              </button>
                             </div>
                           </div>
                         );
