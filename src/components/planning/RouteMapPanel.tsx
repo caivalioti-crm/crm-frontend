@@ -20,8 +20,11 @@ interface RouteMapPanelProps {
   dayLabel: string;
   googleMapsUrl: string | null;
   onClose: () => void;
-onRemove: (code: string) => void;
+  onRemove: (code: string) => void;
   onReorder?: (fromIdx: number, toIdx: number) => void;
+  onReverseOrder?: () => void;
+  onSetStart?: (lat: number, lng: number, label: string) => void;
+  onSetFinish?: (lat: number, lng: number, label: string) => void;
 }
 
 function createNumberedIcon(n: number, color = '#4f46e5') {
@@ -56,11 +59,20 @@ function createSpecialIcon(type: 'start' | 'finish') {
 
 export function RouteMapPanel({
   stops, startPoint, finishPoint, dayLabel, googleMapsUrl,
-  onClose, onRemove, onReorder,
+  onClose, onRemove, onReorder, onReverseOrder, onSetStart, onSetFinish,
 }: RouteMapPanelProps) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const dragNode = useRef<HTMLDivElement | null>(null);
+  const [startInput, setStartInput] = useState(startPoint?.label ?? '');
+  const [finishInput, setFinishInput] = useState(finishPoint?.label ?? '');
+
+  const parseCoord = (val: string, setter: (lat: number, lng: number, label: string) => void) => {
+    const parts = val.trim().split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      setter(parts[0], parts[1], val);
+    }
+  };
 
   const located = stops.filter(s => s.lat && s.lng);
   const unlocated = stops.filter(s => !s.lat || !s.lng);
@@ -168,9 +180,39 @@ export function RouteMapPanel({
         </div>
 
         <div className="w-72 flex flex-col border-l border-slate-200 bg-white overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
-            <div className="text-xs font-semibold text-slate-600">Σειρά Στάσεων</div>
-            <div className="text-xs text-slate-400">Σύρετε για αναδιάταξη</div>
+          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-slate-600">Σειρά Στάσεων</div>
+                <div className="text-xs text-slate-400">Σύρετε για αναδιάταξη</div>
+              </div>
+              {onReverseOrder && (
+                <button
+                  onClick={onReverseOrder}
+                  className="px-2 py-1 text-xs bg-slate-200 hover:bg-slate-300 text-slate-600 rounded transition-colors"
+                  title="Αντίστροφη σειρά">
+                  ↕ Αντίστροφη
+                </button>
+              )}
+            </div>
+            {onSetStart && (
+              <input
+                type="text"
+                placeholder="▶ Αφετηρία: 40.123, 22.456"
+                value={startInput}
+                onChange={e => { setStartInput(e.target.value); parseCoord(e.target.value, onSetStart); }}
+                className="w-full px-2 py-1 text-xs border border-green-300 rounded focus:ring-1 focus:ring-green-400 focus:outline-none placeholder:text-slate-300"
+              />
+            )}
+            {onSetFinish && (
+              <input
+                type="text"
+                placeholder="🏁 Τελικό σημείο: 40.123, 22.456"
+                value={finishInput}
+                onChange={e => { setFinishInput(e.target.value); parseCoord(e.target.value, onSetFinish); }}
+                className="w-full px-2 py-1 text-xs border border-red-300 rounded focus:ring-1 focus:ring-red-400 focus:outline-none placeholder:text-slate-300"
+              />
+            )}
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
             {stops.map((stop, idx) => {

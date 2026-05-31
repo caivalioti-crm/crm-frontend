@@ -431,6 +431,13 @@ const buildGoogleMapsUrl = (date: string) => {
     });
   };
 
+  const reversePlanItems = (date: string) => {
+    setPlan(prev => ({
+      ...prev,
+      [date]: recalcTimes([...(prev[date] ?? [])].reverse()),
+    }));
+  };
+
   const updateDuration = (date: string, code: string, duration: number) => {
     setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).map(c => c.code === code ? { ...c, duration_minutes: duration } : c)) }));
   };
@@ -1170,9 +1177,17 @@ const buildGoogleMapsUrl = (date: string) => {
                   dayLabel={`${slot?.dayName ?? mapDayOpen} · ${slot?.area ?? ''}${slot?.city ? ' › ' + slot.city : ''}`}
                   googleMapsUrl={buildGoogleMapsUrl(mapDayOpen)}
                   onClose={() => setMapDayOpen(null)}
-                  
                   onRemove={(code: string) => removePlanItem(mapDayOpen, code)}
                   onReorder={(fromIdx: number, toIdx: number) => reorderPlanItems(mapDayOpen, fromIdx, toIdx)}
+                  onReverseOrder={() => reversePlanItems(mapDayOpen)}
+                  onSetStart={(lat, lng, label) => {
+                    const slotIdx = daySlots.findIndex(s => s.date === mapDayOpen);
+                    if (slotIdx >= 0) updateSlotStarting(slotIdx, lat, lng, label);
+                  }}
+                  onSetFinish={(lat, lng, label) => {
+                    const slotIdx = daySlots.findIndex(s => s.date === mapDayOpen);
+                    if (slotIdx >= 0) updateSlotFinishing(slotIdx, lat, lng, label);
+                  }}
                 />  
               );
             })()}
