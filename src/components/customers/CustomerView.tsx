@@ -172,6 +172,7 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser, u
     current: number; prev: number; currentQty: number; prevQty: number;
     currentCredit: number; prevCredit: number; currentCreditQty: number; prevCreditQty: number;
   } | null>(null);
+  const [dayTotalsLoading, setDayTotalsLoading] = useState(false);
   const [salesByCategory, setSalesByCategory] = useState<any[]>([]);
   const [salesByCategoryLoading, setSalesByCategoryLoading] = useState(true);
   const [balance, setBalance] = useState<{ balance: number; entries: any[] } | null>(null);
@@ -245,22 +246,15 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
   const [renewDate, setRenewDate] = useState('');
 
   const SALES_PERIODS = useMemo(() => {
-    const cutoffD = new Date(lastInvoiceDate);
-
-    // YTD: σύγκριση ίδιων ΟΛΟΚΛΗΡΩΜΕΝΩΝ μηνών στις δύο χρονιές.
-    // Όταν το cutoff πέφτει στην αρχή μήνα (π.χ. 1 Ιουν), ο μήνας είναι άδειος/μερικός
-    // φέτος αλλά ΠΛΗΡΗΣ πέρσι — αν τον μετρήσεις, φουσκώνει το περσινό baseline.
-    const daysInCutoffMonth = new Date(cutoffD.getFullYear(), cutoffD.getMonth() + 1, 0).getDate();
-    const monthComplete = cutoffD.getDate() >= daysInCutoffMonth;
-    const ytdEndIdx = monthComplete ? cutoffD.getMonth() : cutoffD.getMonth() - 1; // 0-indexed τελευταίος πλήρης μήνας
-    const ytdYear = cutoffD.getFullYear();
-
-    const ytdMonthStr = String(ytdEndIdx + 1).padStart(2, '0');
-    const lastDay = new Date(ytdYear, ytdEndIdx + 1, 0).getDate();
-    const ytdLabel = new Date(ytdYear, ytdEndIdx, 1).toLocaleString('el-GR', { month: 'short' });
-    // day-level όρια στο ίδιο inclusive month-end στυλ με τα Q periods (χωρίς toISOString → χωρίς TZ shift)
-    const ytdDateTo = `${ytdYear}-${ytdMonthStr}-${String(lastDay).padStart(2, '0')}`;
-    const ytdPrevTo = `${ytdYear - 1}-${ytdMonthStr}-${String(lastDay).padStart(2, '0')}`;
+   // YTD = year-to-date ΜΕΧΡΙ ΤΗΝ ΗΜΕΡΟΜΗΝΙΑ του τελευταίου παραστατικού (lastInvoiceDate),
+    // συγκρινόμενο με την ΙΔΙΑ μέρα/μήνα πέρσι. Day-level μέσω RPC → ταυτίζεται με το dashboard.
+    // lastInvoiceDate μορφή 'YYYY-MM-DD'.
+    const ytdYear = Number(lastInvoiceDate.slice(0, 4));
+    const ytdMonthStr = lastInvoiceDate.slice(5, 7);                 // 'MM'
+    const ytdMonthIdx = Number(ytdMonthStr) - 1;
+    const ytdLabel = new Date(ytdYear, ytdMonthIdx, 1).toLocaleString('el-GR', { month: 'short' });
+    const ytdDateTo = lastInvoiceDate;                              // inclusive (το RPC κάνει trndate < p_to + 1)
+    const ytdPrevTo = `${ytdYear - 1}${lastInvoiceDate.slice(4)}`;   // ίδια μέρα/μήνα, προηγ. έτος
     return [
       { label: 'Q1 2026', from: '2026-01', to: '2026-03', prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025', dateFrom: '2026-01-01', dateTo: '2026-03-31', prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31' },
       { label: 'Q2 2026', from: '2026-04', to: '2026-06', prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025', dateFrom: '2026-04-01', dateTo: '2026-06-30', prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30' },
@@ -331,7 +325,8 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
   useEffect(() => {
     const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
     let cancelled = false;
-    setDayTotals(null); // fallback σε monthly όσο φορτώνει
+    setDayTotals(null);
+    setDayTotalsLoading(true);
     (async () => {
       try {
         const { data, error } = await supabase.rpc('get_customer_sales_totals', {
@@ -358,6 +353,8 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
       } catch (e) {
         console.error('sales totals RPC failed, using monthly fallback', e);
         if (!cancelled) setDayTotals(null);
+      } finally {
+        if (!cancelled) setDayTotalsLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -457,6 +454,7 @@ useEffect(() => {
   const growthPct = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
   const isUp = growthPct !== null && growthPct >= 0;
   const diffAbs = currentTotal - prevTotal;
+  const totalsLoading = dayTotalsLoading && !dayTotals;
 
   const filteredDocs = docTypeFilter === 'all' ? documents : documents.filter(d => d.type === docTypeFilter);
   const visibleDocs = docsExpanded ? filteredDocs : filteredDocs.slice(0, 8);
@@ -1087,29 +1085,47 @@ const startEditVisitInCustomer = (v: any) => {
               <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                   <div className="text-xs text-indigo-500 font-medium mb-1">Τρέχουσα Περίοδος ({sp.label})</div>
-                  <div className="text-2xl font-bold text-indigo-700 leading-tight">{fmtEur(currentTotal)}</div>
-                  <div className="text-xs text-indigo-400 mt-0.5">{currentQty.toLocaleString('el-GR')} τεμ.</div>
-                  {dayTotals && (dayTotals.currentCredit > 0 || dayTotals.prevCredit > 0) && (
-                    <div className="text-xs text-red-400 mt-0.5">Επιστροφές: {fmtEur(dayTotals.currentCredit)} · {Math.round(dayTotals.currentCreditQty).toLocaleString('el-GR')} τεμ.</div>
-                  )}
-                  {growthPct !== null && (
-                    <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-green-600' : 'text-red-500'}`}>
-                      {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      {isUp ? '+' : ''}{growthPct.toFixed(1)}% vs {sp.prevLabel}
+                  {totalsLoading ? (
+                    <div className="space-y-2 mt-1">
+                      <div className="h-7 w-28 bg-indigo-200/60 rounded animate-pulse" />
+                      <div className="h-3 w-16 bg-indigo-100 rounded animate-pulse" />
                     </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-indigo-700 leading-tight">{fmtEur(currentTotal)}</div>
+                      <div className="text-xs text-indigo-400 mt-0.5">{currentQty.toLocaleString('el-GR')} τεμ.</div>
+                      {dayTotals && (dayTotals.currentCredit > 0 || dayTotals.prevCredit > 0) && (
+                        <div className="text-xs text-red-400 mt-0.5">Επιστροφές: {fmtEur(dayTotals.currentCredit)} · {Math.round(dayTotals.currentCreditQty).toLocaleString('el-GR')} τεμ.</div>
+                      )}
+                      {growthPct !== null && (
+                        <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-green-600' : 'text-red-500'}`}>
+                          {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                          {isUp ? '+' : ''}{growthPct.toFixed(1)}% vs {sp.prevLabel}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                   <div className="text-xs text-slate-500 font-medium mb-1">Ίδια Περίοδος Πέρσι ({sp.prevLabel})</div>
-                  <div className="text-2xl font-bold text-slate-600 leading-tight">{fmtEur(prevTotal)}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">{prevQty.toLocaleString('el-GR')} τεμ.</div>
-                  {dayTotals && (dayTotals.currentCredit > 0 || dayTotals.prevCredit > 0) && (
-                    <div className="text-xs text-red-400 mt-0.5">Επιστροφές: {fmtEur(dayTotals.prevCredit)} · {Math.round(dayTotals.prevCreditQty).toLocaleString('el-GR')} τεμ.</div>
-                  )}
-                  {growthPct !== null && (
-                    <div className={`text-xs mt-2 font-medium ${isUp ? 'text-green-600' : 'text-red-500'}`}>
-                      {isUp ? '+' : ''}{fmtEur(Math.abs(diffAbs))} {isUp ? 'αύξηση' : 'μείωση'}
+                  {totalsLoading ? (
+                    <div className="space-y-2 mt-1">
+                      <div className="h-7 w-28 bg-slate-200 rounded animate-pulse" />
+                      <div className="h-3 w-16 bg-slate-100 rounded animate-pulse" />
                     </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-slate-600 leading-tight">{fmtEur(prevTotal)}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{prevQty.toLocaleString('el-GR')} τεμ.</div>
+                      {dayTotals && (dayTotals.currentCredit > 0 || dayTotals.prevCredit > 0) && (
+                        <div className="text-xs text-red-400 mt-0.5">Επιστροφές: {fmtEur(dayTotals.prevCredit)} · {Math.round(dayTotals.prevCreditQty).toLocaleString('el-GR')} τεμ.</div>
+                      )}
+                      {growthPct !== null && (
+                        <div className={`text-xs mt-2 font-medium ${isUp ? 'text-green-600' : 'text-red-500'}`}>
+                          {isUp ? '+' : ''}{fmtEur(Math.abs(diffAbs))} {isUp ? 'αύξηση' : 'μείωση'}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
