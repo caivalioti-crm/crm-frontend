@@ -34,11 +34,12 @@ function toLocalDateString(d: Date): string {
 const _now = new Date();
 
 export function buildPeriods(syncDate: string, invoiceDate?: string): Period[] {
-  const labelDate = new Date(syncDate);
   const cutoffDate = new Date(invoiceDate ?? syncDate);
-  const ytdTo    = toLocalDateString(new Date(cutoffDate.getFullYear(), cutoffDate.getMonth(), cutoffDate.getDate() + 1));
-  const ytdCmpTo = toLocalDateString(new Date(cutoffDate.getFullYear() - 1, cutoffDate.getMonth(), cutoffDate.getDate() + 1));
-  const ytdLabel = labelDate.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
+  // YTD μέχρι την ΗΜΕΡΟΜΗΝΙΑ του τελευταίου παραστατικού (inclusive). Το backend είναι <= to,
+  // οπότε ΧΩΡΙΣ +1 — αλλιώς έμπαινε 1 μέρα παραπάνω στο prev (γι' αυτό έβγαζε 8,3% αντί 9,4%).
+  const ytdTo    = toLocalDateString(cutoffDate);
+  const ytdCmpTo = toLocalDateString(new Date(cutoffDate.getFullYear() - 1, cutoffDate.getMonth(), cutoffDate.getDate()));
+  const ytdLabel = new Date(cutoffDate.getFullYear(), cutoffDate.getMonth(), 1).toLocaleString('el-GR', { month: 'short' });
   return [
     {
       key: '2026-YTD',
