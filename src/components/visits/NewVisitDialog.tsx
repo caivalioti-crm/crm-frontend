@@ -27,15 +27,18 @@ type NewVisitDialogProps = {
   onClose: () => void;
   customers: Customer[];
   onSave?: () => void;
+  currentUser?: { id: string; salesman_code?: string | null };
 };
 
-async function authedFetch(url: string) {
+async function authedFetch(url: string, options?: RequestInit) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   const res = await fetch(`${BASE_URL}${url}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers ?? {}),
     },
   });
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
@@ -47,7 +50,7 @@ const todayDisplay = () => {
   return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 };
 
-export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitDialogProps) {
+export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser: _currentUser }: NewVisitDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('');
@@ -75,10 +78,22 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
   const [shopProfile, setShopProfile] = useState<ShopProfile>(EMPTY_SHOP_PROFILE);
   const [competitionInfo, setCompetitionInfo] = useState<CompetitionInfo>(EMPTY_COMPETITION_INFO);
   const [shopType, setShopType] = useState('');
+  const [outcome, setOutcome] = useState<string | null>(null);
+  const [todayPlanned, setTodayPlanned] = useState<any[]>([]);
+  const [plannedLoading, setPlannedLoading] = useState(false);
+  const [selectedPlannedId, setSelectedPlannedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && allCategories.length === 0) {
       authedFetch('/api/categories').then(setAllCategories).catch(console.error);
+    }
+    if (isOpen) {
+      const today = new Date().toISOString().split('T')[0];
+      setPlannedLoading(true);
+      authedFetch(`/api/planning/planned-visits?from=${today}&to=${today}`)
+        .then(data => setTodayPlanned(Array.isArray(data) ? data.filter((v: any) => v.customer_code) : []))
+        .catch(console.error)
+        .finally(() => setPlannedLoading(false));
     }
   }, [isOpen]);
 
@@ -175,6 +190,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
       formData.append('categories', JSON.stringify(selectedCategories));
       formData.append('shop_profile', JSON.stringify({ ...shopProfile, shop_type: shopType || undefined }));
       formData.append('competition_info', JSON.stringify(competitionInfo));
+      if (outcome) formData.append('outcome', outcome);
       if (voiceMemoBlob) {
         formData.append('voice_memo', voiceMemoBlob, 'memo.webm');
       }
@@ -190,6 +206,14 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
         throw new Error(err.error || 'Request failed');
       }
 
+      if (selectedPlannedId && !outcome) {
+        try {
+          await authedFetch(`/api/planning/planned-visits/${selectedPlannedId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'completed' }),
+          });
+        } catch (e) { console.error(e); }
+      }
       onSave?.();
       handleClose();
     } catch (err: any) {
@@ -215,6 +239,9 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
     setShopProfile(EMPTY_SHOP_PROFILE);
     setCompetitionInfo(EMPTY_COMPETITION_INFO);
     setShopType('');
+    setOutcome(null);
+    setTodayPlanned([]);
+    setSelectedPlannedId(null);
     onClose();
     setVoiceMemoBlob(null);
   };
@@ -244,6 +271,43 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
         </div>
 
         <div className="p-6 space-y-6">
+
+          {(plannedLoading || todayPlanned.length > 0) && (
+            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2">
+              <div className="text-sm font-medium text-indigo-700 flex items-center gap-2">
+                📅 Από το πλάνο σου σήμερα
+                <span className="text-xs text-indigo-400 font-normal">(προαιρετικό)</span>
+                {plannedLoading && <span className="text-xs text-indigo-400">Φόρτωση...</span>}
+              </div>
+              {todayPlanned.map(p => {
+                const cust = customers.find(c => String(c.code) === String(p.customer_code));
+                const isSelected = selectedPlannedId === p.id;
+                return (
+                  <button key={p.id}
+                    onClick={() => {
+                      const nowSelected = !isSelected;
+                      setSelectedPlannedId(nowSelected ? p.id : null);
+                      if (nowSelected) {
+                        setSelectedCustomerCode(String(p.customer_code));
+                        if (cust?.area) setFilterArea(cust.area);
+                      } else {
+                        setSelectedCustomerCode('');
+                      }
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border-2 text-left transition-colors ${
+                      isSelected ? 'border-indigo-500 bg-white' : 'border-indigo-200 bg-white hover:border-indigo-400'
+                    }`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-slate-800">{cust?.name ?? String(p.customer_code)}</div>
+                      <div className="text-xs text-slate-500">{p.city || cust?.city}{(p.area || cust?.area) ? ` · ${p.area || cust?.area}` : ''}</div>
+                    </div>
+                    {p.planned_time && <span className="text-xs text-slate-500 shrink-0">{p.planned_time.slice(0, 5)}</span>}
+                    {isSelected && <span className="text-indigo-600 shrink-0">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Customer Selection */}
           <div className="space-y-3">
@@ -319,6 +383,42 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave }: NewVisitD
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Visit Outcome */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox"
+                checked={outcome !== null}
+                onChange={e => setOutcome(e.target.checked ? 'not_in' : null)}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400" />
+              <span className="text-sm font-medium text-gray-700">Η συνάντηση δεν πραγματοποιήθηκε</span>
+            </label>
+            {outcome !== null && (
+              <>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[
+                    { value: 'not_in',      label: '✗ Δεν ήταν εκεί' },
+                    { value: 'closed',      label: '✗ Κλειστό' },
+                    { value: 'rescheduled', label: '↻ Αναβλήθηκε' },
+                    { value: 'no_answer',   label: '📵 Δεν απάντησε' },
+                    { value: 'no_time',     label: '⏱ Δεν πρόλαβα' },
+                  ].map(opt => (
+                    <button key={opt.value} onClick={() => setOutcome(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                        outcome === opt.value
+                          ? 'border-orange-400 bg-orange-50 text-orange-700'
+                          : 'border-gray-300 text-gray-600 hover:border-orange-300'
+                      }`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                  ⚠️ Δεν θα ενημερωθεί η ημερομηνία τελευταίας επίσκεψης
+                </div>
+              </>
+            )}
           </div>
 
           {/* Categories */}

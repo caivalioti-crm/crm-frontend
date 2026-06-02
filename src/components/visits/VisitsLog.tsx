@@ -564,6 +564,11 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
                               )}
                               <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono">{visit.customer_code}</span>
                               <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{visit.visit_type}</span>
+                              {(visit as any).outcome && (
+                                <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                                  🚫 {({ not_in: 'Δεν ήταν εκεί', closed: 'Κλειστό', rescheduled: 'Αναβλήθηκε', no_answer: 'Δεν απάντησε', no_time: 'Δεν πρόλαβα' } as Record<string, string>)[(visit as any).outcome] ?? (visit as any).outcome}
+                                </span>
+                              )}
                               {visitCategories.length > 0 && (
                                 <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-xs flex items-center gap-1">
                                   <Tag className="w-3 h-3" />

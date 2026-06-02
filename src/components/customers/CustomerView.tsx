@@ -1297,6 +1297,11 @@ const startEditVisitInCustomer = (v: any) => {
                         {v.notes && <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{v.notes}</div>}
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                           {v.visit_type && <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">{v.visit_type}</span>}
+                          {(v as any).outcome && (
+                            <span className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-medium">
+                              🚫 {({ not_in: 'Δεν ήταν εκεί', closed: 'Κλειστό', rescheduled: 'Αναβλήθηκε', no_answer: 'Δεν απάντησε', no_time: 'Δεν πρόλαβα' } as Record<string, string>)[(v as any).outcome] ?? (v as any).outcome}
+                            </span>
+                          )}
                           {v.voice_memo_path && (
                             <span className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-500 rounded flex items-center gap-1">
                               <Mic className="w-3 h-3" /> Memo
@@ -1758,6 +1763,7 @@ const startEditVisitInCustomer = (v: any) => {
         isOpen={showNewVisitDialog}
         onClose={() => setShowNewVisitDialog(false)}
         customers={[{ code: customer.code, name: customer.name, city: customer.city, area: customer.area }]}
+        currentUser={currentUser}
         onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }}
       />
     </div>
