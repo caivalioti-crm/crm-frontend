@@ -298,9 +298,12 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
                       isSelected ? 'border-indigo-500 bg-white' : 'border-indigo-200 bg-white hover:border-indigo-400'
                     }`}>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-slate-800">{cust?.name ?? String(p.customer_code)}</div>
-                      <div className="text-xs text-slate-500">{p.city || cust?.city}{(p.area || cust?.area) ? ` · ${p.area || cust?.area}` : ''}</div>
-                    </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm text-slate-800">{cust?.name ?? String(p.customer_code)}</span>
+                          <span className="text-xs font-mono text-slate-400 shrink-0">{String(p.customer_code)}</span>
+                        </div>
+                        <div className="text-xs text-slate-500">{p.city || cust?.city}{(p.area || cust?.area) ? ` · ${p.area || cust?.area}` : ''}</div>
+                      </div>
                     {p.planned_time && <span className="text-xs text-slate-500 shrink-0">{p.planned_time.slice(0, 5)}</span>}
                     {isSelected && <span className="text-indigo-600 shrink-0">✓</span>}
                   </button>
