@@ -75,6 +75,7 @@ export interface CustomerViewProps {
   };
   onBack: () => void;
   currentUser?: { id: string; role: string; salesman_code: string | null; name: string };
+  upcomingPlanned?: Map<string, { date: string; area: string }>;
 }
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
@@ -158,7 +159,7 @@ function getL1Label(l1Code: string, items: any[]): string {
   return l1Item ? l1Item.full_name : `Κατηγορία ${l1Code}`;
 }
 
-export function CustomerView({ customer, onBack, currentUser: propCurrentUser }: CustomerViewProps) {
+export function CustomerView({ customer, onBack, currentUser: propCurrentUser, upcomingPlanned = new Map() }: CustomerViewProps) {
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -848,6 +849,21 @@ const startEditVisitInCustomer = (v: any) => {
       </header>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
+
+        {upcomingPlanned.has(String(customer.code)) && (() => {
+          const planned = upcomingPlanned.get(String(customer.code))!;
+          const dt = new Date(planned.date + 'T12:00:00');
+          const label = dt.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long' });
+          return (
+            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700">
+              <span className="text-lg shrink-0">📅</span>
+              <div>
+                <span className="font-semibold">Προγραμματισμένη επίσκεψη: {label}</span>
+                {planned.area && <span className="text-indigo-500 ml-2">· {planned.area}</span>}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* CUSTOMER DETAILS */}
         <section id="section-customer" className="bg-white rounded-xl shadow p-5">
