@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { Customer } from '../types/customer';
 import type { Sale } from '../types/sale';
 import { mapErpCustomer } from '../mappers/customerMapper';
 import { mapErpSale } from '../mappers/saleMapper';
+
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const FULL_ACCESS_ROLES = ['admin', 'manager', 'exec'];
@@ -221,8 +222,10 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
       .catch(console.error);
   }, [currentUser.id]);
 
-  /* ===================== FETCH SALES ===================== */
+ /* ===================== FETCH SALES ===================== */
+  const salesReqId = useRef(0);
   const fetchSales = useCallback(async (period: Period) => {
+    const reqId = ++salesReqId.current;
     setSalesLoading(true);
     try {
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
@@ -232,37 +235,38 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
         authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
         authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}`),
       ]);
+      if (reqId !== salesReqId.current) return;   // stale response, ignore
       setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
       setCompareSales(Array.isArray(compare) ? compare.map(mapErpSale) : []);
       setAreaStatsRpc(Array.isArray(areas) ? areas : []);
       setCityStats([]);
       setSelectedGeoArea(null);
     } catch (err) {
-      console.error(err);
+      if (reqId === salesReqId.current) console.error(err);
     } finally {
-      setSalesLoading(false);
+      if (reqId === salesReqId.current) setSalesLoading(false);
     }
  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
 
   const fetchMonthlySales = useCallback(async (period: Period) => {
-  setMonthlySalesLoading(true);
-  try {
-    const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
-const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
-    const [current, compare] = await Promise.all([
-      authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}`),
-      authedFetch(`/api/erp/sales/monthly?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
-    ]);
-    setMonthlySales(Array.isArray(current) ? current : []);
-    setMonthlySalesCompare(Array.isArray(compare) ? compare : []);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setMonthlySalesLoading(false);
-  }
-}, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
+    setMonthlySalesLoading(true);
+    try {
+      const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
+      const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
+      const [current, compare] = await Promise.all([
+        authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}`),
+        authedFetch(`/api/erp/sales/monthly?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
+      ]);
+      setMonthlySales(Array.isArray(current) ? current : []);
+      setMonthlySalesCompare(Array.isArray(compare) ? compare : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setMonthlySalesLoading(false);
+    }
+  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
 
   useEffect(() => {
     if (monthlySalesExpanded) fetchMonthlySales(selectedPeriod);
