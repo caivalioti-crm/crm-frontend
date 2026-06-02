@@ -304,7 +304,31 @@ const load = async () => {
   load().catch(console.error);
 }, [currentUser.role]);
   
+useEffect(() => {
+    const load = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const twoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const { data } = await supabase
+          .from('crm_planned_visits')
+          .select('customer_code, planned_date, area')
+          .gte('planned_date', today)
+          .lte('planned_date', twoWeeks)
+          .not('customer_code', 'is', null);
+        const map = new Map<string, { date: string; area: string }>();
+        for (const v of data ?? []) {
+          const code = String(v.customer_code);
+          if (!map.has(code)) map.set(code, { date: v.planned_date, area: v.area ?? '' });
+        }
+        setUpcomingPlanned(map);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    load();
+  }, []);
 
+  const [upcomingPlanned, setUpcomingPlanned] = useState<Map<string, { date: string; area: string }>>(new Map());
   const [showCustomerMap, setShowCustomerMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
@@ -789,6 +813,7 @@ useEffect(() => {
                 title={currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'exec' ? 'All Customers' : 'Your Customers'}
                 customers={displayedCustomers}
                 currentUserRole={currentUser.role}
+                upcomingPlanned={upcomingPlanned}
                 onSelectCustomer={(customer) => {
                   scrollPositionRef.current = window.scrollY;
                   // Save filter state before navigating
@@ -1176,6 +1201,7 @@ useEffect(() => {
         <CustomerView
           customer={selectedCustomer}
           currentUser={currentUser}
+          upcomingPlanned={upcomingPlanned}
             onBack={() => {
               scrollAfterBackRef.current = scrollPositionRef.current;
               setSelectedCustomer(null);
@@ -1232,9 +1258,10 @@ useEffect(() => {
 
       {showCalendar && (
         <VisitCalendar
+          hidden={!!mapSingleCustomer}
   currentUser={viewAsRep ? { ...currentUser, id: viewAsRep.id, name: viewAsRep.full_name, salesman_code: viewAsRep.salesman_code } : currentUser}
           onClose={() => setShowCalendar(false)}
-          customers={customers}
+          customers={allCustomers}
           repList={repList}
           onSelectCustomer={(customer) => {
             cameFromCalendarRef.current = true;
