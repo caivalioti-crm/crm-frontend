@@ -168,6 +168,10 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser, u
   const [sales, setSales] = useState<any[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
   const [salesPeriodIdx, setSalesPeriodIdx] = useState(2);
+  const [dayTotals, setDayTotals] = useState<{
+    current: number; prev: number; currentQty: number; prevQty: number;
+    currentCredit: number; prevCredit: number; currentCreditQty: number; prevCreditQty: number;
+  } | null>(null);
   const [salesByCategory, setSalesByCategory] = useState<any[]>([]);
   const [salesByCategoryLoading, setSalesByCategoryLoading] = useState(true);
   const [balance, setBalance] = useState<{ balance: number; entries: any[] } | null>(null);
@@ -241,13 +245,22 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
   const [renewDate, setRenewDate] = useState('');
 
   const SALES_PERIODS = useMemo(() => {
-    const labelD = new Date(lastSyncDate);
     const cutoffD = new Date(lastInvoiceDate);
-    const ytdMonth = cutoffD.getMonth() + 1;
-    const ytdMonthStr = String(ytdMonth).padStart(2, '0');
-    const ytdLabel = labelD.toLocaleString('el-GR', { day: 'numeric', month: 'short' });
-    const ytdDateTo = new Date(cutoffD.getFullYear(), cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
-    const ytdPrevTo = new Date(cutoffD.getFullYear() - 1, cutoffD.getMonth(), cutoffD.getDate() + 1).toISOString().split('T')[0];
+
+    // YTD: σύγκριση ίδιων ΟΛΟΚΛΗΡΩΜΕΝΩΝ μηνών στις δύο χρονιές.
+    // Όταν το cutoff πέφτει στην αρχή μήνα (π.χ. 1 Ιουν), ο μήνας είναι άδειος/μερικός
+    // φέτος αλλά ΠΛΗΡΗΣ πέρσι — αν τον μετρήσεις, φουσκώνει το περσινό baseline.
+    const daysInCutoffMonth = new Date(cutoffD.getFullYear(), cutoffD.getMonth() + 1, 0).getDate();
+    const monthComplete = cutoffD.getDate() >= daysInCutoffMonth;
+    const ytdEndIdx = monthComplete ? cutoffD.getMonth() : cutoffD.getMonth() - 1; // 0-indexed τελευταίος πλήρης μήνας
+    const ytdYear = cutoffD.getFullYear();
+
+    const ytdMonthStr = String(ytdEndIdx + 1).padStart(2, '0');
+    const lastDay = new Date(ytdYear, ytdEndIdx + 1, 0).getDate();
+    const ytdLabel = new Date(ytdYear, ytdEndIdx, 1).toLocaleString('el-GR', { month: 'short' });
+    // day-level όρια στο ίδιο inclusive month-end στυλ με τα Q periods (χωρίς toISOString → χωρίς TZ shift)
+    const ytdDateTo = `${ytdYear}-${ytdMonthStr}-${String(lastDay).padStart(2, '0')}`;
+    const ytdPrevTo = `${ytdYear - 1}-${ytdMonthStr}-${String(lastDay).padStart(2, '0')}`;
     return [
       { label: 'Q1 2026', from: '2026-01', to: '2026-03', prevFrom: '2025-01', prevTo: '2025-03', prevLabel: 'Q1 2025', dateFrom: '2026-01-01', dateTo: '2026-03-31', prevDateFrom: '2025-01-01', prevDateTo: '2025-03-31' },
       { label: 'Q2 2026', from: '2026-04', to: '2026-06', prevFrom: '2025-04', prevTo: '2025-06', prevLabel: 'Q2 2025', dateFrom: '2026-04-01', dateTo: '2026-06-30', prevDateFrom: '2025-04-01', prevDateTo: '2025-06-30' },
@@ -314,6 +327,41 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
       .catch(console.error)
       .finally(() => setSalesByBranchLoading(false));
   }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
+
+  useEffect(() => {
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
+    let cancelled = false;
+    setDayTotals(null); // fallback σε monthly όσο φορτώνει
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_customer_sales_totals', {
+          p_trdr_code: String(customer.code),
+          p_from: dateFrom,
+          p_to: dateTo,
+          p_prev_from: prevDateFrom,
+          p_prev_to: prevDateTo,
+        });
+        if (error) throw error;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!cancelled && row) {
+          setDayTotals({
+            current: Number(row.current_net) || 0,
+            prev: Number(row.prev_net) || 0,
+            currentQty: Number(row.current_qty) || 0,
+            prevQty: Number(row.prev_qty) || 0,
+            currentCredit: Number(row.current_credit_net) || 0,
+            prevCredit: Number(row.prev_credit_net) || 0,
+            currentCreditQty: Number(row.current_credit_qty) || 0,
+            prevCreditQty: Number(row.prev_credit_qty) || 0,
+          });
+        }
+      } catch (e) {
+        console.error('sales totals RPC failed, using monthly fallback', e);
+        if (!cancelled) setDayTotals(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, refreshKey]);
 
   useEffect(() => {
     setDocsLoading(true);
@@ -400,10 +448,12 @@ useEffect(() => {
   function handleExpandCategory(catIdKey: string) { fetchSkus(catIdKey); fetchRank(catIdKey); fetchTopCust(catIdKey); }
 
   const sp = SALES_PERIODS[salesPeriodIdx];
-  const currentTotal = sumPeriod(sales, sp.from, sp.to);
-  const prevTotal = sumPeriod(sales, sp.prevFrom, sp.prevTo);
-  const currentQty = sumQtyPeriod(sales, sp.from, sp.to);
-  const prevQty = sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
+  // Headline totals: day-accurate από το RPC (ταυτίζονται πάντα με το dashboard),
+  // fallback σε monthly όσο φορτώνει ή αν αποτύχει.
+  const currentTotal = dayTotals ? dayTotals.current : sumPeriod(sales, sp.from, sp.to);
+  const prevTotal = dayTotals ? dayTotals.prev : sumPeriod(sales, sp.prevFrom, sp.prevTo);
+  const currentQty = dayTotals ? dayTotals.currentQty : sumQtyPeriod(sales, sp.from, sp.to);
+  const prevQty = dayTotals ? dayTotals.prevQty : sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
   const growthPct = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
   const isUp = growthPct !== null && growthPct >= 0;
   const diffAbs = currentTotal - prevTotal;
@@ -1039,6 +1089,9 @@ const startEditVisitInCustomer = (v: any) => {
                   <div className="text-xs text-indigo-500 font-medium mb-1">Τρέχουσα Περίοδος ({sp.label})</div>
                   <div className="text-2xl font-bold text-indigo-700 leading-tight">{fmtEur(currentTotal)}</div>
                   <div className="text-xs text-indigo-400 mt-0.5">{currentQty.toLocaleString('el-GR')} τεμ.</div>
+                  {dayTotals && dayTotals.currentCredit > 0 && (
+                    <div className="text-xs text-red-400 mt-0.5">↩ Επιστροφές: {fmtEur(dayTotals.currentCredit)} · {Math.round(dayTotals.currentCreditQty).toLocaleString('el-GR')} τεμ.</div>
+                  )}
                   {growthPct !== null && (
                     <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-green-600' : 'text-red-500'}`}>
                       {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -1050,6 +1103,9 @@ const startEditVisitInCustomer = (v: any) => {
                   <div className="text-xs text-slate-500 font-medium mb-1">Ίδια Περίοδος Πέρσι ({sp.prevLabel})</div>
                   <div className="text-2xl font-bold text-slate-600 leading-tight">{fmtEur(prevTotal)}</div>
                   <div className="text-xs text-slate-400 mt-0.5">{prevQty.toLocaleString('el-GR')} τεμ.</div>
+                  {dayTotals && dayTotals.prevCredit > 0 && (
+                    <div className="text-xs text-red-400 mt-0.5">↩ Επιστροφές: {fmtEur(dayTotals.prevCredit)} · {Math.round(dayTotals.prevCreditQty).toLocaleString('el-GR')} τεμ.</div>
+                  )}
                   {growthPct !== null && (
                     <div className={`text-xs mt-2 font-medium ${isUp ? 'text-green-600' : 'text-red-500'}`}>
                       {isUp ? '+' : ''}{fmtEur(Math.abs(diffAbs))} {isUp ? 'αύξηση' : 'μείωση'}
