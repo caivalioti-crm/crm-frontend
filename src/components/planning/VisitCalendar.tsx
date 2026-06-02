@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { SuggestionsPanel } from './SuggestionsPanel';
+import { RouteMapPanel } from './RouteMapPanel';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -125,6 +126,10 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
   const [filterRepId, setFilterRepId] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [mapPreviewDay, setMapPreviewDay] = useState<string | null>(null);
+  const [mapPreviewStops, setMapPreviewStops] = useState<any[]>([]);
+  const [mapPreviewLoading, setMapPreviewLoading] = useState(false);
+  const [mapPreviewSaving, setMapPreviewSaving] = useState(false);
 
   const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -296,6 +301,85 @@ const repNameForUserId = (userId: string) =>
     ? [...new Set(repFilteredCustomers.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city as string))].sort()
     : [];
 
+    const buildDayMapsUrl = (stops: any[]) => {
+    const located = stops.filter(s => s.lat && s.lng);
+    if (!located.length) return null;
+    return `https://www.google.com/maps/dir/${located.map(s => `${s.lat},${s.lng}`).join('/')}`;
+  };
+
+  const loadDayMap = async (dk: string) => {
+    setMapPreviewLoading(true);
+    try {
+      const dayPlanned = (plannedByDate.get(dk) ?? [])
+        .filter(v => !v.is_fixed_appointment && v.customer_code)
+        .sort((a, b) => (a.planned_time ?? '').localeCompare(b.planned_time ?? ''));
+      if (!dayPlanned.length) return;
+
+      const codes = dayPlanned.map(p => String(p.customer_code));
+      const { data: coords } = await supabase
+        .from('crm_customer_coordinates')
+        .select('customer_code, lat, lng, coord_source, captured_by')
+        .in('customer_code', codes);
+
+      const coordMap = new Map(
+        (coords ?? [])
+          .filter(c => (c.coord_source === 'gps' || c.coord_source === 'map' || c.captured_by) && c.lat && c.lng)
+          .map(c => [String(c.customer_code), { lat: c.lat, lng: c.lng }])
+      );
+
+      setMapPreviewStops(dayPlanned.map(p => {
+        const cust = customers.find((c: any) => c.code === p.customer_code);
+        const coord = coordMap.get(String(p.customer_code));
+        return {
+          code: String(p.customer_code),
+          name: cust?.name ?? p.customer_code,
+          city: cust?.city ?? p.city,
+          lat: coord?.lat ?? null,
+          lng: coord?.lng ?? null,
+          suggested_time: p.planned_time?.slice(0, 5),
+          _area: p.area,
+        };
+      }));
+      setMapPreviewDay(dk);
+    } finally {
+      setMapPreviewLoading(false);
+    }
+  };
+
+  const saveDayMapOrder = async () => {
+    if (!mapPreviewDay) return;
+    setMapPreviewSaving(true);
+    try {
+      const dayPlanned = (plannedByDate.get(mapPreviewDay) ?? []).filter(v => !v.is_fixed_appointment);
+      for (const v of dayPlanned) {
+        await authedFetch(`/api/planning/planned-visits/${v.id}`, { method: 'DELETE' });
+      }
+      let mins = 9 * 60;
+      for (const stop of mapPreviewStops) {
+        const h = String(Math.floor(mins / 60)).padStart(2, '0');
+        const m = String(mins % 60).padStart(2, '0');
+        await authedFetch('/api/planning/planned-visits', {
+          method: 'POST',
+          body: JSON.stringify({
+            planned_date: mapPreviewDay,
+            week_start: getMondayOfWeek(new Date(mapPreviewDay)),
+            customer_code: stop.code,
+            area: stop._area || dayPlanned[0]?.area || null,
+            city: stop.city || null,
+            planned_time: `${h}:${m}`,
+            is_fixed_appointment: false,
+            status: 'planned',
+          }),
+        });
+        mins += 45;
+      }
+      setRefreshKey(k => k + 1);
+      setMapPreviewDay(null);
+      setMapPreviewStops([]);
+    } finally {
+      setMapPreviewSaving(false);
+    }
+  };
     
   return (
     <div className={`fixed inset-0 z-50${hidden ? ' invisible pointer-events-none' : ''} bg-black/40 flex items-start justify-center overflow-y-auto py-4 px-2`}>
@@ -457,6 +541,9 @@ const repNameForUserId = (userId: string) =>
                       {cities.map(({ city, ownerName }) => (
                         <span key={city} className={`${getRepColor(ownerName).city} truncate leading-tight`} style={{ fontSize: '9px' }}>{city}</span>
                       ))}
+                      {planned.filter(v => !v.is_fixed_appointment && v.customer_code).length >= 2 && (
+                        <span style={{ fontSize: '8px' }} className="text-indigo-400 leading-tight">🗺 πλάνο</span>
+                      )}
                     </div>
                   )}
                   {isSelected && (
@@ -521,7 +608,17 @@ const repNameForUserId = (userId: string) =>
 
             {selectedPlanned.length > 0 && (
               <div>
-                <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Προγραμματισμένες</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-medium text-slate-400 uppercase tracking-wide">Προγραμματισμένες</div>
+                  {selectedPlanned.filter(v => !v.is_fixed_appointment && v.customer_code).length >= 2 && (
+                    <button
+                      onClick={() => loadDayMap(selectedKey!)}
+                      disabled={mapPreviewLoading}
+                      className="flex items-center gap-1 px-2 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-xs font-medium transition-colors">
+                      {mapPreviewLoading ? '...' : '🗺 Χάρτης & Επεξεργασία'}
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-2">
                   {selectedPlanned.map(v => {
                     const cust = customers.find((c: any) => c.code === v.customer_code);
@@ -728,6 +825,49 @@ const repNameForUserId = (userId: string) =>
             <span className="font-medium text-slate-700">{plannedVisits.filter(v => v.is_fixed_appointment).length}</span> ραντεβού
           </span>
         </div>
+
+{mapPreviewDay && (
+          <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-3"
+            onClick={() => { setMapPreviewDay(null); setMapPreviewStops([]); }}>
+            <div className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              style={{ width: '96vw', height: '92vh' }}
+              onClick={e => e.stopPropagation()}>
+              <RouteMapPanel
+                stops={mapPreviewStops}
+                startPoint={null}
+                finishPoint={null}
+                dayLabel={`${new Date(mapPreviewDay).toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long' })} — ${mapPreviewStops[0]?._area ?? ''}`}
+                googleMapsUrl={buildDayMapsUrl(mapPreviewStops)}
+                onClose={() => { setMapPreviewDay(null); setMapPreviewStops([]); }}
+                onRemove={code => setMapPreviewStops(prev => prev.filter(s => s.code !== code))}
+                onReorder={(from, to) => setMapPreviewStops(prev => {
+                  const list = [...prev];
+                  const [item] = list.splice(from, 1);
+                  list.splice(to, 0, item);
+                  return list;
+                })}
+                customers={customers}
+                onOpenCustomerMap={onOpenCustomerMap}
+                onUpdateStopCoords={(code, lat, lng) =>
+                  setMapPreviewStops(prev => prev.map(s => s.code === code ? { ...s, lat, lng } : s))
+                }
+              />
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <span className="text-xs text-slate-500">{mapPreviewStops.length} στάσεις · Σύρετε για αναδιάταξη</span>
+                <div className="flex gap-2">
+                  <button onClick={() => { setMapPreviewDay(null); setMapPreviewStops([]); }}
+                    className="px-3 py-1.5 text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg">
+                    Ακύρωση
+                  </button>
+                  <button onClick={saveDayMapOrder} disabled={mapPreviewSaving}
+                    className="px-4 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg font-medium">
+                    {mapPreviewSaving ? 'Αποθήκευση...' : '✓ Αποθήκευση αλλαγών'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showSuggestions && (
           <SuggestionsPanel
