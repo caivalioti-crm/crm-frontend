@@ -307,16 +307,18 @@ const load = async () => {
 useEffect(() => {
     const load = async () => {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
         const today = new Date().toISOString().split('T')[0];
-        const twoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const { data } = await supabase
-          .from('crm_planned_visits')
-          .select('customer_code, planned_date, area')
-          .gte('planned_date', today)
-          .lte('planned_date', twoWeeks)
-          .not('customer_code', 'is', null);
+        const in30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/planning/planned-visits?from=${today}&to=${in30}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
         const map = new Map<string, { date: string; area: string }>();
-        for (const v of data ?? []) {
+        for (const v of Array.isArray(data) ? data : []) {
+          if (!v.customer_code) continue;
           const code = String(v.customer_code);
           if (!map.has(code)) map.set(code, { date: v.planned_date, area: v.area ?? '' });
         }
