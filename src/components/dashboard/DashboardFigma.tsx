@@ -1231,7 +1231,7 @@ useEffect(() => {
       <NewVisitDialog 
         isOpen={showNewVisitDialog} 
         onClose={() => setShowNewVisitDialog(false)} 
-        customers={filteredCustomers.filter(c => c.is_active !== false)}
+        customers={allCustomers.filter((c: any) => c.is_active !== false)}
         currentUser={currentUser}
         onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }} 
       />
