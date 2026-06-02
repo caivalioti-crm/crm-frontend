@@ -120,6 +120,9 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(blankForm());
   const [formSaving, setFormSaving] = useState(false);
+  const [moveMode, setMoveMode] = useState<null | 'day' | 'week'>(null);
+  const [moveTarget, setMoveTarget] = useState('');
+  const [moveSaving, setMoveSaving] = useState(false);
 
   const [filterArea, setFilterArea] = useState('');
   const [filterCity, setFilterCity] = useState('');
@@ -290,6 +293,71 @@ const repNameForUserId = (userId: string) =>
     } catch {
       alert('Αποτυχία διαγραφής');
     }
+  };
+
+// ── Bulk move (shift) προγραμματισμένων ──────────────────────────────
+  const dayDiff = (a: string, b: string) =>
+    Math.round((new Date(b + 'T00:00:00Z').getTime() - new Date(a + 'T00:00:00Z').getTime()) / 86400000);
+
+  const weekRange = (d: Date): [string, string] => {
+    const mon = getMondayOfWeek(d);
+    const sun = new Date(mon + 'T00:00:00Z');
+    sun.setUTCDate(sun.getUTCDate() + 6);
+    return [mon, sun.toISOString().slice(0, 10)];
+  };
+
+  const countFixedInRange = (fromK: string, toK: string) =>
+    plannedVisits.filter(v => {
+      const k = v.planned_date?.slice(0, 10);
+      return k && k >= fromK && k <= toK && v.is_fixed_appointment && v.status !== 'completed' &&
+        (!filterRepId || v.user_id === filterRepId);
+    }).length;
+
+  const doShift = async (fromK: string, toK: string, dayDelta: number) => {
+    if (!dayDelta) { setMoveMode(null); return; }
+    const fixedCount = countFixedInRange(fromK, toK);
+    let includeFixed = false;
+    if (fixedCount > 0) {
+      includeFixed = confirm(
+        `Υπάρχουν ${fixedCount} σταθερά ραντεβού σε αυτό το διάστημα.\n\n` +
+        `Να μετακινηθούν κι αυτά;\n\nOK = Ναι, μετακίνησέ τα\nΆκυρο = Όχι, άφησέ τα στη θέση τους`
+      );
+    }
+    setMoveSaving(true);
+    try {
+      const result = await authedFetch('/api/planning/planned-visits/shift', {
+        method: 'POST',
+        body: JSON.stringify({
+          from: fromK, to: toK, day_delta: dayDelta,
+          include_fixed: includeFixed,
+          ...(filterRepId ? { user_id: filterRepId } : {}),
+        }),
+      });
+      setMoveMode(null);
+      setMoveTarget('');
+      setSelectedDay(null);
+      setRefreshKey(k => k + 1);
+      if (result?.skipped_fixed > 0) {
+        alert(`Μετακινήθηκαν ${result.moved}. Παρέμειναν ${result.skipped_fixed} σταθερά ραντεβού στη θέση τους.`);
+      }
+    } catch {
+      alert('Αποτυχία μετακίνησης');
+    } finally {
+      setMoveSaving(false);
+    }
+  };
+
+  const shiftWeekBy = (weeks: number) => {
+    if (!selectedDay) return;
+    const [mon, sun] = weekRange(selectedDay);
+    doShift(mon, sun, weeks * 7);
+  };
+
+  const moveWeekToTarget = () => {
+    if (!selectedDay || !moveTarget) return;
+    const [mon, sun] = weekRange(selectedDay);
+    const tgtMon = getMondayOfWeek(new Date(moveTarget + 'T00:00:00'));
+    doShift(mon, sun, dayDiff(mon, tgtMon));
   };
 
   const hasActiveFilters = !!(filterArea || filterCity || filterRepId);
@@ -569,12 +637,64 @@ const repNameForUserId = (userId: string) =>
               <h3 className="font-semibold text-slate-800">
                 {selectedDay.toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long' })}
               </h3>
-              <button onClick={() => openAdd(selectedDay)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700">
-                <Plus className="w-3.5 h-3.5" /> Προγραμ. Επίσκεψη
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setMoveMode(m => m ? null : 'day'); setMoveTarget(''); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${moveMode ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  <CalendarDays className="w-3.5 h-3.5" /> Μετακίνηση
+                </button>
+                <button onClick={() => openAdd(selectedDay)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700">
+                  <Plus className="w-3.5 h-3.5" /> Προγραμ. Επίσκεψη
+                </button>
+              </div>
             </div>
 
+            {moveMode && (
+              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setMoveMode('day')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${moveMode === 'day' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-600 border-slate-300'}`}>
+                    Αυτή την ημέρα
+                  </button>
+                  <button onClick={() => setMoveMode('week')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${moveMode === 'week' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-600 border-slate-300'}`}>
+                    Όλη την εβδομάδα
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {moveMode === 'day' ? (
+                    <>
+                      <button disabled={moveSaving} onClick={() => doShift(selectedKey!, selectedKey!, -1)} className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-50">−1 μέρα</button>
+                      <button disabled={moveSaving} onClick={() => doShift(selectedKey!, selectedKey!, 1)} className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-50">+1 μέρα</button>
+                      <button disabled={moveSaving} onClick={() => doShift(selectedKey!, selectedKey!, 7)} className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-50">+1 εβδ.</button>
+                      <span className="text-xs text-slate-400">ή σε:</span>
+                      <input type="date" value={moveTarget} onChange={e => setMoveTarget(e.target.value)} className="px-2 py-1 border border-slate-300 rounded-lg text-xs" />
+                      <button disabled={moveSaving || !moveTarget} onClick={() => doShift(selectedKey!, selectedKey!, dayDiff(selectedKey!, moveTarget))} className="px-3 py-1 text-xs bg-amber-600 text-white rounded-lg disabled:opacity-50">
+                        {moveSaving ? '...' : 'Μετακίνηση'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button disabled={moveSaving} onClick={() => shiftWeekBy(-1)} className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-50">−1 εβδ.</button>
+                      <button disabled={moveSaving} onClick={() => shiftWeekBy(1)} className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-50">+1 εβδ.</button>
+                      <button disabled={moveSaving} onClick={() => shiftWeekBy(2)} className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-50">+2 εβδ.</button>
+                      <span className="text-xs text-slate-400">ή σε εβδ.:</span>
+                      <input type="date" value={moveTarget} onChange={e => setMoveTarget(e.target.value)} className="px-2 py-1 border border-slate-300 rounded-lg text-xs" />
+                      <button disabled={moveSaving || !moveTarget} onClick={moveWeekToTarget} className="px-3 py-1 text-xs bg-amber-600 text-white rounded-lg disabled:opacity-50">
+                        {moveSaving ? '...' : 'Μετακίνηση'}
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="text-xs text-amber-600">
+                  {moveMode === 'day'
+                    ? 'Μετακινεί τις προγραμματισμένες αυτής της ημέρας.'
+                    : 'Μετακινεί όλη την εβδομάδα (Δευ–Κυρ) — κάθε μέρα κρατά το offset της.'}
+                  {filterRepId ? '' : ' · όλοι οι εκπρόσωποι'}
+                </div>
+              </div>
+            )}
+            
             {selectedActual.length === 0 && selectedPlanned.length === 0 && (
               <div className="text-sm text-slate-400 italic">Καμία επίσκεψη αυτή την ημέρα{hasActiveFilters ? ' (με τα τρέχοντα φίλτρα)' : ''}</div>
             )}
