@@ -88,7 +88,8 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
       authedFetch('/api/categories').then(setAllCategories).catch(console.error);
     }
     if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       setPlannedLoading(true);
       authedFetch(`/api/planning/planned-visits?from=${today}&to=${today}`)
         .then(data => setTodayPlanned(Array.isArray(data) ? data.filter((v: any) => v.customer_code) : []))
@@ -130,7 +131,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
     if (type === '1week') base.setDate(base.getDate() + 7);
     else if (type === '2weeks') base.setDate(base.getDate() + 14);
     else if (type === '1month') base.setMonth(base.getMonth() + 1);
-    return base.toISOString().split('T')[0];
+    return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
   };
 
  const handleAddTask = () => {
