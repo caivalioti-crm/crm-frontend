@@ -28,6 +28,7 @@ type NewVisitDialogProps = {
   customers: Customer[];
   onSave?: () => void;
   currentUser?: { id: string; salesman_code?: string | null };
+  plannedUserId?: string | null;
 };
 
 async function authedFetch(url: string, options?: RequestInit) {
@@ -50,7 +51,7 @@ const todayDisplay = () => {
   return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 };
 
-export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser: _currentUser }: NewVisitDialogProps) {
+export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser: _currentUser, plannedUserId }: NewVisitDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('');
@@ -91,12 +92,12 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       setPlannedLoading(true);
-      authedFetch(`/api/planning/planned-visits?from=${today}&to=${today}`)
+      authedFetch(`/api/planning/planned-visits?from=${today}&to=${today}${plannedUserId ? `&user_id=${plannedUserId}` : ''}`)
         .then(data => setTodayPlanned(Array.isArray(data) ? data.filter((v: any) => v.customer_code) : []))
         .catch(console.error)
         .finally(() => setPlannedLoading(false));
     }
-  }, [isOpen]);
+  }, [isOpen, plannedUserId]);
 
   const [competitors, setCompetitors] = useState<{id: string; name: string}[]>([]);
 

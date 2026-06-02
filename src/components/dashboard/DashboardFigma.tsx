@@ -1233,7 +1233,8 @@ useEffect(() => {
         onClose={() => setShowNewVisitDialog(false)} 
         customers={allCustomers.filter((c: any) => c.is_active !== false)}
         currentUser={currentUser}
-        onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }} 
+        plannedUserId={viewAsRepId || undefined}
+        onSave={() => { setShowNewVisitDialog(false); setVisitsRefreshKey(k => k + 1); }}
       />
       <UnifiedProspectDialog
         isOpen={showUnifiedProspectDialog}
