@@ -3,6 +3,10 @@ import { MapPin, TrendingUp, User, TrendingDown, ChevronDown } from 'lucide-reac
 import { formatDate } from '../../utils/dateFormat';
 
 const DEFAULT_VISIBLE = 5;
+const fmtPlannedDate = (d: string) => {
+    const dt = new Date(d + 'T12:00:00');
+    return dt.toLocaleDateString('el-GR', { weekday: 'short', day: 'numeric', month: 'numeric' });
+  };
 
 type CustomerListSectionProps = {
   title: string;
@@ -12,6 +16,7 @@ type CustomerListSectionProps = {
   getDaysSinceVisit: (date: string | undefined | null) => number;
   getRepName?: (repId: string) => string | undefined;
   onOpenMap?: () => void;
+  upcomingPlanned?: Map<string, { date: string; area: string }>;
 };
 
 export function CustomerListSection({
@@ -22,6 +27,7 @@ export function CustomerListSection({
   getDaysSinceVisit,
   getRepName,
   onOpenMap,
+  upcomingPlanned = new Map(),
 }: CustomerListSectionProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -148,6 +154,12 @@ export function CustomerListSection({
                     )}
                   </div>
                 </div>
+
+                {upcomingPlanned.has(String(customer.code ?? customer.trdr_code)) && (
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium shrink-0">
+                    📅 {fmtPlannedDate(upcomingPlanned.get(String(customer.code ?? customer.trdr_code))!.date)}
+                  </span>
+                )}
 
                 {/* Performance indicator */}
                 {growth !== null && (
