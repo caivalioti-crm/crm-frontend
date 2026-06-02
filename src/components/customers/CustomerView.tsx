@@ -1089,8 +1089,8 @@ const startEditVisitInCustomer = (v: any) => {
                   <div className="text-xs text-indigo-500 font-medium mb-1">Τρέχουσα Περίοδος ({sp.label})</div>
                   <div className="text-2xl font-bold text-indigo-700 leading-tight">{fmtEur(currentTotal)}</div>
                   <div className="text-xs text-indigo-400 mt-0.5">{currentQty.toLocaleString('el-GR')} τεμ.</div>
-                  {dayTotals && dayTotals.currentCredit > 0 && (
-                    <div className="text-xs text-red-400 mt-0.5">↩ Επιστροφές: {fmtEur(dayTotals.currentCredit)} · {Math.round(dayTotals.currentCreditQty).toLocaleString('el-GR')} τεμ.</div>
+                  {dayTotals && (dayTotals.currentCredit > 0 || dayTotals.prevCredit > 0) && (
+                    <div className="text-xs text-red-400 mt-0.5">Επιστροφές: {fmtEur(dayTotals.currentCredit)} · {Math.round(dayTotals.currentCreditQty).toLocaleString('el-GR')} τεμ.</div>
                   )}
                   {growthPct !== null && (
                     <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-green-600' : 'text-red-500'}`}>
@@ -1103,8 +1103,8 @@ const startEditVisitInCustomer = (v: any) => {
                   <div className="text-xs text-slate-500 font-medium mb-1">Ίδια Περίοδος Πέρσι ({sp.prevLabel})</div>
                   <div className="text-2xl font-bold text-slate-600 leading-tight">{fmtEur(prevTotal)}</div>
                   <div className="text-xs text-slate-400 mt-0.5">{prevQty.toLocaleString('el-GR')} τεμ.</div>
-                  {dayTotals && dayTotals.prevCredit > 0 && (
-                    <div className="text-xs text-red-400 mt-0.5">↩ Επιστροφές: {fmtEur(dayTotals.prevCredit)} · {Math.round(dayTotals.prevCreditQty).toLocaleString('el-GR')} τεμ.</div>
+                  {dayTotals && (dayTotals.currentCredit > 0 || dayTotals.prevCredit > 0) && (
+                    <div className="text-xs text-red-400 mt-0.5">Επιστροφές: {fmtEur(dayTotals.prevCredit)} · {Math.round(dayTotals.prevCreditQty).toLocaleString('el-GR')} τεμ.</div>
                   )}
                   {growthPct !== null && (
                     <div className={`text-xs mt-2 font-medium ${isUp ? 'text-green-600' : 'text-red-500'}`}>
