@@ -177,7 +177,7 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
   const selectedKey = selectedDay ? dateKey(selectedDay) : null;
 
   const filterVisit = (v: any, isActual: boolean) => {
-    const cust = customers.find((c: any) => c.code === v.customer_code);
+    const cust = customers.find((c: any) => String(c.code) === String(v.customer_code));
     if (filterArea && cust?.area !== filterArea) return false;
     if (filterCity && cust?.city !== filterCity) return false;
     if (isActual && filterRepId && v.owner_id !== filterRepId) return false;
@@ -202,17 +202,19 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
 const repNameForUserId = (userId: string) =>
     repList.find(r => r.id === userId)?.full_name ?? '';
 
+  const repsOnly = repList.filter(r => r.salesman_code);
+
   const citiesForDay = (dk: string): { city: string; ownerName: string }[] => {
     const actual = (actualByDate.get(dk) ?? []).filter(v => filterVisit(v, true));
     const planned = (plannedByDate.get(dk) ?? []).filter(v => filterVisit(v, false));
     const seen = new Map<string, string>();
     for (const v of actual) {
-      const cust = customers.find((c: any) => c.code === v.customer_code);
+      const cust = customers.find((c: any) => String(c.code) === String(v.customer_code));
       const label = cust?.city || cust?.area || v.city || v.area;
       if (label && !seen.has(label)) seen.set(label, v.owner_name ?? '');
     }
     for (const v of planned) {
-      const cust = customers.find((c: any) => c.code === v.customer_code);
+      const cust = customers.find((c: any) => String(c.code) === String(v.customer_code));
       const label = cust?.city || v.city || cust?.area || v.area;
       const ownerName = repNameForUserId(v.user_id ?? '');
       if (label && !seen.has(label)) seen.set(label, ownerName);
@@ -328,7 +330,7 @@ const repNameForUserId = (userId: string) =>
       );
 
       setMapPreviewStops(dayPlanned.map(p => {
-        const cust = customers.find((c: any) => c.code === p.customer_code);
+        const cust = customers.find((c: any) => String(c.code) === String(p.customer_code));
         const coord = coordMap.get(String(p.customer_code));
         return {
           code: String(p.customer_code),
@@ -455,7 +457,7 @@ const repNameForUserId = (userId: string) =>
             </div>
             {repList.length > 0 && (
             <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
-              {repList.map(r => (
+              {repsOnly.map(r => (
                 <span key={r.id} className="flex items-center gap-1 text-xs text-slate-600">
                   <span className={`w-2.5 h-2.5 rounded-full inline-block ${getRepColor(r.full_name).dot}`} />
                   {r.full_name}
@@ -482,9 +484,9 @@ const repNameForUserId = (userId: string) =>
 
         {/* Legend */}
         <div className="flex items-center gap-4 px-6 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-500 flex-wrap">
-          {repList.length > 0 ? (
+          {repsOnly.length > 0 ? (
             <>
-              {repList.map(rep => (
+              {repsOnly.map(rep => (
                 <span key={rep.id} className="flex items-center gap-1.5">
                   <span className={`w-3 h-3 rounded-full inline-block ${getRepColor(rep.full_name).dot}`} />{rep.full_name}
                 </span>
@@ -532,7 +534,7 @@ const repNameForUserId = (userId: string) =>
                       <span key={j} className={`w-2 h-2 rounded-full ${getRepColor(v.owner_name ?? '').dot}`} />
                     ))}
                     {planned.slice(0, 2).map((v, j) => (
-                      <span key={`p${j}`} className={`w-2 h-2 rounded-full ${v.is_fixed_appointment ? 'bg-green-500' : getRepColor(v.owner_name ?? '').dot}`} />
+                      <span key={`p${j}`} className={`w-2 h-2 rounded-full ${v.is_fixed_appointment ? 'bg-green-500' : getRepColor(repNameForUserId(v.user_id ?? '')).dot}`} />
                     ))}
                     {total > 5 && <span className="text-xs text-slate-400 leading-none">+{total - 5}</span>}
                   </div>
@@ -580,7 +582,7 @@ const repNameForUserId = (userId: string) =>
                 <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Πραγματικές Επισκέψεις</div>
                 <div className="space-y-2">
                   {selectedActual.map(v => {
-                    const cust = customers.find((c: any) => c.code === v.customer_code);
+                    const cust = customers.find((c: any) => String(c.code) === String(v.customer_code));
                     const rc = getRepColor(v.owner_name ?? '');
                     return (
                       <div key={v.id} onClick={() => { if (cust && onSelectCustomer) onSelectCustomer(cust); }}
@@ -621,7 +623,7 @@ const repNameForUserId = (userId: string) =>
                 </div>
                 <div className="space-y-2">
                   {selectedPlanned.map(v => {
-                    const cust = customers.find((c: any) => c.code === v.customer_code);
+                    const cust = customers.find((c: any) => String(c.code) === String(v.customer_code));
                     return (
                       <div key={v.id} className={`flex items-start gap-3 p-3 rounded-lg border ${v.is_fixed_appointment ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-100'}`}>
                         <Clock className={`w-4 h-4 mt-0.5 shrink-0 ${v.is_fixed_appointment ? 'text-green-500' : 'text-blue-400'}`} />
