@@ -123,7 +123,9 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
 
   const [filterArea, setFilterArea] = useState('');
   const [filterCity, setFilterCity] = useState('');
-  const [filterRepId, setFilterRepId] = useState('');
+  const [filterRepId, setFilterRepId] = useState(
+    currentUser.salesman_code ? currentUser.id : ''
+  );
   const [showFilters, setShowFilters] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mapPreviewDay, setMapPreviewDay] = useState<string | null>(null);
