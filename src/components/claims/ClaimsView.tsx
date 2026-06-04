@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Search, Upload, FileText, Phone, Mail, MessageSquare, AlertCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Upload, FileText, Phone, Mail, MessageSquare, AlertCircle, Clock, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -96,7 +96,7 @@ const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm fo
 
 interface CurrentUser { id: string; name: string; role: string; salesman_code?: string | null; }
 
-export function ClaimsView({ currentUser, onBack }: { currentUser: CurrentUser; onBack: () => void }) {
+export function ClaimsView({ currentUser, onBack }: { currentUser: CurrentUser; onBack: (() => void) | null }) {
   const [view, setView]               = useState<'list' | 'create' | 'detail'>('list');
   const [claims, setClaims]           = useState<any[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -105,7 +105,10 @@ export function ClaimsView({ currentUser, onBack }: { currentUser: CurrentUser; 
   const [selectedClaim, setSelectedClaim] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const isExec = ['admin', 'manager', 'exec'].includes(currentUser.role);
+  const factoryRole: 'full' | 'partial' | 'none' =
+  ['admin', 'exec'].includes(currentUser.role) ? 'full'
+  : currentUser.role === 'claims_exec'          ? 'partial'
+  : 'none';
 
   const loadClaims = async () => {
     setLoading(true);
@@ -139,17 +142,26 @@ export function ClaimsView({ currentUser, onBack }: { currentUser: CurrentUser; 
 
   const goBack = () => {
     if (view === 'detail' || view === 'create') { setView('list'); loadClaims(); }
-    else onBack();
+    else if (onBack) onBack();
   };
 
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white sticky top-0 z-50 shadow-lg">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={goBack} className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 transition-colors text-sm font-medium">
-            <ArrowLeft className="w-4 h-4" />
-            {view === 'list' ? 'Dashboard' : 'Claims'}
-          </button>
+          {view !== 'list' ? (
+            <button onClick={goBack} className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 transition-colors text-sm font-medium">
+                <ArrowLeft className="w-4 h-4" /> Claims
+            </button>
+            ) : onBack ? (
+            <button onClick={onBack} className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 transition-colors text-sm font-medium">
+                <ArrowLeft className="w-4 h-4" /> Dashboard
+            </button>
+            ) : (
+            <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 transition-colors text-sm font-medium">
+                <LogOut className="w-4 h-4" /> Logout
+            </button>
+            )}
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold leading-tight">
               {view === 'list' ? 'Claims' : view === 'create' ? 'Νέα Αξίωση' : selectedClaim?.claim_number ?? '...'}
@@ -183,7 +195,7 @@ export function ClaimsView({ currentUser, onBack }: { currentUser: CurrentUser; 
           detailLoading
             ? <div className="text-center py-12 text-slate-400">Φόρτωση...</div>
             : selectedClaim
-              ? <ClaimDetail claim={selectedClaim} currentUser={currentUser} isExec={isExec} onRefresh={refreshDetail} />
+              ? <ClaimDetail claim={selectedClaim} currentUser={currentUser} factoryRole={factoryRole} onRefresh={refreshDetail} />
               : null
         )}
       </main>
@@ -341,7 +353,7 @@ function ClaimCreateForm({ currentUser, onSaved, onCancel }: any) {
 
 // ── Claim Detail ──────────────────────────────────────────────────────────────
 
-function ClaimDetail({ claim, currentUser, isExec, onRefresh }: any) {
+function ClaimDetail({ claim, currentUser, factoryRole, onRefresh }: any) {
   const [activeTab, setActiveTab]   = useState<'info' | 'comms' | 'files' | 'factory' | 'history'>('info');
   const [statusLoading, setStatusLoading] = useState(false);
 
@@ -360,7 +372,7 @@ function ClaimDetail({ claim, currentUser, isExec, onRefresh }: any) {
     { id: 'info',    label: 'Στοιχεία' },
     { id: 'comms',   label: 'Επικοινωνία' },
     { id: 'files',   label: 'Αρχεία' },
-    { id: 'factory', label: 'Εργοστάσιο' },
+    ...(factoryRole !== 'none' ? [{ id: 'factory', label: 'Εργοστάσιο' }] : []),
     { id: 'history', label: 'Ιστορικό' },
   ];
 
@@ -395,7 +407,7 @@ function ClaimDetail({ claim, currentUser, isExec, onRefresh }: any) {
           {activeTab === 'info'    && <InfoTab claim={claim} onRefresh={onRefresh} />}
           {activeTab === 'comms'   && <CommsTab claim={claim} currentUser={currentUser} onRefresh={onRefresh} />}
           {activeTab === 'files'   && <FilesTab claim={claim} currentUser={currentUser} onRefresh={onRefresh} />}
-          {activeTab === 'factory' && <FactoryTab claim={claim} currentUser={currentUser} isExec={isExec} onRefresh={onRefresh} />}
+          {activeTab === 'factory' && factoryRole !== 'none' && <FactoryTab claim={claim} factoryRole={factoryRole} onRefresh={onRefresh} />}
           {activeTab === 'history' && <HistoryTab history={claim.history ?? []} />}
         </div>
       </div>
@@ -655,7 +667,7 @@ function FilesTab({ claim, currentUser, onRefresh }: any) {
 
 // ── Factory Tab ───────────────────────────────────────────────────────────────
 
-function FactoryTab({ claim, isExec, onRefresh }: any) {
+function FactoryTab({ claim, factoryRole, onRefresh }: any) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     factory_code: claim.factory_code ?? '', factory_name: claim.factory_name ?? '',
@@ -688,50 +700,66 @@ function FactoryTab({ claim, isExec, onRefresh }: any) {
     </div>
   );
 
-  if (!editing) return (
+ if (!editing) return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-slate-700">Στοιχεία Εργοστασίου</h3>
-        {isExec && <button onClick={() => setEditing(true)} className="text-xs text-indigo-600 hover:underline">Επεξεργασία</button>}
+        {factoryRole !== 'none' && (
+          <button onClick={() => setEditing(true)} className="text-xs text-indigo-600 hover:underline">Επεξεργασία</button>
+        )}
       </div>
-      <Row label="Εργοστάσιο / Προμηθευτής" value={claim.factory_name} />
-      <Row label="Κωδικός"                  value={claim.factory_code} />
-      <Row label="Αρ. Αναφοράς"             value={<span className="font-mono">{claim.factory_reference}</span>} />
-      <Row label="Ημ/νία Αποστολής"         value={formatDate(claim.factory_sent_date)} />
-      <Row label="Επαφή"                    value={claim.factory_contact} />
-      <Row label="Μέθοδος"                  value={claim.factory_sent_method} />
-      <Row label="Ημ/νία Απάντησης"         value={formatDate(claim.factory_response_date)} />
-      {claim.compensation_type && <>
-        <div className="border-t border-slate-200 mt-4 pt-4">
-          <h4 className="text-sm font-semibold text-slate-700 mb-2">Αποζημίωση</h4>
-          <Row label="Τύπος" value={COMPENSATION_TYPES.find(c => c.value === claim.compensation_type)?.label} />
-          <Row label="Αξία (€)" value={claim.compensation_value ? `€${Number(claim.compensation_value).toLocaleString('el-GR', { minimumFractionDigits: 2 })}` : undefined} />
-          <Row label="Αρ. Πιστωτικού (ΠΤ)" value={<span className="font-mono">{claim.credit_note_number}</span>} />
-          <Row label="Ref Αντικατάστασης"   value={<span className="font-mono">{claim.replacement_ref}</span>} />
-          {claim.compensation_notes && <div className="bg-orange-50 rounded-lg p-3 mt-2"><p className="text-xs font-medium text-orange-700 mb-1">Σχόλια Εργοστασίου</p><p className="text-sm text-orange-800 whitespace-pre-wrap">{claim.compensation_notes}</p></div>}
-        </div>
+
+      {/* Factory identity — μόνο full (admin/exec) */}
+      {factoryRole === 'full' && <>
+        <Row label="Εργοστάσιο / Προμηθευτής" value={claim.factory_name} />
+        <Row label="Κωδικός"                  value={claim.factory_code} />
+        <Row label="Αρ. Αναφοράς"             value={<span className="font-mono">{claim.factory_reference}</span>} />
+        <Row label="Ημ/νία Αποστολής"         value={formatDate(claim.factory_sent_date)} />
+        <Row label="Επαφή"                    value={claim.factory_contact} />
+        <Row label="Μέθοδος"                  value={claim.factory_sent_method} />
       </>}
-      {!isExec && <p className="text-xs text-slate-400 italic mt-4">Η επεξεργασία γίνεται από τους executives.</p>}
+
+      {/* Αποζημίωση — full + partial (claims_exec) */}
+      <div className={factoryRole === 'full' ? 'border-t border-slate-200 mt-4 pt-4' : ''}>
+        {factoryRole === 'full' && <h4 className="text-sm font-semibold text-slate-700 mb-2">Αποζημίωση</h4>}
+        <Row label="Ημ/νία Απάντησης"    value={formatDate(claim.factory_response_date)} />
+        <Row label="Τύπος Αποζημίωσης"   value={COMPENSATION_TYPES.find(c => c.value === claim.compensation_type)?.label} />
+        <Row label="Αξία (€)"            value={claim.compensation_value ? `€${Number(claim.compensation_value).toLocaleString('el-GR', { minimumFractionDigits: 2 })}` : undefined} />
+        <Row label="Αρ. Πιστωτικού (ΠΤ)" value={<span className="font-mono">{claim.credit_note_number}</span>} />
+        <Row label="Ref Αντικατάστασης"  value={<span className="font-mono">{claim.replacement_ref}</span>} />
+        {claim.compensation_notes && (
+          <div className="bg-orange-50 rounded-lg p-3 mt-2">
+            <p className="text-xs font-medium text-orange-700 mb-1">Σχόλια</p>
+            <p className="text-sm text-orange-800 whitespace-pre-wrap">{claim.compensation_notes}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-slate-700">Αποστολή στο Εργοστάσιο</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {[['factory_name','Εργοστάσιο / Προμηθευτής'],['factory_code','Κωδικός'],['factory_reference','Αρ. Αναφοράς'],['factory_contact','Επαφή']].map(([k,l]) => (
-          <div key={k}><label className="text-xs text-slate-500 block mb-1">{l}</label><input value={(form as any)[k]} onChange={e => set(k, e.target.value)} className={inputCls} /></div>
-        ))}
-        <div>
-          <label className="text-xs text-slate-500 block mb-1">Μέθοδος</label>
-          <select value={form.factory_sent_method} onChange={e => set('factory_sent_method', e.target.value)} className={inputCls}>
-            <option value="">Επιλέξτε...</option>
-            <option value="email">Email</option><option value="portal">Portal</option><option value="courier">Courier</option>
-          </select>
+
+      {/* Factory identity — μόνο full */}
+      {factoryRole === 'full' && <>
+        <h3 className="text-sm font-semibold text-slate-700">Αποστολή στο Εργοστάσιο</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[['factory_name','Εργοστάσιο / Προμηθευτής'],['factory_code','Κωδικός'],['factory_reference','Αρ. Αναφοράς'],['factory_contact','Επαφή']].map(([k,l]) => (
+            <div key={k}><label className="text-xs text-slate-500 block mb-1">{l}</label><input value={(form as any)[k]} onChange={e => set(k, e.target.value)} className={inputCls} /></div>
+          ))}
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">Μέθοδος</label>
+            <select value={form.factory_sent_method} onChange={e => set('factory_sent_method', e.target.value)} className={inputCls}>
+              <option value="">Επιλέξτε...</option>
+              <option value="email">Email</option><option value="portal">Portal</option><option value="courier">Courier</option>
+            </select>
+          </div>
+          <div><label className="text-xs text-slate-500 block mb-1">Ημ/νία Αποστολής</label><input type="date" value={form.factory_sent_date} onChange={e => set('factory_sent_date', e.target.value)} className={inputCls} /></div>
         </div>
-        <div><label className="text-xs text-slate-500 block mb-1">Ημ/νία Αποστολής</label><input type="date" value={form.factory_sent_date} onChange={e => set('factory_sent_date', e.target.value)} className={inputCls} /></div>
-      </div>
-      <div className="border-t border-slate-200 pt-4 space-y-3">
+      </>}
+
+      {/* Αποζημίωση — full + partial */}
+      <div className={factoryRole === 'full' ? 'border-t border-slate-200 pt-4 space-y-3' : 'space-y-3'}>
         <h4 className="text-sm font-semibold text-slate-700">Απόφαση Εργοστασίου</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-slate-500 block mb-1">Ημ/νία Απάντησης</label><input type="date" value={form.factory_response_date} onChange={e => set('factory_response_date', e.target.value)} className={inputCls} /></div>
@@ -748,6 +776,7 @@ function FactoryTab({ claim, isExec, onRefresh }: any) {
         </div>
         <div><label className="text-xs text-slate-500 block mb-1">Σχόλια Εργοστασίου</label><textarea value={form.compensation_notes} onChange={e => set('compensation_notes', e.target.value)} rows={3} className={`${inputCls} resize-none`} /></div>
       </div>
+
       <div className="flex gap-2 pt-2">
         <button onClick={() => setEditing(false)} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700">Ακύρωση</button>
         <button onClick={save} disabled={saving} className="flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">

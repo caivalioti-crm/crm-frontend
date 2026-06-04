@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { User, TrendingUp, TrendingDown, LogOut, MapPin, Mail, Users, UserPlus, Bell, Eye, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react';
+import { User, TrendingUp, TrendingDown, LogOut, MapPin, Mail, Users, UserPlus, Bell, Eye, AlertCircle, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma } from '../../hooks/useDashboardFigma';
 
@@ -13,6 +13,7 @@ import { CustomerListSection } from '../customers/CustomerListSection';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { VisitCalendar } from '../planning/VisitCalendar';
 import { CustomerMap } from '../customers/CustomerMap';
+import { ClaimsView } from '../claims/ClaimsView';
 
 const NOT_VISITED_OPTIONS = [
   { label: 'All', value: null },
@@ -290,6 +291,17 @@ export function DashboardFigma() {
   } = useDashboardFigma(viewAsRep?.salesman_code ?? null);
 
   usePushNotifications(currentUser.id);
+
+// claims_exec βλέπει ΜΟΝΟ τα claims
+if ((currentUser.role as string) === 'claims_exec') {
+  return (
+    <ClaimsView
+      currentUser={currentUser as any}
+      onBack={null}
+    />
+  );
+}
+
   useEffect(() => {
   if (!['admin', 'manager', 'exec'].includes(currentUser.role)) return;
 const load = async () => {
@@ -333,6 +345,7 @@ useEffect(() => {
   const [upcomingPlanned, setUpcomingPlanned] = useState<Map<string, { date: string; area: string }>>(new Map());
   const [showCustomerMap, setShowCustomerMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showClaims, setShowClaims] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
@@ -434,6 +447,10 @@ useEffect(() => {
     return areaStats.filter(a => selectedAreas.includes(a.area));
   }, [areaStats, selectedAreas]);
 
+if (currentUser.role === 'claims_exec') {
+    return <ClaimsView currentUser={currentUser} onBack={null} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-100">
       {/* ================= HEADER ================= */}
@@ -514,6 +531,7 @@ useEffect(() => {
               { icon: <CalendarDays className="w-4 h-4" />, id: 'section-visits', roles: null, action: () => setShowCalendar(true), title: 'Ημερολόγιο' },
               { icon: <MapPin className="w-4 h-4" />, id: 'section-map', roles: null, action: () => setShowCustomerMap(true), title: 'Χάρτης Πελατών' },
               { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null, action: null },
+              { icon: <AlertCircle className="w-4 h-4" />, id: 'section-claims', roles: null, action: () => setShowClaims(true) },
             ]
               .filter(item => !item.roles || item.roles.includes(currentUser.role))
               .map(({ icon, id, action }, idx) => (
@@ -1173,7 +1191,7 @@ useEffect(() => {
             <div id="section-visits">
               <VisitsLog
               key={`visits-${visitsRefreshKey}`}
-              currentUser={currentUser}
+              currentUser={currentUser as any}
               onNewVisit={() => setShowNewVisitDialog(true)}
               customers={allCustomers} 
               taskFilter={taskFilter}
@@ -1190,7 +1208,7 @@ useEffect(() => {
 
             {/* ===== PROSPECTS ===== */}
             <div id="section-prospects">
-              <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser} onNewProspect={() => setShowUnifiedProspectDialog(true)} onSelectProspect={(prospect) => {
+              <ProspectsList key={`prospects-${prospectsRefreshKey}`} currentUser={currentUser as any} onNewProspect={() => setShowUnifiedProspectDialog(true)} onSelectProspect={(prospect) => {
                 scrollPositionRef.current = window.scrollY;
                 sessionStorage.setItem('dashboardScrollY', String(window.scrollY));
                 setSelectedProspect(prospect);
@@ -1275,6 +1293,14 @@ useEffect(() => {
           onOpenCustomerMap={(customer) => setMapSingleCustomer(customer)}
         />
       )}
+
+      {showClaims && (
+        <ClaimsView
+          currentUser={currentUser}
+          onBack={() => setShowClaims(false)}
+        />
+      )}
+
     </div>
   );
 }
