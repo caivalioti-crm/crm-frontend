@@ -655,7 +655,7 @@ function FilesTab({ claim, currentUser, onRefresh }: any) {
 
 // ── Factory Tab ───────────────────────────────────────────────────────────────
 
-function FactoryTab({ claim, currentUser, isExec, onRefresh }: any) {
+function FactoryTab({ claim, isExec, onRefresh }: any) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     factory_code: claim.factory_code ?? '', factory_name: claim.factory_name ?? '',
