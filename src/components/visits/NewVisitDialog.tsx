@@ -88,16 +88,20 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
     if (isOpen && allCategories.length === 0) {
       authedFetch('/api/categories').then(setAllCategories).catch(console.error);
     }
-    if (isOpen) {
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      setPlannedLoading(true);
-      authedFetch(`/api/planning/planned-visits?from=${today}&to=${today}${plannedUserId ? `&user_id=${plannedUserId}` : ''}`)
-        .then(data => setTodayPlanned(Array.isArray(data) ? data.filter((v: any) => v.customer_code) : []))
-        .catch(console.error)
-        .finally(() => setPlannedLoading(false));
-    }
-  }, [isOpen, plannedUserId]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const isoDate = dateToISO(visitDate);
+    if (!isoDate) return;
+    const effectiveUserId = plannedUserId ?? _currentUser?.id ?? null;
+    setPlannedLoading(true);
+    setTodayPlanned([]);
+    authedFetch(`/api/planning/planned-visits?from=${isoDate}&to=${isoDate}${effectiveUserId ? `&user_id=${effectiveUserId}` : ''}`)
+      .then(data => setTodayPlanned(Array.isArray(data) ? data.filter((v: any) => v.customer_code) : []))
+      .catch(console.error)
+      .finally(() => setPlannedLoading(false));
+  }, [isOpen, visitDate, plannedUserId, _currentUser?.id]);
 
   const [competitors, setCompetitors] = useState<{id: string; name: string}[]>([]);
 
@@ -107,13 +111,22 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
     }
   }, [isOpen]);
 
+  const repSalesmanCode = _currentUser?.salesman_code;
+
+  const repCustomers = useMemo(() => {
+    if (!repSalesmanCode) return customers;
+    return customers.filter((c: any) =>
+      String(c.salesman_code ?? c.salesmanCode ?? '') === String(repSalesmanCode)
+    );
+  }, [customers, repSalesmanCode]);
+
   const areas = useMemo(() =>
-    [...new Set(customers.map(c => c.area).filter(Boolean))].sort() as string[], [customers]);
+    [...new Set(repCustomers.map(c => c.area).filter(Boolean))].sort() as string[], [repCustomers]);
 
   const cities = useMemo(() => {
-    const filtered = filterArea ? customers.filter(c => c.area === filterArea) : customers;
-    return [...new Set(filtered.map(c => c.city).filter(Boolean))].sort() as string[];
-  }, [customers, filterArea]);
+    const base = filterArea ? repCustomers.filter(c => c.area === filterArea) : repCustomers;
+    return [...new Set(base.map(c => c.city).filter(Boolean))].sort() as string[];
+  }, [repCustomers, filterArea]);
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
@@ -277,7 +290,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
           {(plannedLoading || todayPlanned.length > 0) && (
             <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2">
               <div className="text-sm font-medium text-indigo-700 flex items-center gap-2">
-                📅 Από το πλάνο σου σήμερα
+                📅 Από το πλάνο: {visitDate}
                 <span className="text-xs text-indigo-400 font-normal">(προαιρετικό)</span>
                 {plannedLoading && <span className="text-xs text-indigo-400">Φόρτωση...</span>}
               </div>

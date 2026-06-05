@@ -116,6 +116,7 @@ interface CustomerSelection {
   travel_buffer?: number;
   lat?: number | null;
   lng?: number | null;
+  alreadyPlanned?: boolean;
 }
 
 interface SuggestionsPanelProps {
@@ -147,6 +148,7 @@ export function SuggestionsPanel({ currentUser, onClose, customers = [], areas =
   const [selectedDayForPool, setSelectedDayForPool] = useState<string | null>(null);
   const [plan, setPlan] = useState<Record<string, CustomerSelection[]>>({});
   const [dayStartTimes, setDayStartTimes] = useState<Record<string, number>>({});
+  const [hotelBuffers, setHotelBuffers] = useState<Record<string, number>>({});
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -293,17 +295,26 @@ const fromRepCustomers = [...new Set(repCustomers.map((c: any) => c.area).filter
       const result = await authedFetch('/api/planning/suggest', { method: 'POST', body: JSON.stringify(body) });
       const dayResult = result.days?.[0];
       if (!dayResult) { setCustomerPool([]); return; }
-      setCustomerPool(dayResult.suggested.map((s: any) => ({
-        ...s, name: s.customer_name ?? s.name ?? s.code, code: s.customer_code ?? s.code,
-        included: true, sos: false, duration_minutes: 30,
-      })));
+      const alreadyPlannedCodes = new Set(
+        existingVisitsForWeek
+          .filter(v => v.planned_date?.slice(0, 10) === slot.date)
+          .map(v => String(v.customer_code))
+      );
+      setCustomerPool(dayResult.suggested.map((s: any) => {
+        const code = String(s.customer_code ?? s.code);
+        return {
+          ...s, name: s.customer_name ?? s.name ?? s.code, code,
+          included: true, sos: false, duration_minutes: 30,
+          alreadyPlanned: alreadyPlannedCodes.has(code),
+        };
+      }));
     } catch (err) {
       console.error(err);
       setCustomerPool([]);
     } finally {
       setPoolLoading(false);
     }
-  }, [selectedMonday, targetUserId, currentUser.id, filterPerformance, filterNotVisitedDays, filterTiers]);
+  }, [selectedMonday, targetUserId, currentUser.id, filterPerformance, filterNotVisitedDays, filterTiers, existingVisitsForWeek]);
 
   // ── Generate plan ─────────────────────────────────────────────────────────
   const generatePlan = async () => {
@@ -400,10 +411,11 @@ const buildGoogleMapsUrl = (date: string) => {
   };
 
   // ── Plan item manipulation ────────────────────────────────────────────────
-  const recalcTimes = (list: CustomerSelection[], startMinutes?: number) => {
+  const recalcTimes = (list: CustomerSelection[], startMinutes?: number, hotelBuffer?: number) => {
     let minutes = startMinutes ?? 9 * 60;
     return list.map((c, i) => {
-      if (i > 0) minutes += c.travel_buffer ?? 10;
+      if (i === 0) minutes += hotelBuffer ?? 0;
+      else minutes += c.travel_buffer ?? 10;
       const h = Math.floor(minutes / 60);
       const m = minutes % 60;
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -418,12 +430,12 @@ const buildGoogleMapsUrl = (date: string) => {
       const newIdx = dir === 'up' ? idx - 1 : idx + 1;
       if (newIdx < 0 || newIdx >= list.length) return prev;
       [list[idx], list[newIdx]] = [list[newIdx], list[idx]];
-      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date]) };
+      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date], hotelBuffers[date]) };
     });
   };
 
 const removePlanItem = (date: string, code: string) => {
-    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).filter(c => c.code !== code), dayStartTimes[date]) }));
+    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).filter(c => c.code !== code), dayStartTimes[date], hotelBuffers[date]) }));
   };
 
   const reorderPlanItems = (date: string, fromIdx: number, toIdx: number) => {
@@ -431,7 +443,7 @@ const removePlanItem = (date: string, code: string) => {
       const list = [...(prev[date] ?? [])];
       const [item] = list.splice(fromIdx, 1);
       list.splice(toIdx, 0, item);
-      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date]) };
+      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date], hotelBuffers[date]) };
     });
   };
 
@@ -474,7 +486,7 @@ const removePlanItem = (date: string, code: string) => {
     setPlan(prev => {
       const list = [...(prev[date] ?? [])];
       position === 'start' ? list.unshift(newStop) : list.push(newStop);
-      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date]) };
+      return { ...prev, [date]: recalcTimes(list, dayStartTimes[date], hotelBuffers[date]) };
     });
     setUnscheduled(prev => prev.filter(c => c.customer_code !== customer.customer_code));
   };
@@ -482,7 +494,7 @@ const removePlanItem = (date: string, code: string) => {
   const reversePlanItems = (date: string) => {
     setPlan(prev => ({
       ...prev,
-      [date]: recalcTimes([...(prev[date] ?? [])].reverse(), dayStartTimes[date]),
+      [date]: recalcTimes([...(prev[date] ?? [])].reverse(), dayStartTimes[date], hotelBuffers[date]),
     }));
   };
 
@@ -494,7 +506,7 @@ const removePlanItem = (date: string, code: string) => {
   };
 
   const updateDuration = (date: string, code: string, duration: number) => {
-    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).map(c => c.code === code ? { ...c, duration_minutes: duration } : c), dayStartTimes[date]) }));
+    setPlan(prev => ({ ...prev, [date]: recalcTimes((prev[date] ?? []).map(c => c.code === code ? { ...c, duration_minutes: duration } : c), dayStartTimes[date], hotelBuffers[date]) }));
   };
 
   const totalPlanned = Object.values(plan).reduce((s, custs) => s + custs.length, 0);
@@ -1056,6 +1068,11 @@ const removePlanItem = (date: string, code: string) => {
                                 <AlertTriangle className="w-3 h-3" /> {c.declining_months}μ ↓
                               </span>
                             )}
+                            {c.alreadyPlanned && (
+                              <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded font-medium">
+                                ✓ Ήδη προγ.
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
                             {c.city && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{c.city}</span>}
@@ -1156,9 +1173,14 @@ const removePlanItem = (date: string, code: string) => {
                 const custs = plan[slot.date] ?? [];
                 const mapsUrl = buildGoogleMapsUrl(slot.date);
                 const startMins = dayStartTimes[slot.date] ?? 9 * 60;
-                const totalMinutes = custs.reduce((s, c, i) => s + (c.duration_minutes ?? 30) + (i > 0 ? (c.travel_buffer ?? 10) : 0), 0);
+                const hotelBuf = slot.starting_lat ? (hotelBuffers[slot.date] ?? 20) : 0;
+                const totalMinutes = custs.reduce((s, c, i) => s + (c.duration_minutes ?? 30) + (i === 0 ? hotelBuf : (c.travel_buffer ?? 10)), 0);
                 const endHour = Math.floor((startMins + totalMinutes) / 60);
                 const endMin = (startMins + totalMinutes) % 60;
+                const returnBuf = slot.finishing_lat ? (hotelBuffers[slot.date] ?? 20) : 0;
+                const returnMins = startMins + totalMinutes + returnBuf;
+                const returnHour = Math.floor(returnMins / 60);
+                const returnMin = returnMins % 60;
 
                 return (
                   <div key={slot.date} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -1176,18 +1198,38 @@ const removePlanItem = (date: string, code: string) => {
                         <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
                           <span>{custs.length} πελάτες</span>
                           <span className="flex items-center gap-1">
-                            Έναρξη:
+                            {slot.starting_lat ? '🏨 Αναχώρηση:' : 'Έναρξη:'}
                             <input type="time"
                               value={`${String(Math.floor((dayStartTimes[slot.date] ?? 9*60)/60)).padStart(2,'0')}:${String((dayStartTimes[slot.date] ?? 9*60)%60).padStart(2,'0')}`}
                               onChange={e => {
                                 const [h, m] = e.target.value.split(':').map(Number);
                                 const mins = h * 60 + m;
                                 setDayStartTimes(prev => ({ ...prev, [slot.date]: mins }));
-                                setPlan(prev => ({ ...prev, [slot.date]: recalcTimes(prev[slot.date] ?? [], mins) }));
+                                setPlan(prev => ({ ...prev, [slot.date]: recalcTimes(prev[slot.date] ?? [], mins, hotelBuffers[slot.date]) }));
                               }}
                               className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600" />
                           </span>
+                          {slot.starting_lat && (
+                            <span className="flex items-center gap-1">
+                              ταξίδι:
+                              <select
+                                value={hotelBuffers[slot.date] ?? 20}
+                                onChange={e => {
+                                  const buf = parseInt(e.target.value);
+                                  setHotelBuffers(prev => ({ ...prev, [slot.date]: buf }));
+                                  setPlan(prev => ({ ...prev, [slot.date]: recalcTimes(prev[slot.date] ?? [], dayStartTimes[slot.date], buf) }));
+                                }}
+                                className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600">
+                                {[5, 10, 15, 20, 30, 45, 60].map(m => (
+                                  <option key={m} value={m}>{m}'</option>
+                                ))}
+                              </select>
+                            </span>
+                          )}
                           <span>→ {String(endHour).padStart(2, '0')}:{String(endMin).padStart(2, '0')}</span>
+                          {slot.finishing_lat && (
+                            <span className="text-slate-500">· 🏁 {String(returnHour).padStart(2, '0')}:{String(returnMin).padStart(2, '0')}</span>
+                          )}
                           {slot.starting_label && <span>· 🏨 {slot.starting_label}</span>}
                         </div>
                       </div>

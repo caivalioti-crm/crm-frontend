@@ -192,17 +192,23 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
   const selectedActual = (selectedKey ? (actualByDate.get(selectedKey) ?? []) : []).filter(v => filterVisit(v, true));
   const selectedPlanned = (selectedKey ? (plannedByDate.get(selectedKey) ?? []) : []).filter(v => filterVisit(v, false));
 
-  const allAreas = [...new Set(customers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
-  const allCities = [...new Set(
-    customers.filter((c: any) => !filterArea || c.area === filterArea).map((c: any) => c.city).filter(Boolean)
-  )].sort() as string[];
+  // Resolve rep-filtered pool early — drives allAreas, allCities, filteredCustomers
+const selectedRep = filterRepId ? repList.find(r => r.id === filterRepId) : null;
+const repFilteredCustomers = selectedRep
+  ? customers.filter((c: any) => String(c.salesman_code) === String(selectedRep.salesman_code))
+  : customers;
 
-  const filteredCustomers = customers.filter((c: any) =>
-    c.is_active !== false &&
-    (form.customerSearch === '' ||
-      c.name?.toLowerCase().includes(form.customerSearch.toLowerCase()) ||
-      c.code?.includes(form.customerSearch))
-  ).slice(0, 20);
+const allAreas = [...new Set(repFilteredCustomers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
+const allCities = [...new Set(
+  repFilteredCustomers.filter((c: any) => !filterArea || c.area === filterArea).map((c: any) => c.city).filter(Boolean)
+)].sort() as string[];
+
+const filteredCustomers = repFilteredCustomers.filter((c: any) =>
+  c.is_active !== false &&
+  (form.customerSearch === '' ||
+    c.name?.toLowerCase().includes(form.customerSearch.toLowerCase()) ||
+    c.code?.includes(form.customerSearch))
+).slice(0, 20);
 
 const repNameForUserId = (userId: string) =>
     repList.find(r => r.id === userId)?.full_name ?? '';
@@ -228,11 +234,17 @@ const repNameForUserId = (userId: string) =>
   };
 
   const openAdd = (d: Date) => {
-    setSelectedDay(d);
-    setFormMode('add');
-    setEditingId(null);
-    setForm({ ...blankForm(), date: dateKey(d) });
-  };
+  setSelectedDay(d);
+  setFormMode('add');
+  setEditingId(null);
+  // Pre-fill area/city from existing planned visits for the day (rep-filtered)
+  const dayPlanned = (plannedByDate.get(dateKey(d)) ?? []).filter(
+    v => !filterRepId || v.user_id === filterRepId
+  );
+  const preArea = dayPlanned[0]?.area ?? '';
+  const preCity  = dayPlanned[0]?.city  ?? '';
+  setForm({ ...blankForm(), date: dateKey(d), area: preArea, cities: preCity ? [preCity] : [] });
+};
 
   const openEdit = (v: any) => {
     setFormMode('edit');
@@ -361,12 +373,6 @@ const repNameForUserId = (userId: string) =>
   };
 
   const hasActiveFilters = !!(filterArea || filterCity || filterRepId);
-
-  // Filter customers to selected rep when filterRepId is active
-  const selectedRep = filterRepId ? repList.find(r => r.id === filterRepId) : null;
-  const repFilteredCustomers = selectedRep
-    ? customers.filter((c: any) => String(c.salesman_code) === String(selectedRep.salesman_code))
-    : customers;
 
   // Cities available for the selected area in the form
   const formCities = form.area
