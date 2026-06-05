@@ -13,6 +13,7 @@ interface Stop {
   lat?: number | null;
   lng?: number | null;
   suggested_time?: string;
+  duration_minutes?: number;
 }
 
 interface RouteMapPanelProps {
@@ -31,6 +32,8 @@ interface RouteMapPanelProps {
   onOpenCustomerMap?: (customer: any) => void;
   savedHotels?: { id: string; name: string; area: string; lat: number; lng: number }[];
   onUpdateStopCoords?: (code: string, lat: number, lng: number) => void;
+  onTimeChange?: (code: string, time: string) => void;
+  onDurationChange?: (code: string, duration: number) => void;
 }
 
 function createNumberedIcon(n: number, color = '#4f46e5') {
@@ -65,7 +68,7 @@ function createSpecialIcon(type: 'start' | 'finish') {
 
 export function RouteMapPanel({
   stops, startPoint, finishPoint, dayLabel, googleMapsUrl,
-  onClose, onRemove, onReorder, onReverseOrder, onSetStart, onSetFinish, customers = [], onOpenCustomerMap, savedHotels = [], onUpdateStopCoords,
+  onClose, onRemove, onReorder, onReverseOrder, onSetStart, onSetFinish, customers = [], onOpenCustomerMap, savedHotels = [], onUpdateStopCoords, onTimeChange, onDurationChange,
 }: RouteMapPanelProps) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -73,6 +76,18 @@ export function RouteMapPanel({
   const [startInput, setStartInput] = useState(startPoint?.label ?? '');
   const [finishInput, setFinishInput] = useState(finishPoint?.label ?? '');
   const [hotelAreaFilter, setHotelAreaFilter] = useState('');
+  const [recalcStartTime, setRecalcStartTime] = useState('09:00');
+  const [recalcTravelBuffer, setRecalcTravelBuffer] = useState(20);
+
+  const handleAutoRecalc = () => {
+    if (!onTimeChange) return;
+    const [h, m] = recalcStartTime.split(':').map(Number);
+    let mins = h * 60 + m;
+    for (const stop of stops) {
+      onTimeChange(stop.code, `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`);
+      mins += (stop.duration_minutes ?? 30) + recalcTravelBuffer;
+    }
+  };
 
   const parseCoord = (val: string, setter: (lat: number, lng: number, label: string) => void) => {
     const parts = val.trim().split(',').map(s => parseFloat(s.trim()));
@@ -216,6 +231,21 @@ export function RouteMapPanel({
                 </button>
               )}
             </div>
+            {onTimeChange && (
+              <div className="flex flex-wrap items-center gap-1.5 p-2 bg-indigo-50 rounded-lg border border-indigo-100">
+                <span className="text-xs text-indigo-600 font-medium w-full">Auto-χρόνοι:</span>
+                <input type="time" value={recalcStartTime} onChange={e => setRecalcStartTime(e.target.value)}
+                  className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600" />
+                <select value={recalcTravelBuffer} onChange={e => setRecalcTravelBuffer(parseInt(e.target.value))}
+                  className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600">
+                  {[5, 10, 15, 20, 30, 45].map(m => <option key={m} value={m}>{m}' μεταξύ</option>)}
+                </select>
+                <button onClick={handleAutoRecalc}
+                  className="px-2 py-0.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors">
+                  Recalculate
+                </button>
+              </div>
+            )}
             {onSetStart && (
               <input
                 type="text"
@@ -304,10 +334,27 @@ export function RouteMapPanel({
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-medium text-slate-700 truncate">{stop.name}</div>
                     <div className="text-xs text-slate-400 flex items-center gap-1 flex-wrap">
-                      {stop.suggested_time && <span className="text-indigo-500 font-medium">{stop.suggested_time}</span>}
+                      {onTimeChange ? (
+                        <input type="time" value={stop.suggested_time || ''}
+                          onChange={e => onTimeChange(stop.code, e.target.value)}
+                          className="text-xs border border-slate-200 rounded px-1 py-0.5 text-indigo-600 font-medium w-[72px]" />
+                      ) : (
+                        stop.suggested_time && <span className="text-indigo-500 font-medium">{stop.suggested_time}</span>
+                      )}
                       {stop.city && <span>· {stop.city}</span>}
                       {!stop.lat && <span className="text-amber-500">· χωρίς θέση</span>}
                     </div>
+                    {onDurationChange && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="text-xs text-slate-400">Διάρκ.:</span>
+                        {[15, 20, 30, 45, 60].map(d => (
+                          <button key={d} onClick={() => onDurationChange(stop.code, d)}
+                            className={`px-1.5 py-0.5 rounded text-xs transition-colors ${(stop.duration_minutes ?? 30) === d ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                            {d}'
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => onRemove(stop.code)}

@@ -135,6 +135,9 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
   const [mapPreviewStops, setMapPreviewStops] = useState<any[]>([]);
   const [mapPreviewLoading, setMapPreviewLoading] = useState(false);
   const [mapPreviewSaving, setMapPreviewSaving] = useState(false);
+  const [mapStartPoint, setMapStartPoint] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [mapFinishPoint, setMapFinishPoint] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [calendarHotels, setCalendarHotels] = useState<any[]>([]);
 
   const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -157,6 +160,12 @@ export function VisitCalendar({ currentUser, onSelectCustomer, onOpenCustomerMap
   }, [from, to, refreshKey, filterRepId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    authedFetch('/api/planning/hotels')
+      .then(data => setCalendarHotels(Array.isArray(data) ? data : []))
+      .catch(console.error);
+  }, []);
 
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
@@ -432,10 +441,7 @@ const repNameForUserId = (userId: string) =>
       for (const v of dayPlanned) {
         await authedFetch(`/api/planning/planned-visits/${v.id}`, { method: 'DELETE' });
       }
-      let mins = 9 * 60;
       for (const stop of mapPreviewStops) {
-        const h = String(Math.floor(mins / 60)).padStart(2, '0');
-        const m = String(mins % 60).padStart(2, '0');
         await authedFetch('/api/planning/planned-visits', {
           method: 'POST',
           body: JSON.stringify({
@@ -444,16 +450,17 @@ const repNameForUserId = (userId: string) =>
             customer_code: stop.code,
             area: stop._area || dayPlanned[0]?.area || null,
             city: stop.city || null,
-            planned_time: `${h}:${m}`,
+            planned_time: stop.suggested_time || null,
             is_fixed_appointment: false,
             status: 'planned',
           }),
         });
-        mins += 45;
       }
       setRefreshKey(k => k + 1);
       setMapPreviewDay(null);
       setMapPreviewStops([]);
+      setMapStartPoint(null);
+      setMapFinishPoint(null);
     } finally {
       setMapPreviewSaving(false);
     }
@@ -958,17 +965,17 @@ const repNameForUserId = (userId: string) =>
 
 {mapPreviewDay && (
           <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-3"
-            onClick={() => { setMapPreviewDay(null); setMapPreviewStops([]); }}>
+            onClick={() => { setMapPreviewDay(null); setMapPreviewStops([]); setMapStartPoint(null); setMapFinishPoint(null); }}>
             <div className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
               style={{ width: '96vw', height: '92vh' }}
               onClick={e => e.stopPropagation()}>
               <RouteMapPanel
                 stops={mapPreviewStops}
-                startPoint={null}
-                finishPoint={null}
+                startPoint={mapStartPoint}
+                finishPoint={mapFinishPoint}
                 dayLabel={`${new Date(mapPreviewDay).toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long' })} — ${mapPreviewStops[0]?._area ?? ''}`}
                 googleMapsUrl={buildDayMapsUrl(mapPreviewStops)}
-                onClose={() => { setMapPreviewDay(null); setMapPreviewStops([]); }}
+                onClose={() => { setMapPreviewDay(null); setMapPreviewStops([]); setMapStartPoint(null); setMapFinishPoint(null); }}
                 onRemove={code => setMapPreviewStops(prev => prev.filter(s => s.code !== code))}
                 onReorder={(from, to) => setMapPreviewStops(prev => {
                   const list = [...prev];
@@ -976,16 +983,26 @@ const repNameForUserId = (userId: string) =>
                   list.splice(to, 0, item);
                   return list;
                 })}
+                onReverseOrder={() => setMapPreviewStops(prev => [...prev].reverse())}
+                onSetStart={(lat, lng, label) => setMapStartPoint({ lat, lng, label })}
+                onSetFinish={(lat, lng, label) => setMapFinishPoint({ lat, lng, label })}
+                savedHotels={calendarHotels}
                 customers={customers}
                 onOpenCustomerMap={onOpenCustomerMap}
                 onUpdateStopCoords={(code, lat, lng) =>
                   setMapPreviewStops(prev => prev.map(s => s.code === code ? { ...s, lat, lng } : s))
                 }
+                onTimeChange={(code, time) =>
+                  setMapPreviewStops(prev => prev.map(s => s.code === code ? { ...s, suggested_time: time } : s))
+                }
+                onDurationChange={(code, duration) =>
+                  setMapPreviewStops(prev => prev.map(s => s.code === code ? { ...s, duration_minutes: duration } : s))
+                }
               />
               <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                 <span className="text-xs text-slate-500">{mapPreviewStops.length} στάσεις · Σύρετε για αναδιάταξη</span>
                 <div className="flex gap-2">
-                  <button onClick={() => { setMapPreviewDay(null); setMapPreviewStops([]); }}
+                  <button onClick={() => { setMapPreviewDay(null); setMapPreviewStops([]); setMapStartPoint(null); setMapFinishPoint(null); }}
                     className="px-3 py-1.5 text-sm bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg">
                     Ακύρωση
                   </button>
