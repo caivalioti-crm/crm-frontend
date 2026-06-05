@@ -207,17 +207,21 @@ const repFilteredCustomers = selectedRep
   ? customers.filter((c: any) => String(c.salesman_code) === String(selectedRep.salesman_code))
   : customers;
 
-const allAreas = [...new Set(repFilteredCustomers.map((c: any) => c.area).filter(Boolean))].sort() as string[];
-const allCities = [...new Set(
-  repFilteredCustomers.filter((c: any) => !filterArea || c.area === filterArea).map((c: any) => c.city).filter(Boolean)
-)].sort() as string[];
+// Fallback to all customers if rep filter produces empty pool (salesman_code field mismatch)
+  const formAreaSource = repFilteredCustomers.length > 0 ? repFilteredCustomers : customers;
 
-const filteredCustomers = repFilteredCustomers.filter((c: any) =>
-  c.is_active !== false &&
-  (form.customerSearch === '' ||
-    c.name?.toLowerCase().includes(form.customerSearch.toLowerCase()) ||
-    c.code?.includes(form.customerSearch))
-).slice(0, 20);
+  const allAreas = [...new Set(formAreaSource.map((c: any) => c.area).filter(Boolean))].sort() as string[];
+  const allCities = [...new Set(
+    formAreaSource.filter((c: any) => !filterArea || c.area === filterArea).map((c: any) => c.city).filter(Boolean)
+  )].sort() as string[];
+
+  // Search all customers (not rep-filtered) — needed for fixed appointments across territories
+  const filteredCustomers = customers.filter((c: any) =>
+    c.is_active !== false &&
+    (form.customerSearch === '' ||
+      c.name?.toLowerCase().includes(form.customerSearch.toLowerCase()) ||
+      String(c.code).includes(form.customerSearch))
+  ).slice(0, 20);
 
 const repNameForUserId = (userId: string) =>
     repList.find(r => r.id === userId)?.full_name ?? '';
@@ -385,7 +389,7 @@ const repNameForUserId = (userId: string) =>
 
   // Cities available for the selected area in the form
   const formCities = form.area
-    ? [...new Set(repFilteredCustomers.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city as string))].sort()
+    ? [...new Set(formAreaSource.filter((c: any) => c.area === form.area && c.city).map((c: any) => c.city as string))].sort()
     : [];
 
     const buildDayMapsUrl = (stops: any[]) => {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { User, TrendingUp, TrendingDown, LogOut, MapPin, Mail, Users, UserPlus, Bell, Eye, AlertCircle, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight, CalendarDays } from 'lucide-react';
+import { User, TrendingUp, TrendingDown, LogOut, MapPin, Mail, Users, UserPlus, Bell, Eye, Map as MapIcon, AlertCircle, ClipboardList, Search, Clock, BarChart2, ChevronDown, ChevronRight, CalendarDays, CalendarClock } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useDashboardFigma } from '../../hooks/useDashboardFigma';
 
@@ -284,7 +284,7 @@ export function DashboardFigma() {
     joinedPeriod, setJoinedPeriod,
     customerSortMode, setCustomerSortMode, monthlySales, monthlySalesCompare, monthlySalesLoading,
     monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, 
-    dueTasks, unreadCommentCount, allCustomers,
+    dueTasks, unreadCommentCount, todayFixedAppointments, allCustomers,
     taskFilter, setTaskFilter,
     commentFilter, setCommentFilter, 
 
@@ -523,13 +523,13 @@ if (currentUser.role === 'claims_exec') {
           <div className="flex items-center gap-2 border-t border-white/20 pt-2">
             {[
               { icon: <Search className="w-4 h-4" />, id: 'section-filter', roles: null, action: null },
+              { icon: <MapIcon className="w-4 h-4" />, id: 'section-map', roles: null, action: () => setShowCustomerMap(true), title: 'Χάρτης Πελατών' },
               { icon: <Users className="w-4 h-4" />, id: 'section-customers', roles: null, action: null },
               { icon: <TrendingUp className="w-4 h-4" />, id: 'section-performance', roles: null, action: null },
               { icon: <MapPin className="w-4 h-4" />, id: 'section-geo', roles: null, action: null },
               { icon: <BarChart2 className="w-4 h-4" />, id: 'section-categories', roles: ['admin', 'manager', 'exec'], action: null },
               { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', roles: null, action: null },
               { icon: <CalendarDays className="w-4 h-4" />, id: 'section-visits', roles: null, action: () => setShowCalendar(true), title: 'Ημερολόγιο' },
-              { icon: <MapPin className="w-4 h-4" />, id: 'section-map', roles: null, action: () => setShowCustomerMap(true), title: 'Χάρτης Πελατών' },
               { icon: <UserPlus className="w-4 h-4" />, id: 'section-prospects', roles: null, action: null },
               { icon: <AlertCircle className="w-4 h-4" />, id: 'section-claims', roles: null, action: () => setShowClaims(true) },
             ]
@@ -637,6 +637,20 @@ if (currentUser.role === 'claims_exec') {
               <Mail className="w-4 h-4" />
               <span className="px-1.5 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">
                 {unreadCommentCount}
+              </span>
+            </button>
+          )}
+
+          {/* Today's fixed appointments — persistent until completed or dismissed */}
+          {todayFixedAppointments.length > 0 && (
+            <button
+              onClick={() => setShowCalendar(true)}
+              title={`${todayFixedAppointments.length} ραντεβού σήμερα — κλικ για άνοιγμα ημερολογίου`}
+              className="relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white/10 text-white/90 hover:bg-white/20 transition-colors"
+            >
+              <CalendarClock className="w-4 h-4" />
+              <span className="px-1.5 py-0.5 bg-green-400 text-green-900 rounded-full text-xs font-bold animate-pulse">
+                {todayFixedAppointments.length}
               </span>
             </button>
           )}

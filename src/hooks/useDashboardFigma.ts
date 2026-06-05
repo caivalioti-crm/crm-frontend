@@ -12,7 +12,7 @@ const FULL_ACCESS_ROLES = ['admin', 'manager', 'exec'];
 type SalesRep = {
   id: string;
   name: string;
-  role: 'rep' | 'manager' | 'admin' | 'exec';
+  role: 'rep' | 'manager' | 'admin' | 'exec' | 'claims_exec';
   salesman_code: string | null;
 };
 
@@ -153,6 +153,7 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
   const [monthlySalesExpanded, setMonthlySalesExpanded] = useState(false);
   const [dueTasks, setDueTasks] = useState<{ today: any[]; overdue: any[]; total: number }>({ today: [], overdue: [], total: 0 });
   const [unreadCommentCount, setUnreadCommentCount] = useState(0);
+  const [todayFixedAppointments, setTodayFixedAppointments] = useState<any[]>([]);
   const [taskFilter, setTaskFilter] = useState<'none' | 'due'>('none');
   const [commentFilter, setCommentFilter] = useState<'none' | 'unread'>('none');
 
@@ -220,6 +221,16 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
       .catch(console.error);
     authedFetch('/api/comments/unread')
       .then(data => setUnreadCommentCount(data.count ?? 0))
+      .catch(console.error);
+    const today = new Date().toISOString().split('T')[0];
+    authedFetch(`/api/planning/planned-visits?from=${today}&to=${today}&user_id=${currentUser.id}`)
+      .then(data => {
+        setTodayFixedAppointments(
+          Array.isArray(data)
+            ? data.filter((v: any) => v.is_fixed_appointment && v.status !== 'completed')
+            : []
+        );
+      })
       .catch(console.error);
   }, [currentUser.id]);
 
@@ -648,7 +659,7 @@ const areaStats = useMemo(() => {
     customerSortMode, setCustomerSortMode,
     fullyFilteredCustomerIds, monthlySales, monthlySalesCompare, monthlySalesLoading,
     monthlySalesExpanded, setMonthlySalesExpanded, fetchMonthlySales, geoFilteredCompareSales, geoFilteredSales, 
-    dueTasks, unreadCommentCount, 
+    dueTasks, unreadCommentCount, todayFixedAppointments,
     taskFilter, setTaskFilter,
     commentFilter, setCommentFilter,
     };

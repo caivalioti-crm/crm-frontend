@@ -78,6 +78,8 @@ export function RouteMapPanel({
   const [hotelAreaFilter, setHotelAreaFilter] = useState('');
   const [recalcStartTime, setRecalcStartTime] = useState('09:00');
   const [recalcTravelBuffer, setRecalcTravelBuffer] = useState(20);
+  const [showAutoRecalc, setShowAutoRecalc] = useState(false);
+  const [expandedStopCode, setExpandedStopCode] = useState<string | null>(null);
 
   const handleAutoRecalc = () => {
     if (!onTimeChange) return;
@@ -232,18 +234,26 @@ export function RouteMapPanel({
               )}
             </div>
             {onTimeChange && (
-              <div className="flex flex-wrap items-center gap-1.5 p-2 bg-indigo-50 rounded-lg border border-indigo-100">
-                <span className="text-xs text-indigo-600 font-medium w-full">Auto-χρόνοι:</span>
-                <input type="time" value={recalcStartTime} onChange={e => setRecalcStartTime(e.target.value)}
-                  className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600" />
-                <select value={recalcTravelBuffer} onChange={e => setRecalcTravelBuffer(parseInt(e.target.value))}
-                  className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600">
-                  {[5, 10, 15, 20, 30, 45].map(m => <option key={m} value={m}>{m}' μεταξύ</option>)}
-                </select>
-                <button onClick={handleAutoRecalc}
-                  className="px-2 py-0.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors">
-                  Recalculate
+              <div className="border border-indigo-100 rounded-lg overflow-hidden">
+                <button onClick={() => setShowAutoRecalc(v => !v)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-xs text-indigo-600 font-medium transition-colors">
+                  ⏱ Auto-χρόνοι
+                  <span>{showAutoRecalc ? '▲' : '▼'}</span>
                 </button>
+                {showAutoRecalc && (
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white">
+                    <input type="time" value={recalcStartTime} onChange={e => setRecalcStartTime(e.target.value)}
+                      className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600" />
+                    <select value={recalcTravelBuffer} onChange={e => setRecalcTravelBuffer(parseInt(e.target.value))}
+                      className="text-xs border border-slate-300 rounded px-1 py-0.5 text-slate-600">
+                      {[5, 10, 15, 20, 30, 45].map(m => <option key={m} value={m}>{m}' μεταξύ</option>)}
+                    </select>
+                    <button onClick={() => { handleAutoRecalc(); setShowAutoRecalc(false); }}
+                      className="px-2 py-0.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors">
+                      Recalculate
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             {onSetStart && (
@@ -308,6 +318,7 @@ export function RouteMapPanel({
             {stops.map((stop, idx) => {
               const isDragging = dragIdx === idx;
               const isDragOver = dragOverIdx === idx && !isDragging;
+              const isExpanded = expandedStopCode === stop.code;
               return (
                 <div
                   key={stop.code}
@@ -320,7 +331,7 @@ export function RouteMapPanel({
                   className={`flex items-center gap-2 px-3 py-2 transition-colors select-none cursor-default
                     ${isDragging ? 'opacity-40 bg-indigo-50' : ''}
                     ${isDragOver ? 'border-t-2 border-indigo-400 bg-indigo-50' : ''}
-                    ${!isDragging && !isDragOver ? 'hover:bg-slate-50' : ''}
+                    ${isExpanded ? 'bg-indigo-50' : !isDragging && !isDragOver ? 'hover:bg-slate-50' : ''}
                   `}
                 >
                   {onReorder && (
@@ -331,28 +342,36 @@ export function RouteMapPanel({
                   <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
                     {idx + 1}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-medium text-slate-700 truncate">{stop.name}</div>
-                    <div className="text-xs text-slate-400 flex items-center gap-1 flex-wrap">
-                      {onTimeChange ? (
-                        <input type="time" value={stop.suggested_time || ''}
-                          onChange={e => onTimeChange(stop.code, e.target.value)}
-                          className="text-xs border border-slate-200 rounded px-1 py-0.5 text-indigo-600 font-medium w-[72px]" />
-                      ) : (
-                        stop.suggested_time && <span className="text-indigo-500 font-medium">{stop.suggested_time}</span>
+                  <div className="min-w-0 flex-1 cursor-pointer"
+                    onClick={() => setExpandedStopCode(isExpanded ? null : stop.code)}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-slate-700 truncate">{stop.name}</span>
+                      {stop.suggested_time && !isExpanded && (
+                        <span className="text-indigo-500 font-medium text-xs shrink-0">{stop.suggested_time}</span>
                       )}
-                      {stop.city && <span>· {stop.city}</span>}
+                    </div>
+                    <div className="text-xs text-slate-400 flex items-center gap-1">
+                      {stop.city && <span>{stop.city}</span>}
                       {!stop.lat && <span className="text-amber-500">· χωρίς θέση</span>}
                     </div>
-                    {onDurationChange && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-xs text-slate-400">Διάρκ.:</span>
-                        {[15, 20, 30, 45, 60].map(d => (
-                          <button key={d} onClick={() => onDurationChange(stop.code, d)}
-                            className={`px-1.5 py-0.5 rounded text-xs transition-colors ${(stop.duration_minutes ?? 30) === d ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                            {d}'
-                          </button>
-                        ))}
+                    {isExpanded && (
+                      <div className="mt-1.5 space-y-1.5" onClick={e => e.stopPropagation()}>
+                        {onTimeChange && (
+                          <input type="time" value={stop.suggested_time || ''}
+                            onChange={e => onTimeChange(stop.code, e.target.value)}
+                            className="text-xs border border-slate-200 rounded px-1 py-0.5 text-indigo-600 font-medium w-[72px]" />
+                        )}
+                        {onDurationChange && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-xs text-slate-400">Διάρκ.:</span>
+                            {[15, 20, 30, 45, 60].map(d => (
+                              <button key={d} onClick={() => onDurationChange(stop.code, d)}
+                                className={`px-1.5 py-0.5 rounded text-xs transition-colors ${(stop.duration_minutes ?? 30) === d ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                {d}'
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
