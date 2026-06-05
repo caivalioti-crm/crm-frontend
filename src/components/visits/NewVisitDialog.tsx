@@ -83,6 +83,8 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
   const [todayPlanned, setTodayPlanned] = useState<any[]>([]);
   const [plannedLoading, setPlannedLoading] = useState(false);
   const [selectedPlannedId, setSelectedPlannedId] = useState<string | null>(null);
+  const [repProfiles, setRepProfiles] = useState<{ id: string; full_name: string; salesman_code: string }[]>([]);
+  const [filterRepSalesmanCode, setFilterRepSalesmanCode] = useState<string | null>(_currentUser?.salesman_code ?? null);
 
   useEffect(() => {
     if (isOpen && allCategories.length === 0) {
@@ -111,14 +113,20 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
     }
   }, [isOpen]);
 
-  const repSalesmanCode = _currentUser?.salesman_code;
+  useEffect(() => {
+    supabase
+      .from('crm_user_profiles')
+      .select('id, full_name, salesman_code')
+      .not('salesman_code', 'is', null)
+      .then(({ data }) => setRepProfiles((data ?? []).filter((p: any) => p.salesman_code)));
+  }, []);
 
   const repCustomers = useMemo(() => {
-    if (!repSalesmanCode) return customers;
+    if (!filterRepSalesmanCode) return customers;
     return customers.filter((c: any) =>
-      String(c.salesman_code ?? c.salesmanCode ?? '') === String(repSalesmanCode)
+      String(c.salesman_code ?? c.salesmanCode ?? '') === String(filterRepSalesmanCode)
     );
-  }, [customers, repSalesmanCode]);
+  }, [customers, filterRepSalesmanCode]);
 
   const areas = useMemo(() =>
     [...new Set(repCustomers.map(c => c.area).filter(Boolean))].sort() as string[], [repCustomers]);
@@ -257,6 +265,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
     setOutcome(null);
     setTodayPlanned([]);
     setSelectedPlannedId(null);
+    setFilterRepSalesmanCode(_currentUser?.salesman_code ?? null);
     onClose();
     setVoiceMemoBlob(null);
   };
@@ -336,6 +345,21 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
                 placeholder="Search by code or name (min 3 characters)..."
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
             </div>
+            {repProfiles.length > 1 && (
+              <select
+                value={filterRepSalesmanCode ?? ''}
+                onChange={e => {
+                  setFilterRepSalesmanCode(e.target.value || null);
+                  setFilterArea('');
+                  setFilterCity('');
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="">Όλοι οι εκπρόσωποι</option>
+                {repProfiles.map(r => (
+                  <option key={r.id} value={r.salesman_code}>{r.full_name}</option>
+                ))}
+              </select>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <select value={filterArea} onChange={e => { setFilterArea(e.target.value); setFilterCity(''); }}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">

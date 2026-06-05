@@ -110,6 +110,8 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showAllVisits, setShowAllVisits] = useState(false);
+  const [filterRep, setFilterRep] = useState('');
+  const [filterOutcome, setFilterOutcome] = useState<'all' | 'completed' | 'incomplete'>('all');
 
   // Edit state
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
@@ -192,12 +194,18 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
   // Reset pagination when filters change
   useEffect(() => {
     setShowAllVisits(false);
-  }, [searchQuery, selectedArea, selectedCity, dateFrom, dateTo]);
+  }, [searchQuery, selectedArea, selectedCity, dateFrom, dateTo, filterRep, filterOutcome]);
 
   const categoryMap = new Map(allCategories.map(c => [c.category_code, c]));
   const customerMap = new Map(customers.map(c => [c.code, c]));
 
+  const repNames = useMemo(() =>
+    [...new Set(visits.map(v => v.owner_name).filter(Boolean))].sort(),
+    [visits]
+  );
+
   const areas = [...new Set(customers.map(c => c.area))].sort();
+
   const cities = selectedArea
     ? [...new Set(customers.filter(c => c.area === selectedArea).map(c => c.city))].sort()
     : [];
@@ -214,6 +222,9 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
     if (selectedCity && customer?.city !== selectedCity) return false;
     if (dateFrom && v.visit_date < dateFrom) return false;
     if (dateTo && v.visit_date > dateTo) return false;
+    if (filterRep && v.owner_name !== filterRep) return false;
+    if (filterOutcome === 'completed' && (v as any).outcome != null) return false;
+    if (filterOutcome === 'incomplete' && (v as any).outcome == null) return false;
     return true;
   });
 
@@ -236,7 +247,7 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
   const visibleVisits = showAllVisits ? activelyFilteredVisits : activelyFilteredVisits.slice(0, VISITS_PAGE_SIZE);
   const hasMoreVisits = activelyFilteredVisits.length > VISITS_PAGE_SIZE;
 
-  const hasActiveFilters = searchQuery || selectedArea || selectedCity || dateFrom || dateTo;
+  const hasActiveFilters = searchQuery || selectedArea || selectedCity || dateFrom || dateTo || filterRep || filterOutcome !== 'all';
 
   const getTaskSummary = (tasks: Task[]) => {
     const total = tasks.length;
@@ -497,6 +508,25 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
                 </div>
               </div>
             </div>
+            <div className="flex flex-wrap gap-3 mt-3 items-center">
+              {isFullAccess && repNames.length > 0 && (
+                <select value={filterRep} onChange={e => setFilterRep(e.target.value)}
+                  className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <option value="">Όλοι οι εκπρόσωποι</option>
+                  {repNames.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              )}
+              <div className="flex items-center gap-1 bg-white border border-gray-300 rounded-lg p-1">
+                {(['all', 'completed', 'incomplete'] as const).map(opt => (
+                  <button key={opt} onClick={() => setFilterOutcome(opt)}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      filterOutcome === opt ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+                    }`}>
+                    {opt === 'all' ? 'Όλες' : opt === 'completed' ? '✓ Έγινε' : '🚫 Δεν έγινε'}
+                  </button>
+                ))}
+              </div>
+            </div>
             {hasActiveFilters && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-gray-500">Filters:</span>
@@ -505,7 +535,9 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
                 {selectedCity && <span className="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">{selectedCity}</span>}
                 {dateFrom && <span className="px-2.5 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">From {dateFrom}</span>}
                 {dateTo && <span className="px-2.5 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">To {dateTo}</span>}
-                <button onClick={() => { setSearchQuery(''); setSelectedArea(''); setSelectedCity(''); setDateFrom(''); setDateTo(''); }}
+                {filterRep && <span className="px-2.5 py-1 bg-teal-100 text-teal-700 rounded-full text-xs">{filterRep}</span>}
+                {filterOutcome !== 'all' && <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{filterOutcome === 'completed' ? '✓ Έγινε' : '🚫 Δεν έγινε'}</span>}
+                <button onClick={() => { setSearchQuery(''); setSelectedArea(''); setSelectedCity(''); setDateFrom(''); setDateTo(''); setFilterRep(''); setFilterOutcome('all'); }}
                   className="text-xs text-gray-500 hover:text-gray-700 underline ml-1">Clear all</button>
               </div>
             )}
