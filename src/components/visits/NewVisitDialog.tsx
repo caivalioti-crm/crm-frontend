@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { X, Plus, Phone, UserCheck, Video, MessageSquare, Search } from 'lucide-react';
+import { X, Plus, Phone, UserCheck, Video, MessageSquare, Search, TriangleAlert } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { SmartDateInput, dateToISO } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
@@ -83,6 +83,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
   const [todayPlanned, setTodayPlanned] = useState<any[]>([]);
   const [plannedLoading, setPlannedLoading] = useState(false);
   const [selectedPlannedId, setSelectedPlannedId] = useState<string | null>(null);
+  const [customerPrepNotes, setCustomerPrepNotes] = useState<any[]>([]);
   const [repProfiles, setRepProfiles] = useState<{ id: string; full_name: string; salesman_code: string }[]>([]);
   const [filterRepSalesmanCode, setFilterRepSalesmanCode] = useState<string | null>(_currentUser?.salesman_code ?? null);
 
@@ -112,6 +113,14 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
       authedFetch('/api/competitors').then(setCompetitors).catch(console.error);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!selectedCustomerCode) { setCustomerPrepNotes([]); return; }
+    supabase.from('crm_customer_prep_notes')
+      .select('*').eq('customer_code', selectedCustomerCode).eq('is_resolved', false)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setCustomerPrepNotes(data ?? []));
+  }, [selectedCustomerCode]);
 
   useEffect(() => {
     supabase
@@ -396,6 +405,24 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
             {selectedCustomerCode && (
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm font-medium text-green-800">
                 Selected: {customers.find(c => c.code === selectedCustomerCode)?.name}
+              </div>
+            )}
+            {customerPrepNotes.length > 0 && (
+              <div className="p-3 bg-amber-50 border-2 border-amber-400 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <TriangleAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-sm font-bold text-amber-800">
+                    {customerPrepNotes.length === 1 ? 'Σημείωση' : `${customerPrepNotes.length} Σημειώσεις`} για αυτή την επίσκεψη
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {customerPrepNotes.map(note => (
+                    <div key={note.id} className="bg-white rounded-lg px-3 py-2 border border-amber-200">
+                      <p className="text-sm text-slate-800">{note.text}</p>
+                      <p className="text-xs text-amber-500 mt-0.5">— {note.created_by_name}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -512,6 +512,32 @@ if (currentUser.role === 'claims_exec') {
 </div>
 )}
 
+              {dueTasks.total > 0 && (
+                <button
+                  onClick={() => { setTaskFilter(t => t === 'due' ? 'none' : 'due'); setCommentFilter('none'); const el = document.getElementById('section-visits'); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' }); }}
+                  className={`relative flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${taskFilter === 'due' ? 'bg-white text-indigo-700' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
+                >
+                  <Bell className="w-4 h-4" />
+                  {dueTasks.overdue.length > 0 && <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-700 text-white text-xs font-bold">{dueTasks.overdue.length}</span>}
+                  {dueTasks.today.length > 0 && <span className="px-1 py-0.5 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">{dueTasks.today.length}</span>}
+                </button>
+              )}
+              {unreadCommentCount > 0 && (
+                <button
+                  onClick={() => { setCommentFilter(c => c === 'unread' ? 'none' : 'unread'); setTaskFilter('none'); const el = document.getElementById('section-visits'); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' }); }}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${commentFilter === 'unread' ? 'bg-white text-indigo-700' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
+                >
+                  <Mail className="w-4 h-4" />
+                  <span className="px-1 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">{unreadCommentCount}</span>
+                </button>
+              )}
+              {todayFixedAppointments.length > 0 && (
+                <button onClick={() => setShowCalendar(true)}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white/90 hover:bg-white/20 transition-colors">
+                  <CalendarClock className="w-4 h-4" />
+                  <span className="px-1 py-0.5 bg-green-400 text-green-900 rounded-full text-xs font-bold animate-pulse">{todayFixedAppointments.length}</span>
+                </button>
+              )}
               <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors">
                 <LogOut className="w-4 h-4" />
@@ -520,7 +546,7 @@ if (currentUser.role === 'claims_exec') {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 border-t border-white/20 pt-2">
+          <div className="flex items-center gap-2 border-t border-white/20 pt-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
             {[
               { icon: <Search className="w-4 h-4" />, id: 'section-filter', roles: null, action: null },
               { icon: <MapIcon className="w-4 h-4" />, id: 'section-map', roles: null, action: () => setShowCustomerMap(true), title: 'Χάρτης Πελατών' },
@@ -598,63 +624,7 @@ if (currentUser.role === 'claims_exec') {
               )}
             </div>
           )}
-          {/* Task alerts bell */}
-          {dueTasks.total > 0 && (
-            <button
-              onClick={() => {
-                setTaskFilter(taskFilter === 'due' ? 'none' : 'due');
-                setCommentFilter('none');
-                const el = document.getElementById('section-visits');
-                if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
-              }}
-              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${taskFilter === 'due' ? 'bg-white text-indigo-700' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
-            >
-              <Bell className="w-4 h-4" />
-              {dueTasks.overdue.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-700 text-white text-xs font-bold">
-                  {dueTasks.overdue.length}
-                </span>
-              )}
-              {dueTasks.today.length > 0 && (
-                <span className="px-1.5 py-0.5 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
-                  {dueTasks.today.length}
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Unread comments mail */}
-          {unreadCommentCount > 0 && (
-            <button
-              onClick={() => {
-                setCommentFilter(commentFilter === 'unread' ? 'none' : 'unread');
-                setTaskFilter('none');
-                const el = document.getElementById('section-visits');
-                if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
-              }}
-              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${commentFilter === 'unread' ? 'bg-white text-indigo-700' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
-            >
-              <Mail className="w-4 h-4" />
-              <span className="px-1.5 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">
-                {unreadCommentCount}
-              </span>
-            </button>
-          )}
-
-          {/* Today's fixed appointments — persistent until completed or dismissed */}
-          {todayFixedAppointments.length > 0 && (
-            <button
-              onClick={() => setShowCalendar(true)}
-              title={`${todayFixedAppointments.length} ραντεβού σήμερα — κλικ για άνοιγμα ημερολογίου`}
-              className="relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white/10 text-white/90 hover:bg-white/20 transition-colors"
-            >
-              <CalendarClock className="w-4 h-4" />
-              <span className="px-1.5 py-0.5 bg-green-400 text-green-900 rounded-full text-xs font-bold animate-pulse">
-                {todayFixedAppointments.length}
-              </span>
-            </button>
-          )}
-        </div>
+          </div>
       </header>
       
 
