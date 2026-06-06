@@ -1,8 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { TrendingDown, AlertCircle, BarChart2, ChevronDown, ChevronRight, X, RotateCcw, Lightbulb, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const BUSINESS_TYPE_DISPLAY: Record<string, string> = {
+  general_parts: 'Γενικά ανταλλ.', used_japanese: 'Μεταχ. JAP',
+  used_european: 'Μεταχ. EUR',    used_american: 'Μεταχ. USA',
+  bosch_service: 'Bosch Service', body_shop: 'Φανοποιείο',
+  electrician: 'Ηλεκτρολόγος',   dealership: 'Αντιπροσωπεία',
+  tire_shop: 'Ελαστικά',          truck_specialist: 'Trucks',
+  mixed: 'Μικτό',
+};
+
+const BASE_URL = import.meta.env.VITE_API_URL
 
 async function authedFetch(url: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -85,6 +94,12 @@ export function CategoryIntelligence({
   const [similarCustomers, setSimilarCustomers] = useState<any[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [similarCount, setSimilarCount] = useState<number | null>(null);
+  const [primaryBrands, setPrimaryBrands] = useState<string[]>([]);
+  const [brandCoveredCategories, setBrandCoveredCategories] = useState<Set<string>>(new Set());
+  const [selectedSimilarCodes, setSelectedSimilarCodes] = useState<string[]>([]);
+  const [filterByBrands, setFilterByBrands] = useState(true);
+  const [filterBySelected, setFilterBySelected] = useState(false);
+  const [l2NameMap, setL2NameMap] = useState<Map<string, string>>(new Map());
 
   const loadSimilar = async () => {
     if (similarCustomers.length > 0) { setShowSimilar(true); return; }
@@ -92,7 +107,7 @@ export function CategoryIntelligence({
     try {
       const { data: rpcData, error } = await supabase.rpc('get_similar_customers_v2', {
         p_customer_code: customerCode,
-        p_limit: 20,
+        p_limit: 50,
       });
       if (error) throw error;
       if (!rpcData?.length) { setSimilarCustomers([]); setShowSimilar(true); return; }
@@ -111,15 +126,44 @@ export function CategoryIntelligence({
         city: custMap.get(r.similar_code)?.city ?? '',
         area: custMap.get(r.similar_code)?.area ?? '',
       })));
+
+      if (l2NameMap.size === 0) {
+        const { data: l2n } = await supabase
+          .from('crm_category_master')
+          .select('category_code, short_name')
+          .eq('level', 2);
+        setL2NameMap(new Map((l2n ?? []).map((n: any) => [n.category_code, n.short_name])));
+      }
       setShowSimilar(true);
     } catch (e) { console.error(e); }
     finally { setSimilarLoading(false); }
   };
 
   useEffect(() => {
+    const fetchBrandData = async () => {
+      const { data: bp } = await supabase
+        .from('mv_customer_brand_profile')
+        .select('brand, brand_share_pct')
+        .eq('customer_code', customerCode)
+        .gte('brand_share_pct', 10)
+        .order('brand_share_pct', { ascending: false });
+      const brands = (bp ?? []).map((b: any) => b.brand);
+      setPrimaryBrands(brands);
+      if (brands.length > 0) {
+        const { data: cov } = await supabase
+          .from('mv_category_brand_coverage')
+          .select('category_code')
+          .in('brand', brands);
+        setBrandCoveredCategories(new Set((cov ?? []).map((c: any) => c.category_code)));
+      }
+    };
+    fetchBrandData();
+  }, [customerCode]);
+
+  useEffect(() => {
     setLoading(true);
     setError(null);
-   Promise.all([
+    Promise.all([
       authedFetch(
         `/api/customers/${customerCode}/category-intelligence?from=${salesPeriod.dateFrom}&to=${salesPeriod.dateTo}&prevFrom=${salesPeriod.prevDateFrom}&prevTo=${salesPeriod.prevDateTo}`
       ),
@@ -202,6 +246,36 @@ export function CategoryIntelligence({
     setOutOfScopeList(prev => prev.filter(s => s.category_code !== categoryCode));
   };
 
+  const hasBrandCoverage = (code: string): boolean => {
+    if (brandCoveredCategories.size === 0 || primaryBrands.length === 0) return true;
+    if (brandCoveredCategories.has(code)) return true;
+    const parts = code.split('.');
+    if (parts.length > 1 && brandCoveredCategories.has(parts[0])) return true;
+    if (parts.length > 2 && brandCoveredCategories.has(`${parts[0]}.${parts[1]}`)) return true;
+    return false;
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const selectedCustomerL2Codes = useMemo(() => {
+    const codes = new Set<string>();
+    similarCustomers.filter(c => selectedSimilarCodes.includes(c.similar_code))
+      .forEach(c => {
+        (c.shared_l2_codes ?? []).forEach((x: string) => codes.add(x));
+        (c.peer_only_l2_codes ?? []).forEach((x: string) => codes.add(x));
+      });
+    return codes;
+  }, [selectedSimilarCodes, similarCustomers]);
+
+  const isSignalRelevant = (signal: Signal, type: 'missing' | 'weak'): boolean => {
+    if (filterByBrands && primaryBrands.length > 0 && !hasBrandCoverage(signal.category_code)) return false;
+    if (filterBySelected && selectedSimilarCodes.length > 0 && type === 'missing') {
+      const parts = signal.category_code.split('.');
+      const l2 = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : signal.category_code;
+      if (!selectedCustomerL2Codes.has(l2) && !selectedCustomerL2Codes.has(signal.category_code)) return false;
+    }
+    return true;
+  };
+
   if (loading) return (
     <section className="bg-white rounded-xl shadow p-5">
       <div className="flex items-center gap-2 mb-2">
@@ -235,7 +309,7 @@ export function CategoryIntelligence({
     if (isDismissed) return null;
 
     return (
-      <div key={key} className={`rounded-xl border overflow-hidden ${isDiscussed ? 'border-green-200 bg-green-50' : 'border-red-100 bg-white'}`}>
+      <div key={key} className="rounded-xl border border-red-100 bg-white overflow-hidden">
         <button onClick={() => setExpandedCard(isExpanded ? null : key)}
           className="w-full px-4 py-3 flex items-start justify-between text-left hover:bg-red-50 transition-colors">
           <div className="flex-1 min-w-0">
@@ -309,6 +383,7 @@ export function CategoryIntelligence({
     const isExpanded = expandedCard === key;
     const isDismissed = signal.status === 'dismissed';
     if (isDismissed) return null;
+    if (!isSignalRelevant(signal, 'missing')) return null;
 
     return (
       <div key={key} className="rounded-xl border border-purple-100 bg-white overflow-hidden">
@@ -366,6 +441,7 @@ export function CategoryIntelligence({
     const isExpanded = expandedCard === key;
     const isDismissed = signal.status === 'dismissed';
     if (isDismissed) return null;
+    if (!isSignalRelevant(signal, 'weak')) return null;
 
     return (
       <div key={key} className="rounded-xl border border-amber-100 bg-white overflow-hidden">
@@ -439,16 +515,36 @@ export function CategoryIntelligence({
               <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">{totalSignals}</span>
             )}
           </div>
-          <button
-  onClick={() => { console.log('clicked'); loadSimilar(); }}
-  style={{ background: 'purple', color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '12px' }}
->
-  <Users className="w-3.5 h-3.5 inline mr-1" />
- {similarLoading ? '...' : `${similarCount ?? data.similar_customers.count} ομότιμοι`}
-</button>
+          <button onClick={loadSimilar}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition-colors">
+            <Users className="w-3.5 h-3.5" />
+            {similarLoading ? '...' : `${similarCount ?? data.similar_customers.count} ομότιμοι`}
+          </button>
         </div>
         <div className="text-xs text-slate-400 mt-1">{salesPeriod.label} vs {salesPeriod.prevLabel}</div>
       </div>
+
+      {(primaryBrands.length > 0 || selectedSimilarCodes.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-100 bg-slate-50">
+          {primaryBrands.length > 0 && (
+            <button onClick={() => setFilterByBrands(v => !v)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filterByBrands ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-white text-slate-500 border-slate-200'
+              }`}>
+              🎯 Φίλτρο μαρκών
+              {filterByBrands && <span className="opacity-70">({primaryBrands.slice(0,2).join(', ')}{primaryBrands.length > 2 ? '+' : ''})</span>}
+            </button>
+          )}
+          {selectedSimilarCodes.length > 0 && (
+            <button onClick={() => setFilterBySelected(v => !v)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filterBySelected ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-white text-slate-500 border-slate-200'
+              }`}>
+              👥 {selectedSimilarCodes.length} επιλεγμένοι ομότιμοι
+            </button>
+          )}
+        </div>
+      )}
 
       {totalSignals === 0 ? (
         <div className="px-5 py-8 text-center text-slate-400 text-sm italic">
@@ -533,55 +629,118 @@ export function CategoryIntelligence({
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-slate-800">Ομότιμοι Πελάτες</h3>
-              <div className="text-xs text-slate-400 mt-0.5">{similarCustomers.length} πελάτες με παρόμοιο προφίλ αγορών</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                Κορυφαίοι {similarCustomers.length} από {similarCount ?? similarCustomers.length} ομότιμους
+              </div>
             </div>
             <button onClick={() => setShowSimilar(false)} className="p-1.5 hover:bg-slate-100 rounded-lg">
               <X className="w-4 h-4 text-slate-500" />
             </button>
           </div>
           <div className="overflow-y-auto flex-1 divide-y divide-slate-50">
-            {similarCustomers.map(c => (
-            <div key={c.similar_code} className="px-5 py-3 space-y-2 border-b border-slate-50 last:border-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-medium text-slate-800 truncate">{c.name}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
-                      c.match_quality === 'full'    ? 'bg-green-100 text-green-700' :
-                      c.match_quality === 'partial' ? 'bg-blue-100 text-blue-700' :
-                      'bg-slate-100 text-slate-500'
+        {similarCustomers.map(c => {
+            const isSelected = selectedSimilarCodes.includes(c.similar_code);
+            return (
+              <div key={c.similar_code}
+                className={`px-4 py-3 space-y-2 border-b border-slate-50 last:border-0 transition-colors ${isSelected ? 'bg-purple-50' : ''}`}>
+                <div className="flex items-start gap-2">
+                  {/* Selection checkbox */}
+                  <button
+                    onClick={() => setSelectedSimilarCodes(prev =>
+                      isSelected ? prev.filter(x => x !== c.similar_code)
+                        : prev.length < 10 ? [...prev, c.similar_code] : prev
+                    )}
+                    className={`mt-0.5 w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
+                      isSelected ? 'bg-purple-600 border-purple-600' : 'border-slate-300 hover:border-purple-400'
                     }`}>
-                      {c.match_quality === 'full' ? '✦ Πλήρες' : c.match_quality === 'partial' ? '◈ Μερικό' : '○ Βασικό'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-400">{c.city}{c.area ? `, ${c.area}` : ''}</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-base font-bold text-indigo-600">{Math.round(c.total_score * 100)}%</div>
-                </div>
-              </div>
-              <div className="flex gap-1.5 text-xs">
-                <div className="flex-1 bg-purple-50 rounded px-2 py-1 text-center">
-                  <div className="font-bold text-purple-600">{Math.round(c.category_score * 100)}%</div>
-                  <div className="text-purple-400 text-xs">κατηγ.</div>
-                </div>
-                {c.brand_score > 0 && (
-                  <div className="flex-1 bg-orange-50 rounded px-2 py-1 text-center">
-                    <div className="font-bold text-orange-600">{Math.round(c.brand_score * 100)}%</div>
-                    <div className="text-orange-400 text-xs">μάρκες</div>
-                  </div>
-                )}
-                {c.type_score !== 0.5 && (
-                  <div className={`flex-1 rounded px-2 py-1 text-center ${c.type_score >= 1 ? 'bg-green-50' : 'bg-red-50'}`}>
-                    <div className={`font-bold ${c.type_score >= 1 ? 'text-green-600' : 'text-red-400'}`}>
-                      {c.type_score >= 1 ? '✓' : '✗'}
+                    {isSelected && <span className="text-white text-xs leading-none">✓</span>}
+                  </button>
+
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-medium text-slate-800">{c.name}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                            c.match_quality === 'full' ? 'bg-green-100 text-green-700' :
+                            c.match_quality === 'partial' ? 'bg-blue-100 text-blue-700' :
+                            'bg-slate-100 text-slate-500'
+                          }`}>
+                            {c.match_quality === 'full' ? '✦ Πλήρες' : c.match_quality === 'partial' ? '◈ Μερικό' : '○ Βασικό'}
+                          </span>
+                          {c.shop_type && (
+                            <span className="text-xs px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-full shrink-0">
+                              {BUSINESS_TYPE_DISPLAY[c.shop_type] ?? c.shop_type}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400">{c.city}{c.area ? `, ${c.area}` : ''}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-base font-bold text-indigo-600">{Math.round(c.total_score * 100)}%</div>
+                      </div>
                     </div>
-                    <div className="text-slate-400 text-xs">τύπος</div>
+
+                    {/* Scores */}
+                    <div className="flex gap-1 text-xs">
+                      <div className="flex-1 bg-purple-50 rounded px-1.5 py-1 text-center">
+                        <div className="font-bold text-purple-600">{Math.round(c.category_score * 100)}%</div>
+                        <div className="text-purple-400">κατηγ.</div>
+                      </div>
+                      {c.brand_score > 0 && (
+                        <div className="flex-1 bg-orange-50 rounded px-1.5 py-1 text-center">
+                          <div className="font-bold text-orange-600">{Math.round(c.brand_score * 100)}%</div>
+                          <div className="text-orange-400">μάρκες</div>
+                        </div>
+                      )}
+                      {c.type_score !== 0.5 && (
+                        <div className={`flex-1 rounded px-1.5 py-1 text-center ${c.type_score >= 1 ? 'bg-green-50' : 'bg-red-50'}`}>
+                          <div className={`font-bold ${c.type_score >= 1 ? 'text-green-600' : 'text-red-400'}`}>{c.type_score >= 1 ? '✓' : '✗'}</div>
+                          <div className="text-slate-400">τύπος</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Shared brands */}
+                    {c.shared_brands?.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {c.shared_brands.slice(0, 5).map((b: string) => (
+                          <span key={b} className="px-1.5 py-0.5 bg-orange-50 border border-orange-200 text-orange-700 rounded text-xs font-medium">{b}</span>
+                        ))}
+                        {c.shared_brands.length > 5 && <span className="text-xs text-slate-400 self-center">+{c.shared_brands.length - 5}</span>}
+                      </div>
+                    )}
+
+                    {/* Shared L2 categories */}
+                    {c.shared_l2_codes?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        <span className="text-xs text-slate-400">κοινά:</span>
+                        {c.shared_l2_codes.slice(0, 4).map((code: string) => (
+                          <span key={code} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-xs">
+                            {l2NameMap.get(code) ?? code}
+                          </span>
+                        ))}
+                        {c.shared_l2_codes.length > 4 && <span className="text-xs text-slate-400">+{c.shared_l2_codes.length - 4}</span>}
+                      </div>
+                    )}
+
+                    {/* Peer-only L2 */}
+                    {c.peer_only_l2_codes?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        <span className="text-xs text-slate-400">έχει κι αυτός:</span>
+                        {c.peer_only_l2_codes.slice(0, 3).map((code: string) => (
+                          <span key={code} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs">
+                            {l2NameMap.get(code) ?? code}
+                          </span>
+                        ))}
+                        {c.peer_only_l2_codes.length > 3 && <span className="text-xs text-slate-400">+{c.peer_only_l2_codes.length - 3}</span>}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           </div>
         </div>
       </div>
