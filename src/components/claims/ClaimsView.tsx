@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { ArrowLeft, Plus, Search, Upload, FileText, Phone, Mail, MessageSquare, AlertCircle, Clock, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -23,6 +23,12 @@ async function apiFetch(path: string, opts: RequestInit = {}) {
   return res.json();
 }
 
+// ── Shared field wrapper — MUST be at module level (inside component = re-mount on every keystroke) ──
+
+const FormField = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div><label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>{children}</div>
+);
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -36,12 +42,23 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const COMPLAINT_TYPES = [
-  { value: 'defective',        label: 'Ελαττωματικό Προϊόν' },
-  { value: 'wrong_item',       label: 'Λάθος Τεμάχιο' },
-  { value: 'missing',          label: 'Ελλιπής Παραγγελία' },
-  { value: 'damaged_shipping', label: 'Ζημιά Μεταφοράς' },
-  { value: 'quality',          label: 'Πρόβλημα Ποιότητας' },
-  { value: 'other',            label: 'Άλλο' },
+  { value: 'wrong_item',     label: 'Λάθος τεμάχιο' },
+  { value: 'defective',      label: 'Ελαττωματικό προϊόν' },
+  { value: 'arrived_broken', label: 'Έφτασε σπασμένο / κατεστραμμένο' },
+  { value: 'missing',        label: 'Ελλιπής παραγγελία' },
+  { value: 'quality',        label: 'Πρόβλημα ποιότητας' },
+  { value: 'other',          label: 'Άλλο' },
+];
+
+const NEXT_ACTIONS = [
+  { value: 'log_factory',       label: 'Καταχώρηση στο σύστημα εργοστασίου' },
+  { value: 'await_engineer',    label: 'Αναμονή τεχνικού' },
+  { value: 'await_credit_note', label: 'Αναμονή πιστωτικού' },
+  { value: 'await_claims_exec', label: 'Αναμονή διαχειριστή αξιώσεων' },
+  { value: 'await_customer',    label: 'Αναμονή πελάτη' },
+  { value: 'await_factory',     label: 'Αναμονή εργοστασίου' },
+  { value: 'send_replacement',  label: 'Αποστολή αντικατάστασης' },
+  { value: 'close',             label: 'Κλείσιμο' },
 ];
 
 const COMPENSATION_TYPES = [
@@ -96,7 +113,7 @@ const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm fo
 
 interface CurrentUser { id: string; name: string; role: string; salesman_code?: string | null; }
 
-export function ClaimsView({ currentUser, onBack }: { currentUser: CurrentUser; onBack: (() => void) | null }) {
+export function ClaimsView({ currentUser, onBack, customers = [] }: { currentUser: CurrentUser; onBack: (() => void) | null; customers?: any[] }) {
   const [view, setView]               = useState<'list' | 'create' | 'detail'>('list');
   const [claims, setClaims]           = useState<any[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -187,7 +204,7 @@ export function ClaimsView({ currentUser, onBack }: { currentUser: CurrentUser; 
             onSelect={openDetail} />
         )}
         {view === 'create' && (
-          <ClaimCreateForm currentUser={currentUser}
+          <ClaimCreateForm currentUser={currentUser} customers={customers}
             onSaved={() => { setView('list'); loadClaims(); }}
             onCancel={() => setView('list')} />
         )}
@@ -273,77 +290,189 @@ function ClaimsList({ claims, loading, statusFilter, setStatusFilter, search, se
 
 // ── Create Form ───────────────────────────────────────────────────────────────
 
-function ClaimCreateForm({ currentUser, onSaved, onCancel }: any) {
+function ClaimCreateForm({ currentUser, customers, onSaved, onCancel }: any) {
+  const [customerSearch, setCustomerSearch]     = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [skuSearch, setSkuSearch]               = useState('');
+  const [selectedSku, setSelectedSku]           = useState<any>(null);
+  const [skuResults, setSkuResults]             = useState<any[]>([]);
+  const [skuLoading, setSkuLoading]             = useState(false);
   const [form, setForm] = useState({
-    customer_code: '', customer_name: '', sku: '', sku_description: '',
-    quantity: '', invoice_number: '', purchase_date: '',
-    complaint_date: new Date().toISOString().split('T')[0],
-    complaint_type: '', complaint_description: '',
+    complaint_date:        new Date().toISOString().split('T')[0],
+    complaint_type:        '',
+    complaint_description: '',
+    next_action:           '',
+    quantity:              '',
+    invoice_number:        '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch || customerSearch.length < 2) return [];
+    const q = customerSearch.toLowerCase();
+    return (customers ?? [])
+      .filter((c: any) => c.name?.toLowerCase().includes(q) || String(c.code).includes(q))
+      .slice(0, 8);
+  }, [customerSearch, customers]);
+
+  useEffect(() => {
+    if (skuSearch.length < 3) { setSkuResults([]); return; }
+    const t = setTimeout(async () => {
+      setSkuLoading(true);
+      try {
+        const { data } = await supabase
+          .from('stg_soft1_mtrl')
+          .select('mtrl_code, mtrldesc')
+          .or(`mtrl_code.ilike.%${skuSearch}%,mtrldesc.ilike.%${skuSearch}%`)
+          .limit(8);
+        setSkuResults(data ?? []);
+      } catch { setSkuResults([]); }
+      finally { setSkuLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [skuSearch]);
 
   const handleSubmit = async () => {
-    if (!form.customer_name || !form.complaint_type) { setError('Απαιτούνται: Πελάτης & Τύπος Καταγγελίας'); return; }
+    if (!selectedCustomer)    { setError('Επιλέξτε πελάτη'); return; }
+    if (!form.complaint_type) { setError('Επιλέξτε τύπο προβλήματος'); return; }
+    if (!form.complaint_date) { setError('Συμπληρώστε ημερομηνία'); return; }
     setSaving(true); setError('');
     try {
       await apiFetch('/api/claims', {
         method: 'POST',
-        body: JSON.stringify({ ...form, quantity: form.quantity ? parseInt(form.quantity) : null, created_by: currentUser.id, assigned_to: currentUser.id }),
+        body: JSON.stringify({
+          customer_code:         selectedCustomer.code,
+          customer_name:         selectedCustomer.name,
+          sku:                   selectedSku?.mtrl_code ?? (skuSearch || null),
+          sku_description:       selectedSku?.mtrldesc ?? null,
+          quantity:              form.quantity ? parseInt(form.quantity) : null,
+          invoice_number:        form.invoice_number || null,
+          complaint_date:        form.complaint_date,
+          complaint_type:        form.complaint_type,
+          complaint_description: form.complaint_description || null,
+          next_action:           form.next_action || null,
+          created_by:            currentUser.id,
+          assigned_to:           currentUser.id,
+        }),
       });
       onSaved();
     } catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
   };
 
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div><label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>{children}</div>
-  );
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+
+      <FormField label="Πελάτης *">
+        {selectedCustomer ? (
+          <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <span className="text-sm font-medium text-indigo-700 flex-1 truncate">{selectedCustomer.name}</span>
+            <span className="text-xs font-mono text-indigo-400 shrink-0">{selectedCustomer.code}</span>
+            <button onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }}
+              className="text-indigo-300 hover:text-red-400 ml-1 text-lg leading-none">×</button>
+          </div>
+        ) : (
+          <div className="relative">
+            <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)}
+              placeholder="Αναζήτηση ονόματος ή κωδικού..." className={inputCls} autoComplete="off" />
+            {filteredCustomers.length > 0 && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                {filteredCustomers.map((c: any) => (
+                  <button key={c.code} onClick={() => { setSelectedCustomer(c); setCustomerSearch(''); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 text-left border-b border-slate-50 last:border-0">
+                    <span className="text-xs font-mono text-slate-400 shrink-0 w-16">{c.code}</span>
+                    <span className="text-sm text-slate-700 truncate">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </FormField>
+
+      <FormField label="Κωδικός Προϊόντος">
+        {selectedSku ? (
+          <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <span className="text-xs font-mono text-indigo-600 shrink-0">{selectedSku.mtrl_code}</span>
+            <span className="text-sm text-indigo-700 flex-1 truncate">{selectedSku.mtrldesc}</span>
+            <button onClick={() => { setSelectedSku(null); setSkuSearch(''); }}
+              className="text-indigo-300 hover:text-red-400 ml-1 text-lg leading-none">×</button>
+          </div>
+        ) : (
+          <div className="relative">
+            <input value={skuSearch} onChange={e => setSkuSearch(e.target.value)}
+              placeholder="Κωδικός ή περιγραφή (min 3 χαρακτήρες)..." className={inputCls} autoComplete="off" />
+            {skuLoading && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">...</span>}
+            {skuResults.length > 0 && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                {skuResults.map((s: any) => (
+                  <button key={s.mtrl_code} onClick={() => { setSelectedSku(s); setSkuSearch(''); setSkuResults([]); }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 text-left border-b border-slate-50 last:border-0">
+                    <span className="text-xs font-mono text-slate-400 shrink-0 w-28 truncate">{s.mtrl_code}</span>
+                    <span className="text-sm text-slate-700 truncate">{s.mtrldesc}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </FormField>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Κωδικός Πελάτη">
-          <input value={form.customer_code} onChange={e => set('customer_code', e.target.value)} placeholder="π.χ. 10234" className={inputCls} />
-        </Field>
-        <Field label="Επωνυμία Πελάτη *">
-          <input value={form.customer_name} onChange={e => set('customer_name', e.target.value)} placeholder="Όνομα επιχείρησης" className={inputCls} />
-        </Field>
-        <Field label="Κωδικός SKU">
-          <input value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="π.χ. ABS-1234" className={inputCls} />
-        </Field>
-        <Field label="Περιγραφή SKU">
-          <input value={form.sku_description} onChange={e => set('sku_description', e.target.value)} className={inputCls} />
-        </Field>
-        <Field label="Ποσότητα">
-          <input type="number" value={form.quantity} onChange={e => set('quantity', e.target.value)} className={inputCls} />
-        </Field>
-        <Field label="Αρ. Τιμολογίου">
-          <input value={form.invoice_number} onChange={e => set('invoice_number', e.target.value)} placeholder="π.χ. ΤΔ-12345" className={inputCls} />
-        </Field>
-        <Field label="Ημ/νία Αγοράς">
-          <input type="date" value={form.purchase_date} onChange={e => set('purchase_date', e.target.value)} className={inputCls} />
-        </Field>
-        <Field label="Ημ/νία Καταγγελίας">
-          <input type="date" value={form.complaint_date} onChange={e => set('complaint_date', e.target.value)} className={inputCls} />
-        </Field>
+        <FormField label="Ημ/νία Καταγγελίας *">
+          <input type="date" value={form.complaint_date}
+            onChange={e => setForm(f => ({ ...f, complaint_date: e.target.value }))} className={inputCls} />
+        </FormField>
+        <FormField label="Τύπος Προβλήματος *">
+          <select value={form.complaint_type}
+            onChange={e => setForm(f => ({ ...f, complaint_type: e.target.value }))} className={inputCls}>
+            <option value="">Επιλέξτε...</option>
+            {COMPLAINT_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+        </FormField>
       </div>
-      <Field label="Τύπος Καταγγελίας *">
-        <select value={form.complaint_type} onChange={e => set('complaint_type', e.target.value)} className={inputCls}>
-          <option value="">Επιλέξτε τύπο...</option>
-          {COMPLAINT_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+
+      <FormField label="Περιγραφή Προβλήματος">
+        <textarea value={form.complaint_description}
+          onChange={e => setForm(f => ({ ...f, complaint_description: e.target.value }))}
+          rows={3} placeholder="Αναλυτική περιγραφή..." className={`${inputCls} resize-none`} />
+      </FormField>
+
+      <FormField label="Επόμενη Ενέργεια">
+        <select value={form.next_action}
+          onChange={e => setForm(f => ({ ...f, next_action: e.target.value }))} className={inputCls}>
+          <option value="">— Επιλέξτε —</option>
+          {NEXT_ACTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
         </select>
-      </Field>
-      <Field label="Περιγραφή Προβλήματος">
-        <textarea value={form.complaint_description} onChange={e => set('complaint_description', e.target.value)}
-          rows={4} placeholder="Αναλυτική περιγραφή..." className={`${inputCls} resize-none`} />
-      </Field>
+      </FormField>
+
+      <details className="group">
+        <summary className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer hover:text-slate-600 list-none select-none">
+          <span className="transition-transform group-open:rotate-90 inline-block">▶</span>
+          Προαιρετικά (αρ. τιμολογίου, ποσότητα)
+        </summary>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+          <FormField label="Αρ. Τιμολογίου">
+            <input value={form.invoice_number}
+              onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))}
+              placeholder="π.χ. ΤΔ-12345" className={inputCls} />
+          </FormField>
+          <FormField label="Ποσότητα">
+            <input type="number" value={form.quantity}
+              onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} />
+          </FormField>
+        </div>
+      </details>
+
       <div className="flex gap-3 pt-2">
-        <button onClick={onCancel} className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50">Ακύρωση</button>
-        <button onClick={handleSubmit} disabled={saving} className="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+        <button onClick={onCancel}
+          className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          Ακύρωση
+        </button>
+        <button onClick={handleSubmit} disabled={saving}
+          className="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
           {saving ? 'Αποθήκευση...' : 'Δημιουργία'}
         </button>
       </div>
@@ -449,6 +578,13 @@ function InfoTab({ claim, onRefresh }: any) {
       <Row label="Ημ/νία Καταγγελίας" value={formatDate(claim.complaint_date)} />
       <Row label="Τύπος"             value={COMPLAINT_TYPES.find(c => c.value === claim.complaint_type)?.label ?? claim.complaint_type} />
       <Row label="Status"            value={<StatusBadge status={claim.status} />} />
+      {claim.next_action && (
+        <Row label="Επόμενη Ενέργεια" value={
+          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-xs font-medium">
+            {NEXT_ACTIONS.find(a => a.value === claim.next_action)?.label ?? claim.next_action}
+          </span>
+        } />
+      )}
 
       {editing ? (
         <div className="space-y-3 pt-4">

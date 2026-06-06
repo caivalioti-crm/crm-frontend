@@ -3,13 +3,14 @@ import {
   Lightbulb, FileText, Tag, ChevronDown, ChevronRight,
   TrendingUp, TrendingDown, BarChart2, Medal, TriangleAlert, AlertCircle, Receipt, User, RotateCcw,
   ClipboardList, Mic, Pause, Pencil, Bell, CheckCircle, Clock, PlayCircle, CalendarClock, Navigation, MapPin,
-  MessageSquare, Trash2,
+  MessageSquare, Trash2, Cloud as CloudIcon,
 } from 'lucide-react';
 
 import { formatDate } from '../../utils/dateFormat';
 import { NewVisitDialog } from '../visits/NewVisitDialog';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { CustomerWordCloud } from './CustomerWordCloud';
 import { ProfileEditor } from '../ui/ProfileEditor';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
@@ -931,10 +932,10 @@ const startEditVisitInCustomer = (v: any) => {
                 { icon: <HatGlassesIcon className="w-4 h-4" />, id: 'section-comp', title: 'Ανταγωνισμός' },
                 { icon: <BarChart2 className="w-4 h-4" />, id: 'section-sales', title: 'Πωλήσεις' },
                 { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', title: 'Επισκέψεις' },
-                { icon: <Lightbulb className="w-4 h-4" />, id: 'section-categories', title: 'Κατηγορίες' },
+                { icon: <CloudIcon className="w-4 h-4" />, id: 'section-wordcloud', title: 'Ανάλυση Αγορών' },
                 { icon: <FileText className="w-4 h-4" />, id: 'section-docs', title: 'Έγγραφα' },
-                { icon: <AlertCircle className="w-4 h-4" />, id: 'section-intelligence', title: 'Intelligence' },
-              ].map((item, i) => (
+                { icon: <Lightbulb className="w-4 h-4" />, id: 'section-intelligence', title: 'Intelligence' },
+                ].map((item, i) => (
                 <button key={i}
                   onClick={() => { const el = document.getElementById(item.id); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' }); }}
                   title={item.title}
@@ -1924,7 +1925,16 @@ const startEditVisitInCustomer = (v: any) => {
   />
 )}
 
-       {/* STANDALONE COMMENTS */}
+       {/* WORD CLOUD */}
+        <section id="section-wordcloud" className="bg-white rounded-xl shadow p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <CloudIcon className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-base font-semibold">Ανάλυση Αγορών — Τελευταία 3 Χρόνια</h2>
+          </div>
+          <CustomerWordCloud customerCode={String(customer.code)} />
+        </section>
+
+        {/* STANDALONE COMMENTS */}
         <section className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">

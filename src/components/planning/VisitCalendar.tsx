@@ -50,7 +50,9 @@ function hashColor(str: string): number {
 }
 
 const REP_COLOR_OVERRIDES: Record<string, { dot: string; text: string; city: string }> = {
-  'Tsogiannis': { dot: 'bg-slate-600', text: 'text-slate-700', city: 'text-slate-600' },
+  'Tsogiannis':    { dot: 'bg-slate-600', text: 'text-slate-700', city: 'text-slate-600' },
+  'Etaireia':      { dot: 'bg-blue-600',  text: 'text-blue-700',  city: 'text-blue-600'  },
+  'Chartofylakas': { dot: 'bg-teal-500',  text: 'text-teal-600',  city: 'text-teal-500'  },
 };
 
 function getRepColor(ownerName: string) {

@@ -110,7 +110,9 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showAllVisits, setShowAllVisits] = useState(false);
-  const [filterRep, setFilterRep] = useState('');
+  const [filterRep, setFilterRep] = useState(
+    currentUser.salesman_code ? currentUser.name : ''
+  );
   const [filterOutcome, setFilterOutcome] = useState<'all' | 'completed' | 'incomplete'>('all');
 
   // Edit state
@@ -513,7 +515,12 @@ export function VisitsLog({ currentUser, onNewVisit, customers = [], onSelectCus
                 <select value={filterRep} onChange={e => setFilterRep(e.target.value)}
                   className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                   <option value="">Όλοι οι εκπρόσωποι</option>
-                  {repNames.map(r => <option key={r} value={r}>{r}</option>)}
+                  {currentUser.salesman_code && (
+                    <option value={currentUser.name}>✓ Οι επισκέψεις μου</option>
+                  )}
+                  {repNames.filter(r => r !== currentUser.name).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
                 </select>
               )}
               <div className="flex items-center gap-1 bg-white border border-gray-300 rounded-lg p-1">

@@ -1279,11 +1279,12 @@ if (currentUser.role === 'claims_exec') {
       )}
 
       {showClaims && (
-        <ClaimsView
-          currentUser={currentUser}
-          onBack={() => setShowClaims(false)}
-        />
-      )}
+          <ClaimsView
+            currentUser={currentUser}
+            onBack={() => setShowClaims(false)}
+            customers={allCustomers}
+          />
+        )}
 
     </div>
   );
