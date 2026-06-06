@@ -84,6 +84,7 @@ export function CategoryIntelligence({
   const [showSimilar, setShowSimilar] = useState(false);
   const [similarCustomers, setSimilarCustomers] = useState<any[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarCount, setSimilarCount] = useState<number | null>(null);
 
   const loadSimilar = async () => {
     if (similarCustomers.length > 0) { setShowSimilar(true); return; }
@@ -118,15 +119,17 @@ export function CategoryIntelligence({
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([
+   Promise.all([
       authedFetch(
         `/api/customers/${customerCode}/category-intelligence?from=${salesPeriod.dateFrom}&to=${salesPeriod.dateTo}&prevFrom=${salesPeriod.prevDateFrom}&prevTo=${salesPeriod.prevDateTo}`
       ),
       authedFetch(`/api/customers/${customerCode}/category-scope`),
+      supabase.rpc('get_similar_count', { p_customer_code: customerCode }),
     ])
-      .then(([intel, scope]) => {
+      .then(([intel, scope, countResult]) => {
         setData(intel);
         setOutOfScopeList(scope ?? []);
+        setSimilarCount((countResult as any)?.data ?? null);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -441,7 +444,7 @@ export function CategoryIntelligence({
   style={{ background: 'purple', color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '12px' }}
 >
   <Users className="w-3.5 h-3.5 inline mr-1" />
-  {similarLoading ? '...' : `${data.similar_customers.count} ομότιμοι`}
+ {similarLoading ? '...' : `${similarCount ?? data.similar_customers.count} ομότιμοι`}
 </button>
         </div>
         <div className="text-xs text-slate-400 mt-1">{salesPeriod.label} vs {salesPeriod.prevLabel}</div>
