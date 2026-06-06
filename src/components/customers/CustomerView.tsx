@@ -932,9 +932,10 @@ const startEditVisitInCustomer = (v: any) => {
                 { icon: <HatGlassesIcon className="w-4 h-4" />, id: 'section-comp', title: 'Ανταγωνισμός' },
                 { icon: <BarChart2 className="w-4 h-4" />, id: 'section-sales', title: 'Πωλήσεις' },
                 { icon: <ClipboardList className="w-4 h-4" />, id: 'section-visits', title: 'Επισκέψεις' },
-                { icon: <CloudIcon className="w-4 h-4" />, id: 'section-wordcloud', title: 'Ανάλυση Αγορών' },
                 { icon: <FileText className="w-4 h-4" />, id: 'section-docs', title: 'Έγγραφα' },
+                { icon: <MessageSquare className="w-4 h-4" />, id: 'section-comments', title: 'Σχόλια & Σημειώσεις' },
                 { icon: <Lightbulb className="w-4 h-4" />, id: 'section-intelligence', title: 'Intelligence' },
+                { icon: <CloudIcon className="w-4 h-4" />, id: 'section-wordcloud', title: 'Ανάλυση Αγορών' },
                 ].map((item, i) => (
                 <button key={i}
                   onClick={() => { const el = document.getElementById(item.id); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 170, behavior: 'smooth' }); }}
@@ -1935,7 +1936,7 @@ const startEditVisitInCustomer = (v: any) => {
         </section>
 
         {/* STANDALONE COMMENTS */}
-        <section className="bg-white rounded-xl shadow p-5">
+        <section id="section-comments" className="bg-white rounded-xl shadow p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
