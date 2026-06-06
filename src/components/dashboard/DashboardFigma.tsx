@@ -546,7 +546,7 @@ if (currentUser.role === 'claims_exec') {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 border-t border-white/20 pt-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <div className="flex flex-wrap items-center gap-2 border-t border-white/20 pt-2">
             {[
               { icon: <Search className="w-4 h-4" />, id: 'section-filter', roles: null, action: null },
               { icon: <MapIcon className="w-4 h-4" />, id: 'section-map', roles: null, action: () => setShowCustomerMap(true), title: 'Χάρτης Πελατών' },
