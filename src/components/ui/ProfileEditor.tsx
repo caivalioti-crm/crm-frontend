@@ -33,6 +33,18 @@ const SHOP_TYPE_LABELS: Record<string, string> = {
   other: 'Άλλο',
 };
 
+const BUSINESS_TYPE_MAP: Record<string, string> = {
+  auto_parts_retailer: 'general_parts', auto_parts_jap: 'general_parts',
+  auto_parts_eur: 'general_parts',      auto_parts_korea: 'general_parts',
+  used_parts_general: 'mixed',          used_parts_jap: 'used_japanese',
+  used_parts_eur: 'used_european',      accessories: 'general_parts',
+  garage: 'mixed',                      body_shop: 'body_shop',
+  electrician: 'electrician',           bosch_car_service: 'bosch_service',
+  dealership: 'dealership',             specialist: 'mixed',
+  vertical_unit: 'mixed',              car_rental: 'mixed',
+  other: 'mixed',
+};
+
 const STOCK_BEHAVIOR_LABELS: Record<string, string> = {
   keeps_stock: 'Τηρεί Απόθεμα',
   on_demand: "Παραγγελία κατ'ανάγκη",
@@ -164,6 +176,20 @@ export function ProfileEditor({ entityType, entityId, shopProfile: initialShop, 
         estimated_monthly_spend: competitionInfo.estimatedMonthlySpend,
         switch_reason: competitionInfo.switchReason,
       };
+      // Sync to specialization table for enhanced similarity
+      if (entityType === 'customer') {
+        const mappedType = BUSINESS_TYPE_MAP[shopType] ?? null;
+        const brands = (shopProfile.vehicleBrands?.length ?? 0) > 0 ? shopProfile.vehicleBrands : null;
+        if (mappedType || brands) {
+          await supabase.from('crm_customer_specialization').upsert({
+            customer_code: entityId,
+            business_type: mappedType,
+            brand_focus: brands,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'customer_code' });
+        }
+      }
+
       setSavedShop(newShop);
       setSavedComp(newComp);
       onSaved(newShop, newComp);

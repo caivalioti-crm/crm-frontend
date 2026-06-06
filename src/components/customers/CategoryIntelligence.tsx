@@ -89,10 +89,27 @@ export function CategoryIntelligence({
     if (similarCustomers.length > 0) { setShowSimilar(true); return; }
     setSimilarLoading(true);
     try {
-      const result = await authedFetch(
-        `/api/customers/${customerCode}/similar-customers?from=${salesPeriod.dateFrom}&to=${salesPeriod.dateTo}`
-      );
-      setSimilarCustomers(result);
+      const { data: rpcData, error } = await supabase.rpc('get_similar_customers_v2', {
+        p_customer_code: customerCode,
+        p_limit: 20,
+      });
+      if (error) throw error;
+      if (!rpcData?.length) { setSimilarCustomers([]); setShowSimilar(true); return; }
+
+      // Fetch names from view
+      const codes = rpcData.map((r: any) => r.similar_code);
+      const { data: custData } = await supabase
+        .from('vw_crm_customers')
+        .select('code, name, city, area')
+        .in('code', codes);
+      const custMap = new Map((custData ?? []).map((c: any) => [c.code, c]));
+
+      setSimilarCustomers(rpcData.map((r: any) => ({
+        ...r,
+        name: custMap.get(r.similar_code)?.name ?? r.similar_code,
+        city: custMap.get(r.similar_code)?.city ?? '',
+        area: custMap.get(r.similar_code)?.area ?? '',
+      })));
       setShowSimilar(true);
     } catch (e) { console.error(e); }
     finally { setSimilarLoading(false); }
@@ -521,35 +538,45 @@ export function CategoryIntelligence({
           </div>
           <div className="overflow-y-auto flex-1 divide-y divide-slate-50">
             {similarCustomers.map(c => (
-            <div key={c.code} className="px-5 py-3 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-slate-800 truncate">{c.name}</div>
+            <div key={c.similar_code} className="px-5 py-3 space-y-2 border-b border-slate-50 last:border-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-medium text-slate-800 truncate">{c.name}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                      c.match_quality === 'full'    ? 'bg-green-100 text-green-700' :
+                      c.match_quality === 'partial' ? 'bg-blue-100 text-blue-700' :
+                      'bg-slate-100 text-slate-500'
+                    }`}>
+                      {c.match_quality === 'full' ? '✦ Πλήρες' : c.match_quality === 'partial' ? '◈ Μερικό' : '○ Βασικό'}
+                    </span>
+                  </div>
                   <div className="text-xs text-slate-400">{c.city}{c.area ? `, ${c.area}` : ''}</div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0 ml-3">
-                  {c.revenue > 0 && (
-                    <div className="text-right">
-                      <div className="text-xs text-slate-400">Τζίρος</div>
-                      <div className="text-xs font-semibold text-slate-700">€{c.revenue.toLocaleString('el-GR')}</div>
-                    </div>
-                  )}
+                <div className="text-right shrink-0">
+                  <div className="text-base font-bold text-indigo-600">{Math.round(c.total_score * 100)}%</div>
                 </div>
               </div>
-              {c.shared_categories?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {c.shared_categories.map((cat: string) => (
-                    <span key={cat} className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">{cat}</span>
-                  ))}
+              <div className="flex gap-1.5 text-xs">
+                <div className="flex-1 bg-purple-50 rounded px-2 py-1 text-center">
+                  <div className="font-bold text-purple-600">{Math.round(c.category_score * 100)}%</div>
+                  <div className="text-purple-400 text-xs">κατηγ.</div>
                 </div>
-              )}
-              {c.only_peer_categories?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {c.only_peer_categories.map((cat: string) => (
-                    <span key={cat} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-xs">{cat}</span>
-                  ))}
-                </div>
-              )}
+                {c.brand_score > 0 && (
+                  <div className="flex-1 bg-orange-50 rounded px-2 py-1 text-center">
+                    <div className="font-bold text-orange-600">{Math.round(c.brand_score * 100)}%</div>
+                    <div className="text-orange-400 text-xs">μάρκες</div>
+                  </div>
+                )}
+                {c.type_score !== 0.5 && (
+                  <div className={`flex-1 rounded px-2 py-1 text-center ${c.type_score >= 1 ? 'bg-green-50' : 'bg-red-50'}`}>
+                    <div className={`font-bold ${c.type_score >= 1 ? 'text-green-600' : 'text-red-400'}`}>
+                      {c.type_score >= 1 ? '✓' : '✗'}
+                    </div>
+                    <div className="text-slate-400 text-xs">τύπος</div>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           </div>
