@@ -33,7 +33,7 @@ function tokenize(name: string): string[] {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface SkuRow { sku_name: string; netamnt: number; qty: number; }
+interface SkuRow { sku_name: string; total_revenue: number; total_qty: number; }
 interface WordEntry { word: string; revenue: number; count: number; isBrand: boolean; }
 
 // ── Visual config ─────────────────────────────────────────────────────────────
@@ -79,25 +79,13 @@ export function CustomerWordCloud({ customerCode }: { customerCode: string }) {
     try {
       const from = new Date();
       from.setFullYear(from.getFullYear() - 3);
-      const fromMonth = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}`;
 
-      // Try trdr_code first, fall back to customer_code
-      let { data, error: err } = await supabase
-        .from('mv_crm_sku_sales')
-        .select('sku_name, netamnt, qty')
-        .eq('trdr_code', customerCode)
-        .gte('month', fromMonth)
-        .limit(500);
+      const { data, error: err } = await supabase.rpc('get_customer_sku_cloud', {
+        p_customer_code: customerCode,
+        p_from_date: from.toISOString().split('T')[0],
+      });
 
-      if (err || !data?.length) {
-        const fallback = await supabase
-          .from('mv_crm_sku_sales')
-          .select('sku_name, netamnt, qty')
-          .eq('customer_code', customerCode)
-          .gte('month', fromMonth)
-          .limit(500);
-        data = fallback.data;
-      }
+      if (err) throw err;
 
       setSkus(data ?? []);
     } catch (e: any) {
@@ -121,19 +109,19 @@ export function CustomerWordCloud({ customerCode }: { customerCode: string }) {
     const brandSet = new Set<string>();
 
     for (const row of skus) {
-      totalRevenue += row.netamnt;
-      totalQty     += row.qty;
+     totalRevenue += row.total_revenue;
+      totalQty     += row.total_qty;
       skuSet.add(row.sku_name);
 
       const tokens = tokenize(row.sku_name);
       for (const t of tokens) {
-        const key = t.toUpperCase();
-        const existing = wordMap.get(key);
-        if (existing) {
-          existing.revenue += row.netamnt;
+          const key = t.toUpperCase();
+          const existing = wordMap.get(key);
+          if (existing) {
+           existing.revenue += row.total_revenue;
           existing.count   += 1;
         } else {
-          wordMap.set(key, { revenue: row.netamnt, count: 1 });
+          wordMap.set(key, { revenue: row.total_revenue, count: 1 });
         }
         if (CAR_BRANDS.has(t.toLowerCase())) brandSet.add(t.toUpperCase());
       }
