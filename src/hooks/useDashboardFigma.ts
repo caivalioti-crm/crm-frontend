@@ -458,12 +458,25 @@ const scopedCustomers = useMemo(() => {
   }, [scopedCustomers, selectedAreas]);
 
   /* ===================== FILTERED CUSTOMERS (area/city/search) ===================== */
-  const filteredCustomers = useMemo(() => scopedCustomers.filter(c => {
-    if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
-    if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
-    if (searchQuery && !smartMatch(c.name, searchQuery) && !smartMatch(c.code, searchQuery) && !smartMatch(c.city ?? '', searchQuery) && !smartMatch(c.afm ?? '', searchQuery)) return false;
-    return true;
-  }), [scopedCustomers, selectedAreas, selectedCities, searchQuery]);
+  const filteredCustomers = useMemo(() => {
+    const geoFiltered = scopedCustomers.filter(c => {
+      if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
+      if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
+      return true;
+    });
+    if (!searchQuery.trim()) return geoFiltered;
+    const q = searchQuery.trim();
+    if (/^\d+$/.test(q)) {
+      const exact = geoFiltered.filter(c => String(c.code ?? '') === q);
+      if (exact.length > 0) return exact;
+      const prefix = geoFiltered.filter(c => String(c.code ?? '').startsWith(q));
+      if (prefix.length > 0) return prefix;
+    }
+    return geoFiltered.filter(c =>
+      smartMatch(c.name, q) || smartMatch(c.code, q) ||
+      smartMatch(c.city ?? '', q) || smartMatch(c.afm ?? '', q)
+    );
+  }, [scopedCustomers, selectedAreas, selectedCities, searchQuery]);
 
   /* ===================== REVENUE MAPS (for performance filter) ===================== */
   const currentRevMap = useMemo(() => {
