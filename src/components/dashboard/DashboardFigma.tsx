@@ -344,6 +344,7 @@ useEffect(() => {
 
   const [upcomingPlanned, setUpcomingPlanned] = useState<Map<string, { date: string; area: string }>>(new Map());
   const [showCustomerMap, setShowCustomerMap] = useState(false);
+  const [openedFromMap, setOpenedFromMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showClaims, setShowClaims] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
@@ -1206,14 +1207,20 @@ if (currentUser.role === 'claims_exec') {
           customer={selectedCustomer}
           currentUser={currentUser}
           upcomingPlanned={upcomingPlanned}
-            onBack={() => {
-              scrollAfterBackRef.current = scrollPositionRef.current;
-              setSelectedCustomer(null);
-              if (cameFromCalendarRef.current) {
-                cameFromCalendarRef.current = false;
-                setShowCalendar(true);
-              }
-            }}
+            backLabel={openedFromMap ? '← Χάρτης' : undefined}
+      onBack={() => {
+        if (openedFromMap) {
+          setOpenedFromMap(false);
+          setSelectedCustomer(null);
+        } else {
+          scrollAfterBackRef.current = scrollPositionRef.current;
+          setSelectedCustomer(null);
+          if (cameFromCalendarRef.current) {
+            cameFromCalendarRef.current = false;
+            setShowCalendar(true);
+          }
+        }
+      }}
         />
       )}
       {selectedProspect && (
@@ -1249,6 +1256,8 @@ if (currentUser.role === 'claims_exec') {
       />
 
       {(showCustomerMap || mapSingleCustomer) && (
+        <div style={{ display: openedFromMap && selectedCustomer ? 'none' : undefined }}>
+        
         <CustomerMap
           currentUser={currentUser}
           singleCustomer={mapSingleCustomer ?? undefined}
@@ -1262,14 +1271,14 @@ if (currentUser.role === 'claims_exec') {
             }
             return selectedPeriod.to;
           })()}
-          onClose={() => { setShowCustomerMap(false); setMapSingleCustomer(null); }}
+          onClose={() => { setShowCustomerMap(false); setMapSingleCustomer(null); setOpenedFromMap(false); }}
           onSelectCustomer={(customer) => {
-            setShowCustomerMap(false);
-            setMapSingleCustomer(null);
+            setOpenedFromMap(true);
             setSelectedCustomer(customer);
           }}
           repList={repList}
         />
+        </div>
       )}
 
       {showCalendar && (

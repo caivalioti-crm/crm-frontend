@@ -234,7 +234,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
 
     // ── Aggregation by area/city (revenue mode) ───────────────────────────
     if (inRevMode && mapZoom <= 8 && !singleCustomer) {
-      const useArea = mapZoom <= 6;
+      const useArea = mapZoom <= 7;
       const med = (arr: number[]) => { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
 
       const groups = new Map<string, { lats: number[]; lngs: number[]; totalRev: number; count: number }>();
@@ -247,14 +247,14 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
         g.count++;
       });
 
-      const logMax = Math.log(Math.max(...[...groups.values()].map(g => g.totalRev), 1) + 1);
+      const maxRev = Math.max(...[...groups.values()].map(g => g.totalRev), 1);
       const sortedRevs = [...groups.values()].map(g => g.totalRev).filter(r => r > 0).sort((a,b) => a-b);
 
       [...groups.entries()].sort(([,a],[,b]) => a.totalRev - b.totalRev).forEach(([name, g]) => {
         const lat = med(g.lats);
         const lng = med(g.lngs);
         const pct = g.totalRev > 0 ? sortedRevs.filter(r => r <= g.totalRev).length / sortedRevs.length : 0;
-        const radius = Math.max(6, Math.min(22, 6 + (Math.log(g.totalRev + 1) / logMax) * 16));
+        const radius = Math.max(4, 4 + Math.sqrt(g.totalRev / maxRev) * 12);
         const fc = g.totalRev === 0 ? '#94A3B8'
           : pct > 0.9 ? '#1E3A8A' : pct > 0.75 ? '#0284C7' : pct > 0.5 ? '#0EA5E9' : pct > 0.25 ? '#38BDF8' : '#BAE6FD';
         const cm = L.circleMarker([lat, lng], { radius, fillColor: fc, fillOpacity: 0.85, color: 'white', weight: 2 }).addTo(map);
