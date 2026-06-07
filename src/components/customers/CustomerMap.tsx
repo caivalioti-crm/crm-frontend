@@ -33,6 +33,7 @@ type CustomerCoord = {
   captured_by: string | null;
   captured_at: string | null;
   has_coords: boolean;
+  coord_source: string | null;
 };
 
 type Props = {
@@ -278,9 +279,10 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       );
       sortedFiltered.forEach(c => {
         if (!c.lat || !c.lng) return;
-        const coordColor = c.captured_by ? '#22C55E'           // πράσινο = απευθείας GPS
-          : c.accuracy_meters && c.accuracy_meters <= 50 ? '#06B6D4'  // τιρκουάζ = επαληθευμένος χάρτης
-          : '#F97316';                                          // πορτοκαλί = μη επαληθευμένος
+       // coord_source: 'gps'→green, 'map'→turquoise, anything else→orange
+        const coordColor = c.captured_by
+          ? (c.coord_source === 'map' ? '#06B6D4' : '#22C55E')  // τιρκουάζ=χάρτης, πράσινο=GPS
+          : '#F97316';                                            // πορτοκαλί=αυτόματο/μη επαλ.
         const fillColor = inRevMode ? getPerformanceColor(c.customer_code) : coordColor;
         const rev = customerRevenue.get(c.customer_code) ?? 0;
         const revPct = inRevMode && activeRevenues.length > 0
@@ -294,7 +296,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
           radius: isTop10 ? 7 : 5,
           fillColor,
           fillOpacity: 0.88,
-          color: inRevMode ? (isTop10 ? '#ffffff' : 'rgba(255,255,255,0.4)') : coordColor,
+          color: 'white',
           weight: isTop10 ? 2.5 : 1.5,
         }).addTo(map);
         marker.bindTooltip(tooltip, { sticky: false });
@@ -620,9 +622,9 @@ useEffect(() => {
               
             </>) : (<>
               <div className="text-slate-400 font-medium mb-1">Ακρίβεια coords</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#22C55E] inline-block" />Απευθείας GPS</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#06B6D4] inline-block" />Επαληθευμένος (χάρτης)</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#F97316] inline-block" />Μη επαληθευμένος</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#22C55E] inline-block" />Απευθείας GPS (rep)</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#06B6D4] inline-block" />Επαληθευμένος χάρτης</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#F97316] inline-block" />Αυτόματο / μη επαλ.</div>
             </>)}
           </div>
 
