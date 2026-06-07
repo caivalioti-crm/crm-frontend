@@ -247,9 +247,21 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       // zoom ≥ 9 → individual markers
       const med = (arr: number[]) => { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
 
+      const stripAcc = (s: string) => (s ?? '').toUpperCase()
+        .replace(/Ά/g,'Α').replace(/Έ/g,'Ε').replace(/Ή/g,'Η').replace(/Ί/g,'Ι')
+        .replace(/Ό/g,'Ο').replace(/Ύ/g,'Υ').replace(/Ώ/g,'Ω').replace(/ς/g,'Σ');
+      const AREA_MERGE: Record<string, string> = {
+        'ΘΕΣΣΑΛΟΝΙΚΗ-Β': 'ΘΕΣΣΑΛΟΝΙΚΗ',
+        'ΘΕΣΣΑΛΟΝΙΚΗ Β': 'ΘΕΣΣΑΛΟΝΙΚΗ',
+      };
+      const normArea = (area: string): string => {
+        const s = stripAcc(area);
+        return AREA_MERGE[s] ?? s;
+      };
+
       const groups = new Map<string, { lats: number[]; lngs: number[]; totalRev: number; count: number }>();
       filtered.filter(c => c.lat && c.lng).forEach(c => {
-        const key = c.area || c.city || 'Άλλο';
+        const key = normArea(c.area || c.city || 'Άλλο');
         if (!groups.has(key)) groups.set(key, { lats: [], lngs: [], totalRev: 0, count: 0 });
         const g = groups.get(key)!;
         g.lats.push(c.lat!); g.lngs.push(c.lng!);
