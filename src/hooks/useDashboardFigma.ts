@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { smartMatch } from '../utils/smartSearch';
 import type { Customer } from '../types/customer';
 import type { Sale } from '../types/sale';
 import { mapErpCustomer } from '../mappers/customerMapper';
@@ -460,7 +461,7 @@ const scopedCustomers = useMemo(() => {
   const filteredCustomers = useMemo(() => scopedCustomers.filter(c => {
     if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
     if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
-    if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase()) && !c.code.includes(searchQuery)) return false;
+    if (searchQuery && !smartMatch(c.name, searchQuery) && !smartMatch(c.code, searchQuery) && !smartMatch(c.city ?? '', searchQuery) && !smartMatch(c.afm ?? '', searchQuery)) return false;
     return true;
   }), [scopedCustomers, selectedAreas, selectedCities, searchQuery]);
 
