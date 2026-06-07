@@ -136,13 +136,15 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       .then(({ data }) => setPopupPhone(data?.phone ?? null));
   }, [popup?.customer_code, editing?.customer_code]);
 
-  // Revenue map for performance coloring
+ // Revenue map for performance coloring
   useEffect(() => {
     if (!dateFrom || !dateTo) return;
-    supabase.rpc('get_customer_revenue_map', { p_from: dateFrom, p_to: dateTo })
-      .then(({ data }) => {
-        if (data) setCustomerRevenue(new Map(data.map((r: any) => [r.customer_code, Number(r.total_revenue)])));
-      });
+    authedFetch(`/api/erp/revenue-map?from=${dateFrom}&to=${dateTo}`)
+      .then(data => {
+        if (Array.isArray(data))
+          setCustomerRevenue(new Map(data.map((r: any) => [r.customer_code, Number(r.total_revenue)])));
+      })
+      .catch(console.error);
   }, [dateFrom, dateTo]);
 
   // L1 categories on mount
