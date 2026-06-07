@@ -239,12 +239,20 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       const useArea = mapZoom <= 7;
       const med = (arr: number[]) => { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
 
-      // Normalize city names — merge known duplicates (e.g. ΘΕΣΣΑΛΟΝΙΚΗ-Β → ΘΕΣΣΑΛΟΝΙΚΗ)
+      // Strip Greek accents + merge known city duplicates
+      const stripAcc = (s: string) => s.toUpperCase()
+        .replace(/Ά/g,'Α').replace(/Έ/g,'Ε').replace(/Ή/g,'Η').replace(/Ί/g,'Ι')
+        .replace(/Ό/g,'Ο').replace(/Ύ/g,'Υ').replace(/Ώ/g,'Ω').replace(/ς/g,'Σ');
       const CITY_MERGE: Record<string, string> = {
         'ΘΕΣΣΑΛΟΝΙΚΗ-Β': 'ΘΕΣΣΑΛΟΝΙΚΗ', 'ΘΕΣΣΑΛΟΝΙΚΗ Β': 'ΘΕΣΣΑΛΟΝΙΚΗ',
         'ΑΘΗΝΑ-Β': 'ΑΘΗΝΑ', 'ΑΘΗΝΑ Β': 'ΑΘΗΝΑ',
       };
-      const normCity = (city: string) => CITY_MERGE[city?.toUpperCase?.()] ?? city;
+      // Always return accent-stripped form so same city with diff accents groups together
+      const normCity = (city: string): string => {
+        if (!city) return city;
+        const s = stripAcc(city);
+        return CITY_MERGE[s] ?? s;
+      };
 
       const groups = new Map<string, { lats: number[]; lngs: number[]; totalRev: number; count: number }>();
       filtered.filter(c => c.lat && c.lng).forEach(c => {
