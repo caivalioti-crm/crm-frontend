@@ -1253,7 +1253,7 @@ if (currentUser.role === 'claims_exec') {
           currentUser={currentUser}
           singleCustomer={mapSingleCustomer ?? undefined}
           dateFrom={selectedPeriod.from + '-01'}
-          dateTo={selectedPeriod.to + '-31'}
+          dateTo={(() => { const [y, m] = selectedPeriod.to.split('-').map(Number); return new Date(y, m, 0).toISOString().split('T')[0]; })()}
           onClose={() => { setShowCustomerMap(false); setMapSingleCustomer(null); }}
           onSelectCustomer={(customer) => {
             setShowCustomerMap(false);

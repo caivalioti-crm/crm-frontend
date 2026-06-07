@@ -376,9 +376,9 @@ useEffect(() => {
                 className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-400"
               >
                 <option value="">Όλοι οι αντιπρόσωποι</option>
-                {repList.map(r => (
-                  <option key={r.id} value={r.salesman_code}>{r.full_name}</option>
-                ))}
+                {repList.filter(r => r.salesman_code && ['rep', 'manager'].includes((r as any).role ?? 'rep')).map(r => (
+              <option key={r.id} value={r.salesman_code}>{r.full_name}</option>
+            ))}
               </select>
             )}
 
