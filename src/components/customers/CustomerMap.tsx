@@ -319,10 +319,9 @@ useEffect(() => {
       });
       setSavedCode(editing.customer_code);
       setTimeout(() => setSavedCode(null), 2000);
-      const justSaved = { ...editing, lat: editLat, lng: editLng, has_coords: true };
+      
       cancelEdit();
       preserveViewRef.current = true;
-      if (!singleCustomer) setPopup(justSaved);
       loadData();
     } catch (err) {
       alert('Αποτυχία αποθήκευσης');
