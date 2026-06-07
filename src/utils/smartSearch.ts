@@ -59,6 +59,13 @@ export function smartSearchCustomers<T extends {
   afm?: string;
 }>(customers: T[], query: string): T[] {
   if (!query.trim()) return customers;
+
+  // Numeric input → search by code first; fall back to full search if no matches
+  if (/^\d+$/.test(query.trim())) {
+    const codeMatches = customers.filter(c => c.code?.startsWith(query.trim()));
+    if (codeMatches.length > 0) return codeMatches;
+  }
+
   return customers.filter(c =>
     smartMatch(c.name ?? '', query) ||
     smartMatch(c.code ?? '', query) ||
