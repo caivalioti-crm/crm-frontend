@@ -62,9 +62,10 @@ export function smartSearchCustomers<T extends {
 
   // Numeric input → exact code match first, then prefix, then full search
   if (/^\d+$/.test(query.trim())) {
-    const exactMatch = customers.filter(c => c.code === query.trim());
+    const q = query.trim();
+    const exactMatch = customers.filter(c => String(c.code ?? '') === q);
     if (exactMatch.length > 0) return exactMatch;
-    const prefixMatch = customers.filter(c => c.code?.startsWith(query.trim()));
+    const prefixMatch = customers.filter(c => String(c.code ?? '').startsWith(q));
     if (prefixMatch.length > 0) return prefixMatch;
   }
 
