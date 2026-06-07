@@ -78,6 +78,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const [savedCode, setSavedCode] = useState<string | null>(null);
 
   const [popup, setPopup] = useState<CustomerCoord | null>(null);
+  const [returnToOld, setReturnToOld] = useState<{ lat: number; lng: number; name: string } | null>(null);
   const [customerRevenue, setCustomerRevenue] = useState<Map<string, number>>(new Map());
   const [filterL1, setFilterL1] = useState('');
   const [filterL2, setFilterL2] = useState('');
@@ -372,6 +373,10 @@ useEffect(() => {
   const saveCoords = useCallback(async () => {
     if (!editing || editLat === null || editLng === null) return;
     setSaving(true);
+    // Capture old position before overwriting
+    const oldLat = editing.lat;
+    const oldLng = editing.lng;
+    const savedName = editing.customer_name;
     try {
       await authedFetch(`/api/coordinates/${editing.customer_code}`, {
         method: 'PATCH',
@@ -379,10 +384,13 @@ useEffect(() => {
       });
       setSavedCode(editing.customer_code);
       setTimeout(() => setSavedCode(null), 2000);
-      
       cancelEdit();
       preserveViewRef.current = true;
       loadData();
+      // If customer had old coords, offer to return there to fix nearby
+      if (oldLat && oldLng) {
+        setReturnToOld({ lat: oldLat, lng: oldLng, name: savedName });
+      }
     } catch (err) {
       alert('Αποτυχία αποθήκευσης');
     } finally {
@@ -633,6 +641,32 @@ useEffect(() => {
             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg">
               <CheckCircle className="w-4 h-4" />
               Αποθηκεύτηκε
+            </div>
+          )}
+
+          {/* Return-to-old-position toast */}
+          {returnToOld && !savedCode && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1001] bg-slate-800 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-sm">
+              <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-slate-200">Συνέχεια στην παλιά περιοχή;</div>
+                <div className="text-xs text-slate-400 truncate">{returnToOld.name}</div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    leafletMap.current?.setView([returnToOld.lat, returnToOld.lng], Math.max(leafletMap.current.getZoom(), 13));
+                    setReturnToOld(null);
+                  }}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-medium transition-colors">
+                  Πήγαινε
+                </button>
+                <button
+                  onClick={() => setReturnToOld(null)}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-colors">
+                  <X className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+              </div>
             </div>
           )}
         </div>
