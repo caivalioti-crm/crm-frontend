@@ -14,8 +14,11 @@ export type Customer = {
   afm?: string;
   address?: string;
   email?: string;
+  phone?: string;
+  mobile?: string;
   fax?: string;
   zip?: string;
+  district?: string;
   shipmentName?: string;
   carrierName?: string;
   growth_pct?: number | null;
