@@ -65,7 +65,7 @@ export interface CustomerViewProps {
   customer: CommercialEntityBase & {
     code: string; name: string; nameGreek?: string;
     city?: string; area?: string; type?: string; group?: string;
-    address?: string; phone?: string; mobile?: string; email?: string;
+    address?: string; phone?: string; mobile?: string; district?: string; email?: string;
     contactName?: string; vatNumber?: string; createdDate?: string;
     lastVisitDate?: string; transportCompany?: string; transportMeans?: string;
     overallDiscount?: number; afm?: string; fax?: string; zip?: string;
@@ -1060,8 +1060,27 @@ const startEditVisitInCustomer = (v: any) => {
                   )}
                 </div>
               )}
+              {customer.phone && (
+                <div className="flex items-center gap-2">
+                  <span>📞</span>
+                  <a href={`tel:${customer.phone}`} className="text-blue-600 hover:underline">{customer.phone}</a>
+                  <span className="text-xs text-slate-400">Κύριο</span>
+                </div>
+              )}
+              {customer.mobile && (
+                <div className="flex items-center gap-2">
+                  <span>📱</span>
+                  <a href={`tel:${customer.mobile}`} className="text-blue-600 hover:underline">{customer.mobile}</a>
+                </div>
+              )}
+              {customer.fax && (
+                <div className="flex items-center gap-2">
+                  <span>📞</span>
+                  <span className="text-slate-600">{customer.fax}</span>
+                  <span className="text-xs text-slate-400">2ο τηλ.</span>
+                </div>
+              )}
               {customer.email && <div className="flex items-center gap-2"><span>✉️</span><a href={`mailto:${customer.email}`} className="text-blue-600 hover:underline truncate">{customer.email}</a></div>}
-              {customer.fax && <div>📠 {customer.fax}</div>}
               {customer.afm && <div className="inline-block font-mono text-xs bg-slate-100 px-2 py-1 rounded">ΑΦΜ: {customer.afm}</div>}
             </div>
             <div className="space-y-2">
@@ -1079,6 +1098,7 @@ const startEditVisitInCustomer = (v: any) => {
                 </div>
               )}
               {customer.area && <div>Περιοχή: <span className="font-medium">{customer.area}</span></div>}
+              {customer.district && <div>Νομός: <span className="font-medium">{customer.district}</span></div>}
               {customer.lastVisitDate ? <div>Τελευταία επίσκεψη: <span className="font-medium">{formatDate(customer.lastVisitDate)}</span></div> : <div className="text-slate-400 text-xs italic">Καμία επίσκεψη ακόμα</div>}
               {customer.inserted_date && <div>Πελάτης από: <span className="font-medium">{formatDate(customer.inserted_date)}</span></div>}
               {customer.updated_date && <div className="text-xs text-slate-400">Ενημέρωση ERP: {formatDate(customer.updated_date)}</div>}
