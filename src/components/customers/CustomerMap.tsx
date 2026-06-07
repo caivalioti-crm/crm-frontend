@@ -34,6 +34,7 @@ type CustomerCoord = {
   captured_at: string | null;
   has_coords: boolean;
   coord_source: string | null;
+  zip: string | null;
 };
 
 type Props = {
@@ -142,15 +143,18 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       .then(({ data }) => setPopupPhone(data?.phone ?? null));
   }, [popup?.customer_code, editing?.customer_code]);
 
- // Revenue map for performance coloring
+ const [revenueLoading, setRevenueLoading] = useState(!!dateFrom);
+
   useEffect(() => {
     if (!dateFrom || !dateTo) return;
+    setRevenueLoading(true);
     authedFetch(`/api/erp/revenue-map?from=${dateFrom}&to=${dateTo}`)
       .then(data => {
         if (Array.isArray(data))
           setCustomerRevenue(new Map(data.map((r: any) => [r.customer_code, Number(r.total_revenue)])));
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setRevenueLoading(false));
   }, [dateFrom, dateTo]);
 
   // L1 categories on mount
@@ -201,6 +205,9 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     // Clear existing markers
     markersRef.current.forEach(m => m.remove());
     markersRef.current.clear();
+
+    // Wait for revenue data before rendering (prevents coord-mode flash)
+    if (revenueLoading) return;
 
    // Percentile-based performance coloring (revenue mode)
     const activeRevenues = customers
@@ -326,7 +333,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     } else if (bounds.length === 1) {
       map.setView(bounds[0], 15);
     }
-  }, [customers, search, coordFilter, colorMode, mapZoom, customerRevenue, categoryCustomers, isPrivileged, currentUser.salesman_code, singleCustomer]);
+  }, [customers, search, coordFilter, colorMode, mapZoom, customerRevenue, categoryCustomers, isPrivileged, currentUser.salesman_code, singleCustomer, revenueLoading]);
 
   // ── Start editing ─────────────────────────────────────────────────────────
   const startEdit = useCallback((c: CustomerCoord) => {
@@ -423,7 +430,7 @@ useEffect(() => {
   const noCoordCount = customers.filter(c => !c.has_coords).length;
   const mapsSearchUrl = editing
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        [editing.customer_name, editing.address, editing.city, editing.area, 'Greece']
+        [editing.address, editing.zip, editing.city, 'Greece']
           .filter(Boolean).join(', ')
       )}`
     : '';
