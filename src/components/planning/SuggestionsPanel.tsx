@@ -1408,6 +1408,14 @@ const removePlanItem = (date: string, code: string) => {
                     className="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                     style={{ width: '96vw', height: '92vh' }}
                     onClick={e => e.stopPropagation()}>
+                    <div className="px-4 py-2.5 border-b border-slate-200 bg-amber-50 flex items-center justify-between">
+                      <span className="text-xs text-slate-500">Σύρετε για αναδιάταξη · αλλαγές αποθηκεύονται στο πλάνο</span>
+                      <button
+                        onClick={() => setMapDayOpen(null)}
+                        className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">
+                        ✓ Εφαρμογή & Κλείσιμο
+                      </button>
+                    </div>
                     <RouteMapPanel
                       stops={custs}
                       startPoint={slot?.starting_lat && slot?.starting_lng ? { lat: slot.starting_lat, lng: slot.starting_lng, label: slot.starting_label } : null}

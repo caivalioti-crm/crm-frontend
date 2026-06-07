@@ -264,23 +264,31 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       });
     } else {
       // ── Individual markers ──────────────────────────────────────────────
-      filtered.forEach(c => {
+      // Sort ascending by revenue so top earners render last (on top)
+      const sortedFiltered = [...filtered].sort((a, b) =>
+        (customerRevenue.get(a.customer_code) ?? 0) - (customerRevenue.get(b.customer_code) ?? 0)
+      );
+      sortedFiltered.forEach(c => {
         if (!c.lat || !c.lng) return;
         const coordColor = c.captured_by ? '#EF4444'
           : c.accuracy_meters && c.accuracy_meters <= 50 ? '#F97316' : '#06B6D4';
         const fillColor = inRevMode ? getPerformanceColor(c.customer_code) : coordColor;
         const borderColor = coordColor;
         const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
+        const rev = customerRevenue.get(c.customer_code) ?? 0;
+        const revPct = inRevMode && activeRevenues.length > 0
+          ? activeRevenues.filter(r => r <= rev).length / activeRevenues.length : 0;
+        const isTop10 = inRevMode && revPct >= 0.90;
+        const size = isTop10 ? 14 : 10;
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:10px;height:10px;border-radius:50%;background:${fillColor};border:2px solid ${inRevMode ? 'rgba(255,255,255,0.6)' : borderColor};box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
-          iconSize: [10, 10], iconAnchor: [5, 5],
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${fillColor};border:${isTop10 ? '2.5px solid white' : `2px solid ${inRevMode ? 'rgba(255,255,255,0.6)' : borderColor}`};box-shadow:${isTop10 ? '0 2px 8px rgba(0,0,0,0.5)' : '0 1px 4px rgba(0,0,0,0.35)'};cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
+          iconSize: [size, size], iconAnchor: [size/2, size/2],
         });
-        const rev = customerRevenue.get(c.customer_code) ?? 0;
-        const tooltip = inRevMode && rev > 0
+        const tooltip = rev > 0
           ? `<b>${c.customer_name}</b><br>€${Math.round(rev).toLocaleString('el-GR')}`
           : c.customer_name;
-        const marker = L.marker([c.lat, c.lng], { icon })
+        const marker = L.marker([c.lat, c.lng], { icon, zIndexOffset: isTop10 ? 1000 : 0 })
           .addTo(map)
           .bindTooltip(tooltip, { sticky: false })
           .on('click', () => setPopup(c));
@@ -681,7 +689,6 @@ useEffect(() => {
                 <button
                   onClick={() => {
                     onSelectCustomer({ code: popup.customer_code, name: popup.customer_name, city: popup.city, area: popup.area, address: popup.address });
-                    onClose();
                   }}
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
                 >
