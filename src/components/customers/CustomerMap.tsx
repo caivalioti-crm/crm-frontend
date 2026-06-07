@@ -278,8 +278,9 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       );
       sortedFiltered.forEach(c => {
         if (!c.lat || !c.lng) return;
-        const coordColor = c.captured_by ? '#EF4444'
-          : c.accuracy_meters && c.accuracy_meters <= 50 ? '#F97316' : '#06B6D4';
+        const coordColor = c.captured_by ? '#22C55E'           // πράσινο = απευθείας GPS
+          : c.accuracy_meters && c.accuracy_meters <= 50 ? '#06B6D4'  // τιρκουάζ = επαληθευμένος χάρτης
+          : '#F97316';                                          // πορτοκαλί = μη επαληθευμένος
         const fillColor = inRevMode ? getPerformanceColor(c.customer_code) : coordColor;
         const rev = customerRevenue.get(c.customer_code) ?? 0;
         const revPct = inRevMode && activeRevenues.length > 0
@@ -619,9 +620,9 @@ useEffect(() => {
               
             </>) : (<>
               <div className="text-slate-400 font-medium mb-1">Ακρίβεια coords</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#F97316] inline-block" />Επαληθευμένος (χάρτης)</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#06B6D4] inline-block" />Μη επαληθευμένος</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] inline-block" />Απευθείας GPS</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#22C55E] inline-block" />Απευθείας GPS</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#06B6D4] inline-block" />Επαληθευμένος (χάρτης)</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#F97316] inline-block" />Μη επαληθευμένος</div>
             </>)}
           </div>
 
