@@ -237,9 +237,17 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       const useArea = mapZoom <= 7;
       const med = (arr: number[]) => { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
 
+      // Normalize city names — merge known duplicates (e.g. ΘΕΣΣΑΛΟΝΙΚΗ-Β → ΘΕΣΣΑΛΟΝΙΚΗ)
+      const CITY_MERGE: Record<string, string> = {
+        'ΘΕΣΣΑΛΟΝΙΚΗ-Β': 'ΘΕΣΣΑΛΟΝΙΚΗ', 'ΘΕΣΣΑΛΟΝΙΚΗ Β': 'ΘΕΣΣΑΛΟΝΙΚΗ',
+        'ΑΘΗΝΑ-Β': 'ΑΘΗΝΑ', 'ΑΘΗΝΑ Β': 'ΑΘΗΝΑ',
+      };
+      const normCity = (city: string) => CITY_MERGE[city?.toUpperCase?.()] ?? city;
+
       const groups = new Map<string, { lats: number[]; lngs: number[]; totalRev: number; count: number }>();
       filtered.filter(c => c.lat && c.lng).forEach(c => {
-        const key = (useArea ? c.area : c.city) || c.area || 'Άλλο';
+        const raw = (useArea ? c.area : c.city) || c.area || 'Άλλο';
+        const key = useArea ? raw : normCity(raw);
         if (!groups.has(key)) groups.set(key, { lats: [], lngs: [], totalRev: 0, count: 0 });
         const g = groups.get(key)!;
         g.lats.push(c.lat!); g.lngs.push(c.lng!);
@@ -264,7 +272,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       });
     } else {
       // ── Individual markers ──────────────────────────────────────────────
-      // Sort ascending by revenue so top earners render last (on top)
+      // Sort ascending so top revenue renders last (on top in SVG layer)
       const sortedFiltered = [...filtered].sort((a, b) =>
         (customerRevenue.get(a.customer_code) ?? 0) - (customerRevenue.get(b.customer_code) ?? 0)
       );
@@ -273,25 +281,23 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
         const coordColor = c.captured_by ? '#EF4444'
           : c.accuracy_meters && c.accuracy_meters <= 50 ? '#F97316' : '#06B6D4';
         const fillColor = inRevMode ? getPerformanceColor(c.customer_code) : coordColor;
-        const borderColor = coordColor;
-        const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
         const rev = customerRevenue.get(c.customer_code) ?? 0;
         const revPct = inRevMode && activeRevenues.length > 0
           ? activeRevenues.filter(r => r <= rev).length / activeRevenues.length : 0;
         const isTop10 = inRevMode && revPct >= 0.90;
-        const size = isTop10 ? 14 : 10;
-        const icon = L.divIcon({
-          className: '',
-          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${fillColor};border:${isTop10 ? '2.5px solid white' : `2px solid ${inRevMode ? 'rgba(255,255,255,0.6)' : borderColor}`};box-shadow:${isTop10 ? '0 2px 8px rgba(0,0,0,0.5)' : '0 1px 4px rgba(0,0,0,0.35)'};cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
-          iconSize: [size, size], iconAnchor: [size/2, size/2],
-        });
         const tooltip = rev > 0
           ? `<b>${c.customer_name}</b><br>€${Math.round(rev).toLocaleString('el-GR')}`
           : c.customer_name;
-        const marker = L.marker([c.lat, c.lng], { icon, zIndexOffset: isTop10 ? 1000 : 0 })
-          .addTo(map)
-          .bindTooltip(tooltip, { sticky: false })
-          .on('click', () => setPopup(c));
+        // circleMarker = SVG, no DOM per marker → much faster for 2000+ points
+        const marker = L.circleMarker([c.lat, c.lng], {
+          radius: isTop10 ? 7 : 5,
+          fillColor,
+          fillOpacity: 0.88,
+          color: inRevMode ? (isTop10 ? '#ffffff' : 'rgba(255,255,255,0.4)') : coordColor,
+          weight: isTop10 ? 2.5 : 1.5,
+        }).addTo(map);
+        marker.bindTooltip(tooltip, { sticky: false });
+        marker.on('click', () => setPopup(c));
         markersRef.current.set(c.customer_code, marker);
         bounds.push([c.lat, c.lng]);
       });
@@ -610,10 +616,7 @@ useEffect(() => {
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8] inline-block" />25–75%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#BAE6FD] inline-block" />Κάτω 25%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] inline-block" />Ανενεργός</div>
-              <div className="border-t border-slate-600 mt-1 pt-1 text-slate-500">Περίγραμμα coords</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#F97316] inline-block" />Επαληθευμένος (χάρτης)</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#06B6D4] inline-block" />Μη επαληθευμένος</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#EF4444] inline-block" />Απευθείας GPS</div>
+              
             </>) : (<>
               <div className="text-slate-400 font-medium mb-1">Ακρίβεια coords</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#F97316] inline-block" />Επαληθευμένος (χάρτης)</div>
