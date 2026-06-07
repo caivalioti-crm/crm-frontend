@@ -80,6 +80,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const [l1Categories, setL1Categories] = useState<{code: string; name: string}[]>([]);
   const [l2Categories, setL2Categories] = useState<{code: string; name: string}[]>([]);
   const [categoryCustomers, setCategoryCustomers] = useState<Set<string> | null>(null);
+  const [popupPhone, setPopupPhone] = useState<string | null>(null);
 
   // ── Init Leaflet ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -127,7 +128,15 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   useEffect(() => { loadData(); }, [loadData]);
 
 
- // Revenue map for performance coloring
+ // Fetch phone for popup or edit bar
+  useEffect(() => {
+    const code = popup?.customer_code ?? editing?.customer_code;
+    if (!code) { setPopupPhone(null); return; }
+    supabase.from('vw_crm_customers').select('phone').eq('code', code).single()
+      .then(({ data }) => setPopupPhone(data?.phone ?? null));
+  }, [popup?.customer_code, editing?.customer_code]);
+
+  // Revenue map for performance coloring
   useEffect(() => {
     if (!dateFrom || !dateTo) return;
     supabase.rpc('get_customer_revenue_map', { p_from: dateFrom, p_to: dateTo })
@@ -458,6 +467,9 @@ useEffect(() => {
             <MapPin className="w-3 h-3" />
             Google Maps ↗
           </a>
+          {popupPhone && (
+            <a href={`tel:${popupPhone}`} className="text-xs text-indigo-200 hover:text-white shrink-0">📞 {popupPhone}</a>
+          )}
           <span className="text-xs text-indigo-200 shrink-0">Σύρε τον μπλε δείκτη στη σωστή θέση</span>
           {editLat !== null && (
             <div className="flex items-center gap-1 flex-wrap gap-y-1">
@@ -567,6 +579,11 @@ useEffect(() => {
               <div className="text-xs text-slate-400">{popup.customer_code}</div>
               {popup.address && <div className="text-xs text-slate-300">{popup.address}</div>}
               <div className="text-xs text-slate-400">{popup.city} · {popup.area}</div>
+              {popupPhone && (
+                <a href={`tel:${popupPhone}`} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                  📞 {popupPhone}
+                </a>
+              )}
 
               <div className="pt-2 border-t border-slate-700">
                 {popup.has_coords ? (
