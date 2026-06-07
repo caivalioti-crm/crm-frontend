@@ -78,6 +78,7 @@ export interface CustomerViewProps {
   onBack: () => void;
   currentUser?: { id: string; role: string; salesman_code: string | null; name: string };
   upcomingPlanned?: Map<string, { date: string; area: string }>;
+  backLabel?: string;
 }
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
@@ -161,7 +162,7 @@ function getL1Label(l1Code: string, items: any[]): string {
   return l1Item ? l1Item.full_name : `Κατηγορία ${l1Code}`;
 }
 
-export function CustomerView({ customer, onBack, currentUser: propCurrentUser, upcomingPlanned = new Map() }: CustomerViewProps) {
+export function CustomerView({ customer, onBack, backLabel, currentUser: propCurrentUser, upcomingPlanned = new Map() }: CustomerViewProps) {
   const [showNewVisitDialog, setShowNewVisitDialog] = useState(false);
   const [visitsRefreshKey, setVisitsRefreshKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -234,6 +235,8 @@ export function CustomerView({ customer, onBack, currentUser: propCurrentUser, u
   const currentUser = propCurrentUser ?? { id: '', role: 'rep', salesman_code: null, name: '' };
 
   const docsRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
   const [showAllVisits, setShowAllVisits] = useState(false);
@@ -791,7 +794,7 @@ const startEditVisitInCustomer = (v: any) => {
 
           <div className="flex items-center justify-between">
             <button onClick={onBack} className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors">
-              <ArrowLeft className="w-4 h-4" />Back to Dashboard
+              <ArrowLeft className="w-4 h-4" />{backLabel ?? 'Back to Dashboard'}
             </button>
             <div className="flex items-center gap-2">
               <button
@@ -955,8 +958,20 @@ const startEditVisitInCustomer = (v: any) => {
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-4">
 
+
+{isPrivilegedUser && prepNotes.length === 0 && !addingPrepNote && (
+          <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+            <div className="flex items-center gap-1.5 text-amber-600">
+              <TriangleAlert className="w-3.5 h-3.5" />
+              <span>Σημειώσεις επόμενης επίσκεψης</span>
+            </div>
+            <button onClick={() => setAddingPrepNote(true)} className="text-amber-700 hover:text-amber-900 font-medium">+ Νέα</button>
+          </div>
+        )}
+
+
         {/* PREP NOTES — alert for rep on next visit */}
-        {(prepNotes.length > 0 || isPrivilegedUser) && (
+        {(prepNotes.length > 0 || (isPrivilegedUser && addingPrepNote)) && (
           <section className="bg-amber-50 rounded-xl border-2 border-amber-300 p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1159,7 +1174,7 @@ const startEditVisitInCustomer = (v: any) => {
                 )}
                 {discounts.brands.length > 0 && (
                   <div>
-                    <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Εκπτώσεις ανά Μάρκα</div>
+                    <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Επιπρόσθετες εκπτώσεις ανά Μάρκα</div>
                     <div className="space-y-1">
                       {(showAllBrands ? discounts.brands : discounts.brands.slice(0, 5)).map((b: any, i: number) => (
                         <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50">
