@@ -243,28 +243,13 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
 
     // ── Aggregation by area/city (revenue mode) ───────────────────────────
     if (inRevMode && mapZoom <= 8 && !singleCustomer) {
-      const useArea = mapZoom <= 7;
+      // zoom ≤ 8 → group by area (reliable, avoids city name variants like ΘΕΣΣΑΛΟΝΙΚΗ-Β)
+      // zoom ≥ 9 → individual markers
       const med = (arr: number[]) => { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
-
-      // Strip Greek accents + merge known city duplicates
-      const stripAcc = (s: string) => s.toUpperCase()
-        .replace(/Ά/g,'Α').replace(/Έ/g,'Ε').replace(/Ή/g,'Η').replace(/Ί/g,'Ι')
-        .replace(/Ό/g,'Ο').replace(/Ύ/g,'Υ').replace(/Ώ/g,'Ω').replace(/ς/g,'Σ');
-      const CITY_MERGE: Record<string, string> = {
-        'ΘΕΣΣΑΛΟΝΙΚΗ-Β': 'ΘΕΣΣΑΛΟΝΙΚΗ', 'ΘΕΣΣΑΛΟΝΙΚΗ Β': 'ΘΕΣΣΑΛΟΝΙΚΗ',
-        'ΑΘΗΝΑ-Β': 'ΑΘΗΝΑ', 'ΑΘΗΝΑ Β': 'ΑΘΗΝΑ',
-      };
-      // Always return accent-stripped form so same city with diff accents groups together
-      const normCity = (city: string): string => {
-        if (!city) return city;
-        const s = stripAcc(city);
-        return CITY_MERGE[s] ?? s;
-      };
 
       const groups = new Map<string, { lats: number[]; lngs: number[]; totalRev: number; count: number }>();
       filtered.filter(c => c.lat && c.lng).forEach(c => {
-        const raw = (useArea ? c.area : c.city) || c.area || 'Άλλο';
-        const key = useArea ? raw : normCity(raw);
+        const key = c.area || c.city || 'Άλλο';
         if (!groups.has(key)) groups.set(key, { lats: [], lngs: [], totalRev: 0, count: 0 });
         const g = groups.get(key)!;
         g.lats.push(c.lat!); g.lngs.push(c.lng!);
@@ -635,7 +620,7 @@ useEffect(() => {
                 </button>
               </div>
             )}
-            {(colorMode === 'revenue' && customerRevenue.size > 0) ? (<>
+             {colorMode === 'revenue' ? (<>
               <div className="text-slate-400 font-medium mb-1">Τζίρος περιόδου</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1E3A8A] inline-block" />Top 10%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#0284C7] inline-block" />75–90%</div>
