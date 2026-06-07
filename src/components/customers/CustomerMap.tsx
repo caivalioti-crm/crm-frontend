@@ -54,6 +54,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const markersRef = useRef<Map<string, any>>(new Map());
   const dragMarkerRef = useRef<any>(null);
   const preserveViewRef = useRef(false);
+  const hasFitBoundsRef = useRef(false);
 
   const isPrivileged = FULL_ACCESS_ROLES.includes(currentUser.role);
 
@@ -243,12 +244,13 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
         g.count++;
       });
       const sortedRevs = [...cityGroups.values()].map(g => g.totalRev).filter(r => r > 0).sort((a, b) => a - b);
-      cityGroups.forEach((g, cityName) => {
+      const sortedGroups = [...cityGroups.entries()].sort(([, a], [, b]) => a.totalRev - b.totalRev);
+      sortedGroups.forEach(([cityName, g]) => {
         if (!g.count) return;
         const lat = g.lats.reduce((a, b) => a + b) / g.lats.length;
         const lng = g.lngs.reduce((a, b) => a + b) / g.lngs.length;
         const pct = g.totalRev > 0 ? sortedRevs.filter(r => r <= g.totalRev).length / sortedRevs.length : 0;
-        const radius = Math.max(8, Math.min(40, 8 + Math.sqrt(g.count) * 2.5));
+        const radius = Math.max(5, Math.min(22, 5 + pct * 17));
         const fc = g.totalRev === 0 ? '#94A3B8'
           : pct > 0.9 ? '#1E3A8A' : pct > 0.75 ? '#0284C7' : pct > 0.5 ? '#0EA5E9' : pct > 0.25 ? '#38BDF8' : '#BAE6FD';
         const cm = L.circleMarker([lat, lng], { radius, fillColor: fc, fillOpacity: 0.75, color: 'white', weight: 1.5 }).addTo(map);
@@ -260,11 +262,10 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       // ── Individual markers ──────────────────────────────────────────────
       filtered.forEach(c => {
         if (!c.lat || !c.lng) return;
-        const fillColor = inRevMode
-          ? getPerformanceColor(c.customer_code)
-          : (c.captured_by ? '#E24B4A' : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27');
-        const borderColor = c.captured_by ? '#E24B4A'
-          : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27';
+        const coordColor = c.captured_by ? '#EF4444'
+          : c.accuracy_meters && c.accuracy_meters <= 50 ? '#F97316' : '#06B6D4';
+        const fillColor = inRevMode ? getPerformanceColor(c.customer_code) : coordColor;
+        const borderColor = coordColor;
         const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
         const icon = L.divIcon({
           className: '',
@@ -278,10 +279,11 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     }
 
     if (bounds.length && !singleCustomer) {
-      if (!preserveViewRef.current) {
+      if (!hasFitBoundsRef.current && !preserveViewRef.current) {
         const greekBounds = bounds.filter(([lat, lng]) => lat >= 34 && lat <= 42 && lng >= 18 && lng <= 30);
         const fitTarget = greekBounds.length > 0 ? greekBounds : bounds;
         map.fitBounds(fitTarget, { padding: [40, 40], maxZoom: 10 });
+        hasFitBoundsRef.current = true;
       }
       preserveViewRef.current = false;
     } else if (bounds.length === 1) {
@@ -590,14 +592,14 @@ useEffect(() => {
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#BAE6FD] inline-block" />Κάτω 25%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] inline-block" />Ανενεργός</div>
               <div className="border-t border-slate-600 mt-1 pt-1 text-slate-500">Περίγραμμα coords</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#1D9E75] inline-block" />Επαληθευμένος</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#EF9F27] inline-block" />Μη επαληθευμένος</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#E24B4A] inline-block" />Απευθείας GPS</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#F97316] inline-block" />Επαληθευμένος (χάρτης)</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#06B6D4] inline-block" />Μη επαληθευμένος</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#EF4444] inline-block" />Απευθείας GPS</div>
             </>) : (<>
               <div className="text-slate-400 font-medium mb-1">Ακρίβεια coords</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1D9E75] inline-block" />Επαληθευμένος</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF9F27] inline-block" />Μη επαληθευμένος</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#E24B4A] inline-block" />Απευθείας GPS</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#F97316] inline-block" />Επαληθευμένος (χάρτης)</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#06B6D4] inline-block" />Μη επαληθευμένος</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] inline-block" />Απευθείας GPS</div>
             </>)}
           </div>
 
