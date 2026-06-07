@@ -98,6 +98,9 @@ export function CategoryIntelligence({
   const [brandCoveredCategories, setBrandCoveredCategories] = useState<Set<string>>(new Set());
   const [selectedSimilarCodes, setSelectedSimilarCodes] = useState<string[]>([]);
   const [filterByBrands, setFilterByBrands] = useState(true);
+  const [expandedSignalCode, setExpandedSignalCode] = useState<string | null>(null);
+  const [peerSkus, setPeerSkus] = useState<Record<string, any[]>>({});
+  const [peerSkuLoading, setPeerSkuLoading] = useState<Record<string, boolean>>({});
   const [filterBySelected, setFilterBySelected] = useState(false);
   const [l2NameMap, setL2NameMap] = useState<Map<string, string>>(new Map());
 
@@ -159,6 +162,16 @@ export function CategoryIntelligence({
     };
     fetchBrandData();
   }, [customerCode]);
+
+  // Fetch L2 names on mount so similar customer cards always have them
+  useEffect(() => {
+    supabase.from('crm_category_master')
+      .select('category_code, short_name, full_name')
+      .eq('level', 2)
+      .then(({ data }) => {
+        setL2NameMap(new Map((data ?? []).map((n: any) => [n.category_code, n.short_name ?? n.full_name ?? n.category_code])));
+      });
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -276,6 +289,28 @@ export function CategoryIntelligence({
     return true;
   };
 
+  const loadPeerSkus = async (categoryCode: string) => {
+    if (peerSkus[categoryCode] || peerSkuLoading[categoryCode]) return;
+    setPeerSkuLoading(prev => ({ ...prev, [categoryCode]: true }));
+    try {
+      let peerCodes = similarCustomers.map((c: any) => c.similar_code);
+      if (peerCodes.length === 0) {
+        const { data: rpcData } = await supabase.rpc('get_similar_customers_v2', {
+          p_customer_code: customerCode, p_limit: 30,
+        });
+        peerCodes = (rpcData ?? []).map((r: any) => r.similar_code);
+      }
+      if (peerCodes.length === 0) { setPeerSkus(prev => ({ ...prev, [categoryCode]: [] })); return; }
+      const { data } = await supabase.rpc('get_peer_category_skus', {
+        p_category_code: categoryCode,
+        p_peer_codes: peerCodes.slice(0, 30),
+        p_limit: 8,
+      });
+      setPeerSkus(prev => ({ ...prev, [categoryCode]: data ?? [] }));
+    } catch (e) { console.error(e); }
+    finally { setPeerSkuLoading(prev => ({ ...prev, [categoryCode]: false })); }
+  };
+
   if (loading) return (
     <section className="bg-white rounded-xl shadow p-5">
       <div className="flex items-center gap-2 mb-2">
@@ -385,6 +420,9 @@ export function CategoryIntelligence({
     if (isDismissed) return null;
     if (!isSignalRelevant(signal, 'missing')) return null;
 
+    const skuKey = signal.category_code;
+    const isSkuExpanded = expandedSignalCode === skuKey;
+
     return (
       <div key={key} className="rounded-xl border border-purple-100 bg-white overflow-hidden">
         <button onClick={() => setExpandedCard(isExpanded ? null : key)}
@@ -407,6 +445,35 @@ export function CategoryIntelligence({
           <div className="px-4 pb-4 border-t border-purple-50 space-y-3 pt-3">
             <div className="text-xs bg-purple-50 rounded-lg px-3 py-2 text-purple-700">
               {signal.peer_penetration_pct}% των ομότιμων πελατών ({signal.peer_buyer_count} από {signal.similar_customer_count}) αγοράζουν αυτή την κατηγορία με μέσο τζίρο {fmtEur(signal.peer_avg_revenue)} την περίοδο.
+            </div>
+            {/* Peer SKUs */}
+            <div className="border border-purple-100 rounded-lg overflow-hidden">
+              <button
+                onClick={() => { const n = isSkuExpanded ? null : skuKey; setExpandedSignalCode(n); if (n) loadPeerSkus(n); }}
+                className="w-full flex items-center justify-between px-3 py-2 bg-purple-50 hover:bg-purple-100 text-xs text-purple-700 font-medium transition-colors">
+                <span className="flex items-center gap-1.5"><BarChart2 className="w-3.5 h-3.5" />Top SKUs ομότιμων</span>
+                {isSkuExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+              {isSkuExpanded && (
+                <div className="px-3 py-2 space-y-1.5 bg-white">
+                  {peerSkuLoading[skuKey] ? (
+                    <div className="text-xs text-slate-400 text-center py-2">Φόρτωση...</div>
+                  ) : (peerSkus[skuKey] ?? []).length === 0 ? (
+                    <div className="text-xs text-slate-400 italic text-center py-2">Δεν βρέθηκαν SKUs</div>
+                  ) : (peerSkus[skuKey] ?? []).map((sku: any) => (
+                    <div key={sku.sku_code} className="flex items-center gap-2 py-1.5 px-2 bg-purple-50 rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-mono text-slate-500 leading-none">{sku.sku_code}</div>
+                        <div className="text-xs text-slate-700 truncate mt-0.5">{sku.sku_name}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-bold text-purple-700">{fmtEur(sku.total_revenue)}</div>
+                        <div className="text-xs text-slate-400">{sku.buyer_count} πελ.</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <textarea
               rows={2}
@@ -461,7 +528,10 @@ export function CategoryIntelligence({
           {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 mt-1" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" />}
         </button>
 
-        {isExpanded && (
+        {isExpanded && (() => {
+          const skuKey = signal.category_code;
+          const isSkuExpanded = expandedSignalCode === skuKey;
+          return (
           <div className="px-4 pb-4 border-t border-amber-50 space-y-3 pt-3">
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-amber-50 rounded-lg p-2">
@@ -483,6 +553,35 @@ export function CategoryIntelligence({
               placeholder="Σημειώσεις..."
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 resize-none"
             />
+            {/* Peer SKUs */}
+            <div className="border border-amber-100 rounded-lg overflow-hidden">
+              <button
+                onClick={() => { const n = isSkuExpanded ? null : skuKey; setExpandedSignalCode(n); if (n) loadPeerSkus(n); }}
+                className="w-full flex items-center justify-between px-3 py-2 bg-amber-50 hover:bg-amber-100 text-xs text-amber-700 font-medium transition-colors">
+                <span className="flex items-center gap-1.5"><BarChart2 className="w-3.5 h-3.5" />Top SKUs ομότιμων</span>
+                {isSkuExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+              {isSkuExpanded && (
+                <div className="px-3 py-2 space-y-1.5 bg-white">
+                  {peerSkuLoading[skuKey] ? (
+                    <div className="text-xs text-slate-400 text-center py-2">Φόρτωση...</div>
+                  ) : (peerSkus[skuKey] ?? []).length === 0 ? (
+                    <div className="text-xs text-slate-400 italic text-center py-2">Δεν βρέθηκαν SKUs</div>
+                  ) : (peerSkus[skuKey] ?? []).map((sku: any) => (
+                    <div key={sku.sku_code} className="flex items-center gap-2 py-1.5 px-2 bg-amber-50 rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-mono text-slate-500 leading-none">{sku.sku_code}</div>
+                        <div className="text-xs text-slate-700 truncate mt-0.5">{sku.sku_name}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-bold text-amber-700">{fmtEur(sku.total_revenue)}</div>
+                        <div className="text-xs text-slate-400">{sku.buyer_count} πελ.</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={() => saveOpportunity('weak', signal, 'discussed', notes[key])}
@@ -498,7 +597,8 @@ export function CategoryIntelligence({
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     );
   };
