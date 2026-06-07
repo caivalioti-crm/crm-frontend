@@ -234,29 +234,56 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
 
     // ── Zoom-out aggregation (revenue mode only) ──────────────────────────
     if (inRevMode && mapZoom <= 8 && !singleCustomer) {
-      const cityGroups = new Map<string, { lats: number[]; lngs: number[]; totalRev: number; count: number }>();
-      filtered.filter(c => c.lat && c.lng).forEach(c => {
-        const key = c.city || c.area || 'Άλλο';
-        if (!cityGroups.has(key)) cityGroups.set(key, { lats: [], lngs: [], totalRev: 0, count: 0 });
-        const g = cityGroups.get(key)!;
-        g.lats.push(c.lat!); g.lngs.push(c.lng!);
-        g.totalRev += customerRevenue.get(c.customer_code) ?? 0;
-        g.count++;
-      });
-      const sortedRevs = [...cityGroups.values()].map(g => g.totalRev).filter(r => r > 0).sort((a, b) => a - b);
-      const sortedGroups = [...cityGroups.entries()].sort(([, a], [, b]) => a.totalRev - b.totalRev);
-      sortedGroups.forEach(([cityName, g]) => {
-        if (!g.count) return;
-        const lat = g.lats.reduce((a, b) => a + b) / g.lats.length;
-        const lng = g.lngs.reduce((a, b) => a + b) / g.lngs.length;
-        const pct = g.totalRev > 0 ? sortedRevs.filter(r => r <= g.totalRev).length / sortedRevs.length : 0;
-        const radius = Math.max(5, Math.min(22, 5 + pct * 17));
-        const fc = g.totalRev === 0 ? '#94A3B8'
+      // Distance threshold in degrees based on zoom
+      const mergeDeg = mapZoom <= 6 ? 1.2 : mapZoom <= 7 ? 0.6 : 0.25;
+
+      interface GeoCluster {
+        lat: number; lng: number; totalRev: number; count: number;
+        topLabel: string; topCount: number; labelMap: Map<string, number>;
+      }
+      const clusters: GeoCluster[] = [];
+
+      // Sort descending by revenue so high-value customers anchor clusters
+      filtered
+        .filter(c => c.lat && c.lng)
+        .sort((a, b) => (customerRevenue.get(b.customer_code) ?? 0) - (customerRevenue.get(a.customer_code) ?? 0))
+        .forEach(c => {
+          const rev = customerRevenue.get(c.customer_code) ?? 0;
+          const label = c.city || c.area || 'Άλλο';
+          let nearest: GeoCluster | undefined;
+          let nearestDist = Infinity;
+          for (const cl of clusters) {
+            const d = Math.sqrt((cl.lat - c.lat!) ** 2 + (cl.lng - c.lng!) ** 2);
+            if (d < mergeDeg && d < nearestDist) { nearest = cl; nearestDist = d; }
+          }
+          if (nearest) {
+            const n = nearest.count;
+            nearest.lat = (nearest.lat * n + c.lat!) / (n + 1);
+            nearest.lng = (nearest.lng * n + c.lng!) / (n + 1);
+            nearest.totalRev += rev;
+            nearest.count++;
+            nearest.labelMap.set(label, (nearest.labelMap.get(label) ?? 0) + 1);
+            const topEntry = [...nearest.labelMap.entries()].sort((a, b) => b[1] - a[1])[0];
+            nearest.topLabel = topEntry[0]; nearest.topCount = topEntry[1];
+          } else {
+            const lm = new Map([[label, 1]]);
+            clusters.push({ lat: c.lat!, lng: c.lng!, totalRev: rev, count: 1, topLabel: label, topCount: 1, labelMap: lm });
+          }
+        });
+
+      const logMax = Math.log(Math.max(...clusters.map(cl => cl.totalRev), 1) + 1);
+      const sortedRevs = clusters.map(cl => cl.totalRev).filter(r => r > 0).sort((a, b) => a - b);
+
+      // Draw lowest revenue first so high-revenue circles render on top
+      [...clusters].sort((a, b) => a.totalRev - b.totalRev).forEach(cl => {
+        const pct = cl.totalRev > 0 ? sortedRevs.filter(r => r <= cl.totalRev).length / sortedRevs.length : 0;
+        const radius = Math.max(5, Math.min(18, 5 + (Math.log(cl.totalRev + 1) / logMax) * 13));
+        const fc = cl.totalRev === 0 ? '#94A3B8'
           : pct > 0.9 ? '#1E3A8A' : pct > 0.75 ? '#0284C7' : pct > 0.5 ? '#0EA5E9' : pct > 0.25 ? '#38BDF8' : '#BAE6FD';
-        const cm = L.circleMarker([lat, lng], { radius, fillColor: fc, fillOpacity: 0.75, color: 'white', weight: 1.5 }).addTo(map);
-        cm.bindTooltip(`<b>${cityName}</b><br>€${Math.round(g.totalRev).toLocaleString('el-GR')} · ${g.count} πελάτες`, { sticky: true });
-        markersRef.current.set(`cluster_${cityName}`, cm);
-        bounds.push([lat, lng]);
+        const cm = L.circleMarker([cl.lat, cl.lng], { radius, fillColor: fc, fillOpacity: 0.85, color: 'white', weight: 1.5 }).addTo(map);
+        cm.bindTooltip(`<b>${cl.topLabel}</b><br>€${Math.round(cl.totalRev).toLocaleString('el-GR')} · ${cl.count} πελάτες`, { sticky: true });
+        markersRef.current.set(`cluster_${cl.topLabel}_${cl.lat.toFixed(3)}`, cm);
+        bounds.push([cl.lat, cl.lng]);
       });
     } else {
       // ── Individual markers ──────────────────────────────────────────────
@@ -269,7 +296,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
         const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:10px;height:10px;border-radius:50%;background:${fillColor};border:2px solid ${inRevMode ? borderColor : 'white'};box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
+          html: `<div style="width:10px;height:10px;border-radius:50%;background:${fillColor};border:2px solid ${inRevMode ? 'rgba(255,255,255,0.6)' : borderColor};box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
           iconSize: [10, 10], iconAnchor: [5, 5],
         });
         const marker = L.marker([c.lat, c.lng], { icon }).addTo(map).on('click', () => setPopup(c));
