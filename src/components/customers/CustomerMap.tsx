@@ -229,14 +229,16 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     filtered.forEach(c => {
       if (!c.lat || !c.lng) return;
 
-      const color = customerRevenue.size > 0
+      const fillColor = customerRevenue.size > 0
         ? getPerformanceColor(c.customer_code)
         : (c.captured_by ? '#E24B4A' : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27');
+      const borderColor = c.captured_by ? '#E24B4A'
+        : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27';
       const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
 
       const icon = L.divIcon({
         className: '',
-        html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
+        html: `<div style="width:10px;height:10px;border-radius:50%;background:${fillColor};border:2px solid ${customerRevenue.size > 0 ? borderColor : 'white'};box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
         iconSize: [10, 10],
         iconAnchor: [5, 5],
       });
@@ -545,7 +547,7 @@ useEffect(() => {
           <div ref={mapRef} className="w-full h-full" />
 
           {/* Legend */}
-          <div className="absolute bottom-4 left-4 bg-slate-800/90 text-white rounded-lg px-3 py-2 text-xs space-y-1 pointer-events-none">
+          <div className="absolute bottom-4 left-4 bg-slate-800/90 text-white rounded-lg px-3 py-2 text-xs space-y-1 pointer-events-none" style={{zIndex: 1000}}>
             {customerRevenue.size > 0 ? (<>
               <div className="text-slate-400 font-medium mb-1">Τζίρος περιόδου</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1E3A8A] inline-block" />Top 10%</div>
@@ -553,6 +555,10 @@ useEffect(() => {
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8] inline-block" />25–75%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#BAE6FD] inline-block" />Κάτω 25%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] inline-block" />Ανενεργός</div>
+              <div className="border-t border-slate-600 mt-1 pt-1 text-slate-500">Περίγραμμα</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#1D9E75] inline-block" />Ακριβής</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#EF9F27] inline-block" />Πόλη</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#E24B4A] inline-block" />Rep-captured</div>
             </>) : (<>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1D9E75] inline-block" />Address-level</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF9F27] inline-block" />City-level</div>
