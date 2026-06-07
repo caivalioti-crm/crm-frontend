@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, MapPin, Search, Save, RotateCcw, Navigation, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, MapPin, Search, Save, RotateCcw, Navigation, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { smartMatch } from '../../utils/smartSearch';
 
@@ -63,7 +63,9 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const [filterRep, setFilterRep] = useState('');
   const [filterArea, setFilterArea] = useState('');
   const [filterCity, setFilterCity] = useState('');
-  const [showNoCoords, setShowNoCoords] = useState(false);
+  const [coordFilter, setCoordFilter] = useState<'all' | 'no_coords' | 'unverified'>('all');
+  const [colorMode, setColorMode] = useState<'revenue' | 'accuracy'>('revenue');
+  const [mapZoom, setMapZoom] = useState(6);
   const [areas, setAreas] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
 
@@ -93,6 +95,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
       attribution: '© OpenStreetMap',
       maxZoom: 19,
     }).addTo(map);
+    map.on('zoomend', () => setMapZoom(map.getZoom()));
     leafletMap.current = map;
 
     return () => {
@@ -196,7 +199,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     markersRef.current.forEach(m => m.remove());
     markersRef.current.clear();
 
-    // Percentile-based performance coloring
+   // Percentile-based performance coloring (revenue mode)
     const activeRevenues = customers
       .map(c => customerRevenue.get(c.customer_code) ?? 0)
       .filter(r => r > 0).sort((a, b) => a - b);
@@ -213,7 +216,8 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     };
 
     const filtered = customers.filter(c => {
-      if (showNoCoords) return !c.has_coords;
+      if (coordFilter === 'no_coords') return !c.has_coords;
+      if (coordFilter === 'unverified') return c.has_coords && !c.captured_by && (!c.accuracy_meters || c.accuracy_meters > 50);
       if (!c.lat || !c.lng) return false;
       if (categoryCustomers !== null && !categoryCustomers.has(c.customer_code)) return false;
       if (search && !['customer_name', 'customer_code', 'city', 'area'].some(k =>
@@ -225,31 +229,53 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     if (filtered.length === 0) return;
 
     const bounds: [number, number][] = [];
+    const inRevMode = colorMode === 'revenue' && customerRevenue.size > 0;
 
-    filtered.forEach(c => {
-      if (!c.lat || !c.lng) return;
-
-      const fillColor = customerRevenue.size > 0
-        ? getPerformanceColor(c.customer_code)
-        : (c.captured_by ? '#E24B4A' : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27');
-      const borderColor = c.captured_by ? '#E24B4A'
-        : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27';
-      const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
-
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:10px;height:10px;border-radius:50%;background:${fillColor};border:2px solid ${customerRevenue.size > 0 ? borderColor : 'white'};box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
-        iconSize: [10, 10],
-        iconAnchor: [5, 5],
+    // ── Zoom-out aggregation (revenue mode only) ──────────────────────────
+    if (inRevMode && mapZoom <= 8 && !singleCustomer) {
+      const cityGroups = new Map<string, { lats: number[]; lngs: number[]; totalRev: number; count: number }>();
+      filtered.filter(c => c.lat && c.lng).forEach(c => {
+        const key = c.city || c.area || 'Άλλο';
+        if (!cityGroups.has(key)) cityGroups.set(key, { lats: [], lngs: [], totalRev: 0, count: 0 });
+        const g = cityGroups.get(key)!;
+        g.lats.push(c.lat!); g.lngs.push(c.lng!);
+        g.totalRev += customerRevenue.get(c.customer_code) ?? 0;
+        g.count++;
       });
-
-      const marker = L.marker([c.lat, c.lng], { icon })
-        .addTo(map)
-        .on('click', () => setPopup(c));
-
-      markersRef.current.set(c.customer_code, marker);
-      bounds.push([c.lat, c.lng]);
-    });
+      const sortedRevs = [...cityGroups.values()].map(g => g.totalRev).filter(r => r > 0).sort((a, b) => a - b);
+      cityGroups.forEach((g, cityName) => {
+        if (!g.count) return;
+        const lat = g.lats.reduce((a, b) => a + b) / g.lats.length;
+        const lng = g.lngs.reduce((a, b) => a + b) / g.lngs.length;
+        const pct = g.totalRev > 0 ? sortedRevs.filter(r => r <= g.totalRev).length / sortedRevs.length : 0;
+        const radius = Math.max(8, Math.min(40, 8 + Math.sqrt(g.count) * 2.5));
+        const fc = g.totalRev === 0 ? '#94A3B8'
+          : pct > 0.9 ? '#1E3A8A' : pct > 0.75 ? '#0284C7' : pct > 0.5 ? '#0EA5E9' : pct > 0.25 ? '#38BDF8' : '#BAE6FD';
+        const cm = L.circleMarker([lat, lng], { radius, fillColor: fc, fillOpacity: 0.75, color: 'white', weight: 1.5 }).addTo(map);
+        cm.bindTooltip(`<b>${cityName}</b><br>€${Math.round(g.totalRev).toLocaleString('el-GR')} · ${g.count} πελάτες`, { sticky: true });
+        markersRef.current.set(`cluster_${cityName}`, cm);
+        bounds.push([lat, lng]);
+      });
+    } else {
+      // ── Individual markers ──────────────────────────────────────────────
+      filtered.forEach(c => {
+        if (!c.lat || !c.lng) return;
+        const fillColor = inRevMode
+          ? getPerformanceColor(c.customer_code)
+          : (c.captured_by ? '#E24B4A' : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27');
+        const borderColor = c.captured_by ? '#E24B4A'
+          : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27';
+        const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:10px;height:10px;border-radius:50%;background:${fillColor};border:2px solid ${inRevMode ? borderColor : 'white'};box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:${canEdit ? 'pointer' : 'default'};"></div>`,
+          iconSize: [10, 10], iconAnchor: [5, 5],
+        });
+        const marker = L.marker([c.lat, c.lng], { icon }).addTo(map).on('click', () => setPopup(c));
+        markersRef.current.set(c.customer_code, marker);
+        bounds.push([c.lat, c.lng]);
+      });
+    }
 
     if (bounds.length && !singleCustomer) {
       if (!preserveViewRef.current) {
@@ -261,7 +287,7 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     } else if (bounds.length === 1) {
       map.setView(bounds[0], 15);
     }
-  }, [customers, search, showNoCoords, isPrivileged, currentUser.salesman_code, singleCustomer]);
+  }, [customers, search, coordFilter, colorMode, mapZoom, customerRevenue, categoryCustomers, isPrivileged, currentUser.salesman_code, singleCustomer]);
 
   // ── Start editing ─────────────────────────────────────────────────────────
   const startEdit = useCallback((c: CustomerCoord) => {
@@ -436,16 +462,12 @@ useEffect(() => {
               </select>
             )}
 
-            {/* No coords toggle */}
-            {noCoordCount > 0 && (
-              <button
-                onClick={() => setShowNoCoords(v => !v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showNoCoords ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-700 text-slate-300 border-slate-600 hover:border-amber-400'}`}
-              >
-                <AlertCircle className="w-3.5 h-3.5 inline mr-1" />
-                {noCoordCount} χωρίς coords
-              </button>
-            )}
+            <select value={coordFilter} onChange={e => setCoordFilter(e.target.value as any)}
+              className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-xs text-white focus:outline-none focus:border-amber-400">
+              <option value="all">📍 Όλοι</option>
+              <option value="no_coords">⚠ {noCoordCount} χωρίς coords</option>
+              <option value="unverified">🏙 Μη επαληθευμένοι</option>
+            </select>
           </>
         )}
 
@@ -547,22 +569,35 @@ useEffect(() => {
           <div ref={mapRef} className="w-full h-full" />
 
           {/* Legend */}
-          <div className="absolute bottom-4 left-4 bg-slate-800/90 text-white rounded-lg px-3 py-2 text-xs space-y-1 pointer-events-none" style={{zIndex: 1000}}>
-            {customerRevenue.size > 0 ? (<>
+          <div className="absolute bottom-4 left-4 bg-slate-800/90 text-white rounded-lg px-3 py-2 text-xs space-y-1" style={{zIndex: 1000}}>
+            {customerRevenue.size > 0 && (
+              <div className="flex gap-1 mb-2">
+                <button onClick={() => setColorMode('revenue')}
+                  className={`flex-1 px-2 py-0.5 rounded text-xs font-medium transition-colors ${colorMode === 'revenue' ? 'bg-blue-600' : 'bg-slate-700 hover:bg-slate-600'}`}>
+                  Τζίρος
+                </button>
+                <button onClick={() => setColorMode('accuracy')}
+                  className={`flex-1 px-2 py-0.5 rounded text-xs font-medium transition-colors ${colorMode === 'accuracy' ? 'bg-green-700' : 'bg-slate-700 hover:bg-slate-600'}`}>
+                  Coords
+                </button>
+              </div>
+            )}
+            {(colorMode === 'revenue' && customerRevenue.size > 0) ? (<>
               <div className="text-slate-400 font-medium mb-1">Τζίρος περιόδου</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1E3A8A] inline-block" />Top 10%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#0284C7] inline-block" />75–90%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8] inline-block" />25–75%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#BAE6FD] inline-block" />Κάτω 25%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] inline-block" />Ανενεργός</div>
-              <div className="border-t border-slate-600 mt-1 pt-1 text-slate-500">Περίγραμμα</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#1D9E75] inline-block" />Ακριβής</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#EF9F27] inline-block" />Πόλη</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#E24B4A] inline-block" />Rep-captured</div>
+              <div className="border-t border-slate-600 mt-1 pt-1 text-slate-500">Περίγραμμα coords</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#1D9E75] inline-block" />Επαληθευμένος</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#EF9F27] inline-block" />Μη επαληθευμένος</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#E24B4A] inline-block" />Απευθείας GPS</div>
             </>) : (<>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1D9E75] inline-block" />Address-level</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF9F27] inline-block" />City-level</div>
-              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#E24B4A] inline-block" />Rep-captured</div>
+              <div className="text-slate-400 font-medium mb-1">Ακρίβεια coords</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1D9E75] inline-block" />Επαληθευμένος</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF9F27] inline-block" />Μη επαληθευμένος</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#E24B4A] inline-block" />Απευθείας GPS</div>
             </>)}
           </div>
 
@@ -645,7 +680,7 @@ useEffect(() => {
         )}
 
         {/* No-coords list (when toggle active) */}
-        {showNoCoords && !popup && (
+        {coordFilter === 'no_coords' && !popup && (
           <div className="w-72 bg-slate-800 text-white flex flex-col shrink-0 border-l border-slate-700 overflow-y-auto">
             <div className="px-4 py-3 border-b border-slate-700 text-sm font-medium text-amber-400">
               Χωρίς συντεταγμένες ({noCoordCount})
