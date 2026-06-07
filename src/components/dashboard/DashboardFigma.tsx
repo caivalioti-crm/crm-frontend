@@ -1252,8 +1252,16 @@ if (currentUser.role === 'claims_exec') {
         <CustomerMap
           currentUser={currentUser}
           singleCustomer={mapSingleCustomer ?? undefined}
-          dateFrom={selectedPeriod.from + '-01'}
-          dateTo={(() => { const [y, m] = selectedPeriod.to.split('-').map(Number); return new Date(y, m, 0).toISOString().split('T')[0]; })()}
+          dateFrom={selectedPeriod.from}
+          dateTo={(() => {
+            const parts = selectedPeriod.to.split('-');
+            if (parts.length === 2) {
+              const [y, m] = parts.map(Number);
+              const d = new Date(y, m, 0);
+              return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            }
+            return selectedPeriod.to;
+          })()}
           onClose={() => { setShowCustomerMap(false); setMapSingleCustomer(null); }}
           onSelectCustomer={(customer) => {
             setShowCustomerMap(false);
