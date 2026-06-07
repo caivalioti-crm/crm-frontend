@@ -1252,6 +1252,8 @@ if (currentUser.role === 'claims_exec') {
         <CustomerMap
           currentUser={currentUser}
           singleCustomer={mapSingleCustomer ?? undefined}
+          dateFrom={selectedPeriod.from + '-01'}
+          dateTo={selectedPeriod.to + '-31'}
           onClose={() => { setShowCustomerMap(false); setMapSingleCustomer(null); }}
           onSelectCustomer={(customer) => {
             setShowCustomerMap(false);

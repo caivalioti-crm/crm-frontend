@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, MapPin, Search, Save, RotateCcw, Navigation, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import { smartMatch } from '../../utils/smartSearch';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -41,15 +42,18 @@ type Props = {
   onClose: () => void;
   onSelectCustomer?: (customer: any) => void;
   repList?: { id: string; full_name: string; salesman_code: string }[];
+  dateFrom?: string;
+  dateTo?: string;
 };
 
 const FULL_ACCESS_ROLES = ['admin', 'manager', 'exec'];
 
-export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCustomer, repList = [] }: Props) {
+export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCustomer, repList = [], dateFrom, dateTo }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
   const dragMarkerRef = useRef<any>(null);
+  const preserveViewRef = useRef(false);
 
   const isPrivileged = FULL_ACCESS_ROLES.includes(currentUser.role);
 
@@ -70,6 +74,12 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const [savedCode, setSavedCode] = useState<string | null>(null);
 
   const [popup, setPopup] = useState<CustomerCoord | null>(null);
+  const [customerRevenue, setCustomerRevenue] = useState<Map<string, number>>(new Map());
+  const [filterL1, setFilterL1] = useState('');
+  const [filterL2, setFilterL2] = useState('');
+  const [l1Categories, setL1Categories] = useState<{code: string; name: string}[]>([]);
+  const [l2Categories, setL2Categories] = useState<{code: string; name: string}[]>([]);
+  const [categoryCustomers, setCategoryCustomers] = useState<Set<string> | null>(null);
 
   // ── Init Leaflet ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -117,6 +127,41 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   useEffect(() => { loadData(); }, [loadData]);
 
 
+ // Revenue map for performance coloring
+  useEffect(() => {
+    if (!dateFrom || !dateTo) return;
+    supabase.rpc('get_customer_revenue_map', { p_from: dateFrom, p_to: dateTo })
+      .then(({ data }) => {
+        if (data) setCustomerRevenue(new Map(data.map((r: any) => [r.customer_code, Number(r.total_revenue)])));
+      });
+  }, [dateFrom, dateTo]);
+
+  // L1 categories on mount
+  useEffect(() => {
+    supabase.from('crm_category_master').select('category_code, short_name')
+      .eq('level', 1).order('category_code')
+      .then(({ data }) => setL1Categories((data ?? []).map((c: any) => ({ code: c.category_code, name: c.short_name }))));
+  }, []);
+
+  // L2 when L1 changes
+  useEffect(() => {
+    if (!filterL1) { setL2Categories([]); setFilterL2(''); return; }
+    supabase.from('crm_category_master').select('category_code, short_name')
+      .eq('level', 2).eq('parent_code', filterL1).order('category_code')
+      .then(({ data }) => setL2Categories((data ?? []).map((c: any) => ({ code: c.category_code, name: c.short_name }))));
+    setFilterL2('');
+  }, [filterL1]);
+
+  // Category customer filter
+  useEffect(() => {
+    const code = filterL2 || filterL1;
+    if (!code) { setCategoryCustomers(null); return; }
+    const table = filterL2 ? 'mv_customer_l2_categories' : 'mv_customer_l1_categories';
+    const field = filterL2 ? 'l2_code' : 'l1_code';
+    supabase.from(table).select('customer_code').eq(field, code)
+      .then(({ data }) => setCategoryCustomers(new Set((data ?? []).map((r: any) => r.customer_code))));
+  }, [filterL1, filterL2]);
+
   // Update cities when area changes
   useEffect(() => {
     if (filterArea) {
@@ -140,15 +185,29 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     markersRef.current.forEach(m => m.remove());
     markersRef.current.clear();
 
+    // Percentile-based performance coloring
+    const activeRevenues = customers
+      .map(c => customerRevenue.get(c.customer_code) ?? 0)
+      .filter(r => r > 0).sort((a, b) => a - b);
+    const getPerformanceColor = (code: string): string => {
+      if (customerRevenue.size === 0) return '#EF9F27';
+      const rev = customerRevenue.get(code) ?? 0;
+      if (rev === 0) return '#94A3B8';
+      const pct = activeRevenues.filter(r => r <= rev).length / activeRevenues.length;
+      if (pct < 0.25) return '#BAE6FD';
+      if (pct < 0.50) return '#38BDF8';
+      if (pct < 0.75) return '#0EA5E9';
+      if (pct < 0.90) return '#0284C7';
+      return '#1E3A8A';
+    };
+
     const filtered = customers.filter(c => {
       if (showNoCoords) return !c.has_coords;
       if (!c.lat || !c.lng) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        if (!c.customer_name?.toLowerCase().includes(q) &&
-            !c.customer_code?.includes(q) &&
-            !c.city?.toLowerCase().includes(q)) return false;
-      }
+      if (categoryCustomers !== null && !categoryCustomers.has(c.customer_code)) return false;
+      if (search && !['customer_name', 'customer_code', 'city', 'area'].some(k =>
+        smartMatch((c as any)[k] ?? '', search)
+      )) return false;
       return true;
     });
 
@@ -159,7 +218,9 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     filtered.forEach(c => {
       if (!c.lat || !c.lng) return;
 
-      const color = c.captured_by ? '#E24B4A' : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27';
+      const color = customerRevenue.size > 0
+        ? getPerformanceColor(c.customer_code)
+        : (c.captured_by ? '#E24B4A' : c.accuracy_meters && c.accuracy_meters <= 50 ? '#1D9E75' : '#EF9F27');
       const canEdit = isPrivileged || String(c.salesman_code) === String(currentUser.salesman_code);
 
       const icon = L.divIcon({
@@ -178,7 +239,12 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     });
 
     if (bounds.length && !singleCustomer) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      if (!preserveViewRef.current) {
+        const greekBounds = bounds.filter(([lat, lng]) => lat >= 34 && lat <= 42 && lng >= 18 && lng <= 30);
+        const fitTarget = greekBounds.length > 0 ? greekBounds : bounds;
+        map.fitBounds(fitTarget, { padding: [40, 40], maxZoom: 10 });
+      }
+      preserveViewRef.current = false;
     } else if (bounds.length === 1) {
       map.setView(bounds[0], 15);
     }
@@ -245,6 +311,7 @@ useEffect(() => {
       setSavedCode(editing.customer_code);
       setTimeout(() => setSavedCode(null), 2000);
       cancelEdit();
+      preserveViewRef.current = true;
       loadData();
     } catch (err) {
       alert('Αποτυχία αποθήκευσης');
@@ -336,6 +403,22 @@ useEffect(() => {
               >
                 <option value="">Όλες οι πόλεις</option>
                 {cities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+
+            {/* L1 category filter */}
+            {l1Categories.length > 0 && (
+              <select value={filterL1} onChange={e => setFilterL1(e.target.value)}
+                className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-400">
+                <option value="">Όλες κατηγορίες L1</option>
+                {l1Categories.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </select>
+            )}
+            {l2Categories.length > 0 && (
+              <select value={filterL2} onChange={e => setFilterL2(e.target.value)}
+                className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-400">
+                <option value="">Όλες κατηγορίες L2</option>
+                {l2Categories.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
               </select>
             )}
 
@@ -448,9 +531,18 @@ useEffect(() => {
 
           {/* Legend */}
           <div className="absolute bottom-4 left-4 bg-slate-800/90 text-white rounded-lg px-3 py-2 text-xs space-y-1 pointer-events-none">
-            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1D9E75] inline-block" />Address-level</div>
-            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF9F27] inline-block" />City-level</div>
-            <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#E24B4A] inline-block" />Rep-captured</div>
+            {customerRevenue.size > 0 ? (<>
+              <div className="text-slate-400 font-medium mb-1">Τζίρος περιόδου</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1E3A8A] inline-block" />Top 10%</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#0284C7] inline-block" />75–90%</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8] inline-block" />25–75%</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#BAE6FD] inline-block" />Κάτω 25%</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] inline-block" />Ανενεργός</div>
+            </>) : (<>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1D9E75] inline-block" />Address-level</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#EF9F27] inline-block" />City-level</div>
+              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#E24B4A] inline-block" />Rep-captured</div>
+            </>)}
           </div>
 
           {/* Saved toast */}
