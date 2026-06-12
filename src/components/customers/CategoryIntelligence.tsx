@@ -136,11 +136,30 @@ export function CategoryIntelligence({
         .in('code', codes);
       const custMap = new Map((custData ?? []).map((c: any) => [c.code, c]));
 
+      // Build local map (may be newer than state)
+      let localL2Map = l2NameMap;
+      if (l2NameMap.size === 0) {
+        const { data: l2n } = await supabase
+          .from('crm_category_master')
+          .select('category_code, short_name, full_name')
+          .eq('level', 2);
+        if (l2n?.length) {
+          localL2Map = new Map(l2n.map((n: any) => [
+            n.category_code,
+            n.short_name ?? n.full_name?.split('/')[0].trim() ?? n.category_code,
+          ]));
+          setL2NameMap(localL2Map);
+        }
+      }
+      const resolveName = (code: string) => localL2Map.get(code) ?? code;
+
       setSimilarCustomers(rpcData.map((r: any) => ({
         ...r,
         name: custMap.get(r.similar_code)?.name ?? r.similar_code,
         city: custMap.get(r.similar_code)?.city ?? '',
         area: custMap.get(r.similar_code)?.area ?? '',
+        shared_l2_names: (r.shared_l2_codes ?? []).map(resolveName),
+        peer_only_l2_names: (r.peer_only_l2_codes ?? []).map(resolveName),
       })));
 
       setShowSimilar(true);
@@ -826,9 +845,9 @@ export function CategoryIntelligence({
                     {c.shared_l2_codes?.length > 0 && (
                       <div className="flex flex-wrap gap-1 items-center">
                         <span className="text-xs text-slate-400">κοινά:</span>
-                        {c.shared_l2_codes.slice(0, 4).map((code: string) => (
-                          <span key={code} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-xs">
-                            {l2NameMap.get(code) ?? code}
+                        {(c.shared_l2_names ?? c.shared_l2_codes).slice(0, 4).map((name: string, i: number) => (
+                          <span key={i} title={name} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-xs">
+                            {name.length > 12 ? name.slice(0, 11) + '…' : name}
                           </span>
                         ))}
                         {c.shared_l2_codes.length > 4 && <span className="text-xs text-slate-400">+{c.shared_l2_codes.length - 4}</span>}
