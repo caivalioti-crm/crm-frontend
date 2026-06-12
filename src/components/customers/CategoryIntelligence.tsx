@@ -348,12 +348,20 @@ export function CategoryIntelligence({
 
   if (!data) return null;
 
-  const totalSignals = data.declining.length + data.missing.length + data.weak.length;
+
+  
+const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
+  const visibleMissing = data.missing.filter(s => s.status !== 'dismissed' && isSignalRelevant(s, 'missing'));
+  const visibleWeak = data.weak.filter(s => s.status !== 'dismissed' && isSignalRelevant(s, 'weak'));
+  const totalSignals = visibleDeclining.length + visibleMissing.length + visibleWeak.length;
+
   const tabs: { key: TabType; label: string; count: number; color: string }[] = [
-    { key: 'declining', label: 'Πτωτικές', count: data.declining.length, color: 'text-red-600' },
-    { key: 'missing', label: 'Απούσες', count: data.missing.length, color: 'text-purple-600' },
-    { key: 'weak', label: 'Αδύναμες', count: data.weak.length, color: 'text-amber-600' },
+    { key: 'declining', label: 'Πτωτικές', count: visibleDeclining.length, color: 'text-red-600' },
+    { key: 'missing', label: 'Απούσες', count: visibleMissing.length, color: 'text-purple-600' },
+    { key: 'weak', label: 'Αδύναμες', count: visibleWeak.length, color: 'text-amber-600' },
   ];
+
+  
 
   const renderDecliningCard = (signal: DecliningSignal) => {
     const key = `declining__${signal.category_code}`;
