@@ -105,17 +105,30 @@ export function CategoryIntelligence({
   const [l2NameMap, setL2NameMap] = useState<Map<string, string>>(new Map());
 
   const loadSimilar = async () => {
-    if (similarCustomers.length > 0) { setShowSimilar(true); return; }
     setSimilarLoading(true);
     try {
-      const { data: rpcData, error } = await supabase.rpc('get_similar_customers_v2', {
+      // Always ensure l2NameMap is populated before showing modal
+      if (l2NameMap.size === 0) {
+        const { data: l2n } = await supabase
+          .from('crm_category_master')
+          .select('category_code, short_name, full_name')
+          .eq('level', 2);
+        if (l2n?.length) {
+          setL2NameMap(new Map(l2n.map((n: any) => [
+            n.category_code,
+            n.short_name ?? n.full_name?.split('/')[0].trim() ?? n.category_code,
+          ])));
+        }
+      }
+
+      if (similarCustomers.length > 0) { setShowSimilar(true); return; }
+
+      const { data: rpcData } = await supabase.rpc('get_similar_customers_v2', {
         p_customer_code: customerCode,
         p_limit: 50,
       });
-      if (error) throw error;
       if (!rpcData?.length) { setSimilarCustomers([]); setShowSimilar(true); return; }
 
-      // Fetch names from view
       const codes = rpcData.map((r: any) => r.similar_code);
       const { data: custData } = await supabase
         .from('vw_crm_customers')
@@ -130,13 +143,6 @@ export function CategoryIntelligence({
         area: custMap.get(r.similar_code)?.area ?? '',
       })));
 
-      if (l2NameMap.size === 0) {
-        const { data: l2n } = await supabase
-          .from('crm_category_master')
-          .select('category_code, short_name')
-          .eq('level', 2);
-        setL2NameMap(new Map((l2n ?? []).map((n: any) => [n.category_code, n.short_name])));
-      }
       setShowSimilar(true);
     } catch (e) { console.error(e); }
     finally { setSimilarLoading(false); }
