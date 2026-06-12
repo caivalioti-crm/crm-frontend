@@ -165,12 +165,17 @@ export function CategoryIntelligence({
 
   // Fetch L2 names on mount so similar customer cards always have them
   useEffect(() => {
-    supabase.from('crm_category_master')
-      .select('category_code, short_name, full_name')
-      .eq('level', 2)
-      .then(({ data }) => {
-        setL2NameMap(new Map((data ?? []).map((n: any) => [n.category_code, n.short_name ?? n.full_name ?? n.category_code])));
-      });
+    (async () => {
+      const { data } = await supabase.from('crm_category_master')
+        .select('category_code, short_name, full_name')
+        .eq('level', 2);
+      if (data?.length) {
+        setL2NameMap(new Map(data.map((n: any) => [
+          n.category_code,
+          n.short_name ?? n.full_name?.split('/')[0].trim() ?? n.category_code,
+        ])));
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -290,7 +295,7 @@ export function CategoryIntelligence({
   };
 
   const loadPeerSkus = async (categoryCode: string) => {
-    if (peerSkus[categoryCode] || peerSkuLoading[categoryCode]) return;
+    if (peerSkus[categoryCode]?.length > 0 || peerSkuLoading[categoryCode]) return;
     setPeerSkuLoading(prev => ({ ...prev, [categoryCode]: true }));
     try {
       let peerCodes = similarCustomers.map((c: any) => c.similar_code);
