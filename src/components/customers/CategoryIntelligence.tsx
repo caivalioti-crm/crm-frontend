@@ -102,6 +102,10 @@ export function CategoryIntelligence({
   const [peerSkus, setPeerSkus] = useState<Record<string, any[]>>({});
   const [peerSkuLoading, setPeerSkuLoading] = useState<Record<string, boolean>>({});
   const [filterBySelected, setFilterBySelected] = useState(false);
+  const [expandedCatCodes, setExpandedCatCodes] = useState<Set<string>>(new Set());
+  const toggleCatExpand = (code: string) => setExpandedCatCodes(prev => {
+    const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n;
+  });
   const [l2NameMap, setL2NameMap] = useState<Map<string, string>>(new Map());
 
   const loadSimilar = async () => {
@@ -848,12 +852,24 @@ const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
                     {c.shared_l2_codes?.length > 0 && (
                       <div className="flex flex-wrap gap-1 items-center">
                         <span className="text-xs text-slate-400">κοινά:</span>
-                        {(c.shared_l2_names ?? c.shared_l2_codes).slice(0, 4).map((name: string, i: number) => (
-                          <span key={i} title={name} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-xs">
-                            {name.length > 12 ? name.slice(0, 11) + '…' : name}
-                          </span>
-                        ))}
-                        {c.shared_l2_codes.length > 4 && <span className="text-xs text-slate-400">+{c.shared_l2_codes.length - 4}</span>}
+                        {(() => {
+                          const names = c.shared_l2_names ?? c.shared_l2_codes;
+                          const expanded = expandedCatCodes.has(`s_${c.similar_code}`);
+                          const shown = expanded ? names : names.slice(0, 4);
+                          return (<>
+                            {shown.map((name: string, i: number) => (
+                              <span key={i} title={name} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-xs">
+                                {name.length > 12 ? name.slice(0, 11) + '…' : name}
+                              </span>
+                            ))}
+                            {names.length > 4 && (
+                              <button onClick={() => toggleCatExpand(`s_${c.similar_code}`)}
+                                className="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                                {expanded ? '▲' : `+${names.length - 4}`}
+                              </button>
+                            )}
+                          </>);
+                        })()}
                       </div>
                     )}
 
@@ -861,12 +877,24 @@ const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
                     {c.peer_only_l2_codes?.length > 0 && (
                       <div className="flex flex-wrap gap-1 items-center">
                         <span className="text-xs text-slate-400">έχει κι αυτός:</span>
-                        {(c.peer_only_l2_names ?? c.peer_only_l2_codes).slice(0, 3).map((name: string, i: number) => (
-                          <span key={i} title={name} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs">
-                            {name.length > 12 ? name.slice(0, 11) + '…' : name}
-                          </span>
-                        ))}
-                        {c.peer_only_l2_codes.length > 3 && <span className="text-xs text-slate-400">+{c.peer_only_l2_codes.length - 3}</span>}
+                        {(() => {
+                          const names = c.peer_only_l2_names ?? c.peer_only_l2_codes;
+                          const expanded = expandedCatCodes.has(`p_${c.similar_code}`);
+                          const shown = expanded ? names : names.slice(0, 3);
+                          return (<>
+                            {shown.map((name: string, i: number) => (
+                              <span key={i} title={name} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs">
+                                {name.length > 12 ? name.slice(0, 11) + '…' : name}
+                              </span>
+                            ))}
+                            {names.length > 3 && (
+                              <button onClick={() => toggleCatExpand(`p_${c.similar_code}`)}
+                                className="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                                {expanded ? '▲' : `+${names.length - 3}`}
+                              </button>
+                            )}
+                          </>);
+                        })()}
                       </div>
                     )}
                   </div>
