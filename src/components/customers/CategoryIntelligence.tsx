@@ -107,19 +107,22 @@ export function CategoryIntelligence({
   const loadSimilar = async () => {
     setSimilarLoading(true);
     try {
-      // Always ensure l2NameMap is populated before showing modal
-      if (l2NameMap.size === 0) {
+      // Build LOCAL map (React state update won't reflect in same closure)
+      let localL2Map = l2NameMap;
+      if (localL2Map.size === 0) {
         const { data: l2n } = await supabase
           .from('crm_category_master')
           .select('category_code, short_name, full_name')
           .eq('level', 2);
         if (l2n?.length) {
-          setL2NameMap(new Map(l2n.map((n: any) => [
+          localL2Map = new Map(l2n.map((n: any) => [
             n.category_code,
             n.short_name ?? n.full_name?.split('/')[0].trim() ?? n.category_code,
-          ])));
+          ]));
+          setL2NameMap(localL2Map);
         }
       }
+      const resolveName = (code: string) => localL2Map.get(code) ?? code;
 
       if (similarCustomers.length > 0) { setShowSimilar(true); return; }
 
@@ -136,23 +139,6 @@ export function CategoryIntelligence({
         .in('code', codes);
       const custMap = new Map((custData ?? []).map((c: any) => [c.code, c]));
 
-      // Build local map (may be newer than state)
-      let localL2Map = l2NameMap;
-      if (l2NameMap.size === 0) {
-        const { data: l2n } = await supabase
-          .from('crm_category_master')
-          .select('category_code, short_name, full_name')
-          .eq('level', 2);
-        if (l2n?.length) {
-          localL2Map = new Map(l2n.map((n: any) => [
-            n.category_code,
-            n.short_name ?? n.full_name?.split('/')[0].trim() ?? n.category_code,
-          ]));
-          setL2NameMap(localL2Map);
-        }
-      }
-      const resolveName = (code: string) => localL2Map.get(code) ?? code;
-
       setSimilarCustomers(rpcData.map((r: any) => ({
         ...r,
         name: custMap.get(r.similar_code)?.name ?? r.similar_code,
@@ -161,7 +147,6 @@ export function CategoryIntelligence({
         shared_l2_names: (r.shared_l2_codes ?? []).map(resolveName),
         peer_only_l2_names: (r.peer_only_l2_codes ?? []).map(resolveName),
       })));
-
       setShowSimilar(true);
     } catch (e) { console.error(e); }
     finally { setSimilarLoading(false); }
@@ -312,9 +297,13 @@ export function CategoryIntelligence({
   const isSignalRelevant = (signal: Signal, type: 'missing' | 'weak'): boolean => {
     if (filterByBrands && primaryBrands.length > 0 && !hasBrandCoverage(signal.category_code)) return false;
     if (filterBySelected && selectedSimilarCodes.length > 0 && type === 'missing') {
-      const parts = signal.category_code.split('.');
-      const l2 = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : signal.category_code;
-      if (!selectedCustomerL2Codes.has(l2) && !selectedCustomerL2Codes.has(signal.category_code)) return false;
+      const code = signal.category_code;
+      const l1 = code.split('.')[0];
+      // L1 signal matches if any peer L2 code falls under that L1
+      const isRelevant = [...selectedCustomerL2Codes].some(l2code =>
+        l2code === code || l2code.startsWith(l1 + '.')
+      );
+      if (!isRelevant) return false;
     }
     return true;
   };
@@ -776,10 +765,16 @@ export function CategoryIntelligence({
                 <div className="flex items-start gap-2">
                   {/* Selection checkbox */}
                   <button
-                    onClick={() => setSelectedSimilarCodes(prev =>
-                      isSelected ? prev.filter(x => x !== c.similar_code)
-                        : prev.length < 10 ? [...prev, c.similar_code] : prev
-                    )}
+                    onClick={() => {
+                      setSelectedSimilarCodes(prev => {
+                        const next = isSelected
+                          ? prev.filter(x => x !== c.similar_code)
+                          : prev.length < 10 ? [...prev, c.similar_code] : prev;
+                        if (next.length > 0) setFilterBySelected(true);
+                        if (next.length === 0) setFilterBySelected(false);
+                        return next;
+                      });
+                    }}
                     className={`mt-0.5 w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
                       isSelected ? 'bg-purple-600 border-purple-600' : 'border-slate-300 hover:border-purple-400'
                     }`}>
@@ -858,9 +853,9 @@ export function CategoryIntelligence({
                     {c.peer_only_l2_codes?.length > 0 && (
                       <div className="flex flex-wrap gap-1 items-center">
                         <span className="text-xs text-slate-400">έχει κι αυτός:</span>
-                        {c.peer_only_l2_codes.slice(0, 3).map((code: string) => (
-                          <span key={code} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs">
-                            {l2NameMap.get(code) ?? code}
+                        {(c.peer_only_l2_names ?? c.peer_only_l2_codes).slice(0, 3).map((name: string, i: number) => (
+                          <span key={i} title={name} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs">
+                            {name.length > 12 ? name.slice(0, 11) + '…' : name}
                           </span>
                         ))}
                         {c.peer_only_l2_codes.length > 3 && <span className="text-xs text-slate-400">+{c.peer_only_l2_codes.length - 3}</span>}
