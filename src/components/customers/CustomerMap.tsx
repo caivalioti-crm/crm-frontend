@@ -375,6 +375,13 @@ useEffect(() => {
     }
   }, [customers, singleCustomer, startEdit, editing]);
 
+  // Invalidate Leaflet size when edit bar appears/disappears
+useEffect(() => {
+  if (!leafletMap.current) return;
+  const timer = setTimeout(() => leafletMap.current?.invalidateSize(), 50);
+  return () => clearTimeout(timer);
+}, [editing]);
+
   const cancelEdit = useCallback(() => {
     if (dragMarkerRef.current) { dragMarkerRef.current.remove(); dragMarkerRef.current = null; }
     setEditing(null);
