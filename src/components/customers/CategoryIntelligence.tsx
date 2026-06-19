@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingDown, AlertCircle, BarChart2, ChevronDown, ChevronRight, X, RotateCcw, Lightbulb, Users } from 'lucide-react';
+import { TrendingDown, AlertCircle, BarChart2, ChevronDown, ChevronRight, X, RotateCcw, Lightbulb, Users, Sparkles, Tag, ThumbsUp, ThumbsDown, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
 const BUSINESS_TYPE_DISPLAY: Record<string, string> = {
@@ -70,7 +70,23 @@ function fmtEur(n: number) {
   return '€' + Math.round(n).toLocaleString('el-GR');
 }
 
-type TabType = 'declining' | 'missing' | 'weak';
+type ItemRow = {
+  mtrl: string; code: string; name: string; english_name: string | null;
+  category_code: string; category_name: string | null; category_level: number | null;
+  price: number | null; vehicle: string[]; category_spend: number;
+  discussed: boolean; interested: boolean | null; notes: string | null;
+  reason?: string[]; is_policy_104?: boolean;
+};
+
+const VEHICLE_LABEL: Record<string, string> = {
+  agrotiko: 'Αγροτικό', suv: 'SUV', van: 'Κλούβα', epivatiko: 'Επιβατικό', fortigo: 'Φορτηγό',
+};
+const ITEM_STYLE = {
+  new:    { border: 'border-emerald-100', hover: 'hover:bg-emerald-50', borderT: 'border-emerald-50' },
+  offers: { border: 'border-rose-100',    hover: 'hover:bg-rose-50',    borderT: 'border-rose-50' },
+} as const;
+
+type TabType = 'declining' | 'missing' | 'weak' | 'new' | 'offers';
 
 export function CategoryIntelligence({
   customerCode,
@@ -86,6 +102,10 @@ export function CategoryIntelligence({
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('declining');
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [newItems, setNewItems] = useState<ItemRow[]>([]);
+  const [offers, setOffers] = useState<ItemRow[]>([]);
+  const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
+  const [itemSaving, setItemSaving] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [outOfScopeList, setOutOfScopeList] = useState<any[]>([]);
@@ -201,11 +221,15 @@ export function CategoryIntelligence({
       ),
       authedFetch(`/api/customers/${customerCode}/category-scope`),
       supabase.rpc('get_similar_count', { p_customer_code: customerCode }),
+      authedFetch(`/api/customers/${customerCode}/new-items`).catch(() => []),
+      authedFetch(`/api/customers/${customerCode}/offers`).catch(() => []),
     ])
-      .then(([intel, scope, countResult]) => {
+      .then(([intel, scope, countResult, ni, off]) => {
         setData(intel);
         setOutOfScopeList(scope ?? []);
         setSimilarCount((countResult as any)?.data ?? null);
+        setNewItems(Array.isArray(ni) ? ni : []);
+        setOffers(Array.isArray(off) ? off : []);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -251,6 +275,33 @@ export function CategoryIntelligence({
     } finally {
       setSaving(s => ({ ...s, [key]: false }));
     }
+  };
+
+  const saveItemInterest = async (
+    listType: 'new' | 'offers',
+    item: ItemRow,
+    patch: { discussed?: boolean; interested?: boolean | null; notes?: string }
+  ) => {
+    const key = `${listType}__${item.mtrl}`;
+    setItemSaving(s => ({ ...s, [key]: true }));
+    const next = {
+      discussed:  patch.discussed  ?? item.discussed,
+      interested: patch.interested !== undefined ? patch.interested : item.interested,
+      notes:      patch.notes      !== undefined ? patch.notes      : item.notes,
+    };
+    try {
+      await authedFetch(`/api/customers/${customerCode}/item-interest`, {
+        method: 'POST',
+        body: JSON.stringify({
+          mtrl: item.mtrl,
+          list_type: listType === 'offers' ? 'offer' : 'new',
+          ...next,
+        }),
+      });
+      const apply = (arr: ItemRow[]) => arr.map(x => x.mtrl === item.mtrl ? { ...x, ...next } : x);
+      if (listType === 'new') setNewItems(apply); else setOffers(apply);
+    } catch (e) { console.error(e); }
+    finally { setItemSaving(s => ({ ...s, [key]: false })); }
   };
 
   const markOutOfScope = async (signal: Signal) => {
@@ -358,11 +409,14 @@ const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
   const visibleMissing = data.missing.filter(s => s.status !== 'dismissed' && isSignalRelevant(s, 'missing'));
   const visibleWeak = data.weak.filter(s => s.status !== 'dismissed' && isSignalRelevant(s, 'weak'));
   const totalSignals = visibleDeclining.length + visibleMissing.length + visibleWeak.length;
+  const totalContent = totalSignals + newItems.length + offers.length;
 
   const tabs: { key: TabType; label: string; count: number; color: string }[] = [
     { key: 'declining', label: 'Πτωτικές', count: visibleDeclining.length, color: 'text-red-600' },
     { key: 'missing', label: 'Απούσες', count: visibleMissing.length, color: 'text-purple-600' },
     { key: 'weak', label: 'Αδύναμες', count: visibleWeak.length, color: 'text-amber-600' },
+    { key: 'new', label: 'Νέα είδη', count: newItems.length, color: 'text-emerald-600' },
+    { key: 'offers', label: 'Προσφορές', count: offers.length, color: 'text-rose-600' },
   ];
 
   
@@ -634,6 +688,77 @@ const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
     );
   };
 
+  const renderItemCard = (item: ItemRow, listType: 'new' | 'offers') => {
+    const key = `${listType}__${item.mtrl}`;
+    const isExpanded = expandedCard === key;
+    const s = ITEM_STYLE[listType];
+    const saving = itemSaving[key];
+    return (
+      <div key={key} className={`rounded-xl border ${s.border} bg-white overflow-hidden`}>
+        <button onClick={() => setExpandedCard(isExpanded ? null : key)}
+          className={`w-full px-4 py-3 flex items-start justify-between text-left ${s.hover} transition-colors`}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="text-xs font-mono px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full">{item.code}</span>
+              {item.category_level && <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full">L{item.category_level}</span>}
+              {item.is_policy_104 && <span className="text-xs px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full font-semibold">Πολιτική 104</span>}
+              {item.discussed && <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">Συζητήθηκε</span>}
+              {item.interested === true && <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">Ενδιαφέρει</span>}
+              {item.interested === false && <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full">Δεν ενδιαφέρει</span>}
+            </div>
+            <div className="font-semibold text-slate-800 text-sm">{item.name}</div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap">
+              {item.category_name && <span>{item.category_name}</span>}
+              {item.price != null && <span className="font-medium text-slate-700">{fmtEur(item.price)}</span>}
+              {item.vehicle.length > 0 && <span>{item.vehicle.map(v => VEHICLE_LABEL[v] ?? v).join(' · ')}</span>}
+            </div>
+          </div>
+          {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 mt-1" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" />}
+        </button>
+
+        {isExpanded && (
+          <div className={`px-4 pb-4 border-t ${s.borderT} space-y-3 pt-3`}>
+            <div className="flex gap-2">
+              <button
+                onClick={() => saveItemInterest(listType, item, { interested: item.interested === true ? null : true })}
+                disabled={saving}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
+                  item.interested === true ? 'bg-emerald-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}>
+                <ThumbsUp className="w-3.5 h-3.5" /> Ενδιαφέρει
+              </button>
+              <button
+                onClick={() => saveItemInterest(listType, item, { interested: item.interested === false ? null : false })}
+                disabled={saving}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
+                  item.interested === false ? 'bg-slate-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}>
+                <ThumbsDown className="w-3.5 h-3.5" /> Δεν ενδιαφέρει
+              </button>
+              <button
+                onClick={() => saveItemInterest(listType, item, { discussed: !item.discussed })}
+                disabled={saving}
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
+                  item.discussed ? 'bg-green-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}>
+                <Check className="w-3.5 h-3.5" /> Συζητήθηκε
+              </button>
+            </div>
+            <textarea
+              rows={2}
+              value={itemNotes[key] ?? item.notes ?? ''}
+              onChange={e => setItemNotes(n => ({ ...n, [key]: e.target.value }))}
+              onBlur={() => { if ((itemNotes[key] ?? '') !== (item.notes ?? '')) saveItemInterest(listType, item, { notes: itemNotes[key] ?? '' }); }}
+              placeholder="Σημειώσεις..."
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-400 resize-none"
+            />
+            {item.english_name && <div className="text-xs text-slate-400">{item.english_name}</div>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <section className="bg-white rounded-xl shadow overflow-hidden">
       {/* Header */}
@@ -677,7 +802,7 @@ const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
         </div>
       )}
 
-      {totalSignals === 0 ? (
+      {totalContent === 0 ? (
         <div className="px-5 py-8 text-center text-slate-400 text-sm italic">
           {data.similar_customers.count === 0
             ? 'Δεν βρέθηκαν ομότιμοι πελάτες για σύγκριση'
@@ -695,10 +820,12 @@ const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
                 {tab.key === 'declining' && <TrendingDown className="w-3.5 h-3.5" />}
                 {tab.key === 'missing' && <AlertCircle className="w-3.5 h-3.5" />}
                 {tab.key === 'weak' && <BarChart2 className="w-3.5 h-3.5" />}
+                {tab.key === 'new' && <Sparkles className="w-3.5 h-3.5" />}
+                {tab.key === 'offers' && <Tag className="w-3.5 h-3.5" />}
                 {tab.label}
                 {tab.count > 0 && (
                   <span className={`px-1.5 py-0.5 rounded-full text-white text-xs font-bold ${
-                    tab.key === 'declining' ? 'bg-red-500' : tab.key === 'missing' ? 'bg-purple-500' : 'bg-amber-500'
+                    { declining: 'bg-red-500', missing: 'bg-purple-500', weak: 'bg-amber-500', new: 'bg-emerald-500', offers: 'bg-rose-500' }[tab.key]
                   }`}>{tab.count}</span>
                 )}
               </button>
@@ -721,6 +848,16 @@ const visibleDeclining = data.declining.filter(s => s.status !== 'dismissed');
               data.weak.length === 0
                 ? <div className="text-sm text-slate-400 italic text-center py-4">Δεν υπάρχουν αδύναμες κατηγορίες</div>
                 : data.weak.map(renderWeakCard)
+            )}
+            {activeTab === 'new' && (
+              newItems.length === 0
+                ? <div className="text-sm text-slate-400 italic text-center py-4">Δεν υπάρχουν νέα είδη σχετικά με τον πελάτη</div>
+                : newItems.map(it => renderItemCard(it, 'new'))
+            )}
+            {activeTab === 'offers' && (
+              offers.length === 0
+                ? <div className="text-sm text-slate-400 italic text-center py-4">Δεν υπάρχουν προσφορές σχετικές με τον πελάτη</div>
+                : offers.map(it => renderItemCard(it, 'offers'))
             )}
           </div>
 
