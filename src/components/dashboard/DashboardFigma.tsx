@@ -579,6 +579,35 @@ if (currentUser.role === 'claims_exec') {
                 × Clear filters
               </button>
             )}
+
+            {/* Attribution mode. Lives in the header because it governs the whole
+                dataset, not one panel: revenue, the per-customer ↑↓ growth arrows,
+                area and city breakdowns and the monthly chart all follow it.
+                'Οι πωλήσεις μου' counts invoices this rep wrote; 'Το πελατολόγιό μου'
+                counts everything their current customers bought, including sales
+                made by a predecessor.
+                NOT yet followed by the category/SKU section or the revenue map —
+                those read mv_crm_sku_sales, which carries no salesman. */}
+            <div
+              className={`inline-flex rounded-lg overflow-hidden border border-white/30 ${hasActiveFilters ? '' : 'ml-auto'}`}
+              role="group"
+              title="Οι πωλήσεις μου: τιμολόγια που έκοψε ο πωλητής. Το πελατολόγιό μου: ό,τι αγόρασαν οι σημερινοί του πελάτες, ακόμη κι αν τα πούλησε προηγούμενος πωλητής. Δεν επηρεάζει ακόμη τις κατηγορίες/SKU."
+            >
+              {([['sales', 'Οι πωλήσεις μου'], ['book', 'Το πελατολόγιό μου']] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setAttributionMode(mode)}
+                  aria-pressed={attributionMode === mode}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${
+                    attributionMode === mode
+                      ? 'bg-white text-blue-700'
+                      : 'bg-white/10 text-white/90 hover:bg-white/25'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Context bar */}
@@ -855,28 +884,12 @@ if (currentUser.role === 'claims_exec') {
                     {PERIODS.map(p => <option key={p.key} value={p.key}>{p.shortLabel}</option>)}
                   </select>
 
-                  {/* Attribution: who gets credit for a sale. 'Οι πωλήσεις μου'
-                      counts invoices this rep wrote; 'Το πελατολόγιό μου' counts
-                      everything their current customers bought, including sales
-                      made by a predecessor. Only the figures in this section
-                      follow it. */}
-                  <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden" role="group"
-                       title="Οι πωλήσεις μου: τιμολόγια που έκοψε ο πωλητής. Το πελατολόγιό μου: ό,τι αγόρασαν οι σημερινοί του πελάτες, ακόμη κι αν τα πούλησε προηγούμενος πωλητής.">
-                    {([['sales', 'Οι πωλήσεις μου'], ['book', 'Το πελατολόγιό μου']] as const).map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        onClick={() => setAttributionMode(mode)}
-                        aria-pressed={attributionMode === mode}
-                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                          attributionMode === mode
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  {/* The attribution toggle moved to the header — it governs the
+                      whole dashboard, not just this panel. A small label here so
+                      the numbers are never ambiguous when read on their own. */}
+                  <span className="text-xs text-slate-500">
+                    {attributionMode === 'sales' ? 'Οι πωλήσεις μου' : 'Το πελατολόγιό μου'}
+                  </span>
                   {selectedAreas.length > 0 && (
                     <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
