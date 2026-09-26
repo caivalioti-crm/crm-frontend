@@ -115,6 +115,17 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
     catch { return {}; }
   }, []);
 
+  /* ===================== ATTRIBUTION MODE ===================== */
+  // 'sales' = credit the rep who wrote the invoice (their own performance).
+  // 'book'  = credit whoever holds the customer now, i.e. that book's history
+  //           including sales made by a predecessor.
+  // Defaults to 'sales'. Only the revenue figures follow it — the customer
+  // list, map and category analysis stay on the book, which is what they are
+  // for: you plan the next visit against the whole customer, not your slice.
+  const [attributionMode, setAttributionMode] = useState<'sales' | 'book'>(
+    savedFilters.attributionMode === 'book' ? 'book' : 'sales'
+  );
+
   /* ===================== DATA STATE ===================== */
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -242,11 +253,12 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
     setSalesLoading(true);
     try {
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
-const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
+const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=` : '';
+      const modeParam = `&mode=${attributionMode}`;
       const [current, compare, areas] = await Promise.all([
-        authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}`),
-        authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
-        authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}`),
+        authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}${modeParam}`),
+        authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}${modeParam}`),
+        authedFetch(`/api/erp/sales/by-area?from=${period.from}&to=${period.to}&compareFrom=${period.compareFrom}&compareTo=${period.compareTo}${salesmanParam}${modeParam}`),
       ]);
       if (reqId !== salesReqId.current) return;   // stale response, ignore
       setSales(Array.isArray(current) ? current.map(mapErpSale) : []);
@@ -259,7 +271,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
     } finally {
       if (reqId === salesReqId.current) setSalesLoading(false);
     }
- }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
+ }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode]);
 
   useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
 
@@ -267,10 +279,11 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
     setMonthlySalesLoading(true);
     try {
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
-      const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
+      const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=` : '';
+      const modeParam = `&mode=${attributionMode}`;
       const [current, compare] = await Promise.all([
-        authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}`),
-        authedFetch(`/api/erp/sales/monthly?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}`),
+        authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}${modeParam}`),
+        authedFetch(`/api/erp/sales/monthly?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}${modeParam}`),
       ]);
       setMonthlySales(Array.isArray(current) ? current : []);
       setMonthlySalesCompare(Array.isArray(compare) ? compare : []);
@@ -279,7 +292,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
     } finally {
       setMonthlySalesLoading(false);
     }
-  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
+  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode]);
 
   useEffect(() => {
     if (monthlySalesExpanded) fetchMonthlySales(selectedPeriod);
@@ -398,9 +411,10 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     setCityLoading(true);
     try {
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
-const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
+const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=` : '';
+      const modeParam = `&mode=${attributionMode}`;
       const data = await authedFetch(
-        `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}${salesmanParam}`
+        `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}${salesmanParam}${modeParam}`
       );
       setCityStats(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -408,7 +422,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
     } finally {
       setCityLoading(false);
     }
-  }, [selectedPeriod, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode]);
+  }, [selectedPeriod, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode]);
 
   const backToAreas = useCallback(() => { setSelectedGeoArea(null); setCityStats([]); }, []);
 
@@ -639,6 +653,7 @@ const areaStats = useMemo(() => {
     customersTotal: scopedCustomers.length,
     totalRevenue, compareRevenue, revenueGrowth, customersWithSales,
     salesLoading, areaStats, cityStats, cityLoading,
+    attributionMode, setAttributionMode,
     selectedGeoArea, drillDownToArea, backToAreas,
     selectedPeriod, setSelectedPeriod,
     areas, cities,

@@ -264,6 +264,7 @@ export function DashboardFigma() {
   const {
     customers, customersTotal, totalRevenue, compareRevenue, revenueGrowth,
     customersWithSales, salesLoading, areaStats, cityStats, cityLoading,
+    attributionMode, setAttributionMode,
     selectedGeoArea, drillDownToArea, backToAreas, selectedPeriod, setSelectedPeriod,
     areas, cities,
     selectedAreas, selectedCities, toggleArea, toggleCity, clearAreas, clearCities,
@@ -824,6 +825,7 @@ if (currentUser.role === 'claims_exec') {
                   // Save filter state before navigating
                   sessionStorage.setItem('dashboardScrollY', String(window.scrollY));
                   sessionStorage.setItem('dashboardFilters', JSON.stringify({
+                    attributionMode,
                     selectedAreas,
                     selectedCities,
                     notVisitedDays,
@@ -852,6 +854,29 @@ if (currentUser.role === 'claims_exec') {
                   <select value={selectedPeriod.key} onChange={e => setSelectedPeriod(e.target.value)} className="text-sm font-medium text-blue-600 bg-transparent border-none outline-none cursor-pointer">
                     {PERIODS.map(p => <option key={p.key} value={p.key}>{p.shortLabel}</option>)}
                   </select>
+
+                  {/* Attribution: who gets credit for a sale. 'Οι πωλήσεις μου'
+                      counts invoices this rep wrote; 'Το πελατολόγιό μου' counts
+                      everything their current customers bought, including sales
+                      made by a predecessor. Only the figures in this section
+                      follow it. */}
+                  <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden" role="group"
+                       title="Οι πωλήσεις μου: τιμολόγια που έκοψε ο πωλητής. Το πελατολόγιό μου: ό,τι αγόρασαν οι σημερινοί του πελάτες, ακόμη κι αν τα πούλησε προηγούμενος πωλητής.">
+                    {([['sales', 'Οι πωλήσεις μου'], ['book', 'Το πελατολόγιό μου']] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        onClick={() => setAttributionMode(mode)}
+                        aria-pressed={attributionMode === mode}
+                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                          attributionMode === mode
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   {selectedAreas.length > 0 && (
                     <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
