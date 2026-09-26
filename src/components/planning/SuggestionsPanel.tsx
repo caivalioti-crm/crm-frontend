@@ -167,7 +167,11 @@ const [hotelNameInput, setHotelNameInput] = useState('');
   // ── Load rep profiles ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!isPrivileged) return;
+    // is_active, not salesman_code, decides who can be assigned work — a
+    // departed rep keeps their profile row so their name still renders on
+    // their old visits, and must not appear as an assignment target.
     supabase.from('crm_user_profiles').select('id, full_name, role, salesman_code')
+      .eq('is_active', true)
       .then(({ data }) => {
         setRepProfiles((data ?? []).filter((p: any) => p.role === 'rep' || p.role === 'manager'));
       })

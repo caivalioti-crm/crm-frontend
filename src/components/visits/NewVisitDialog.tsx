@@ -126,6 +126,7 @@ export function NewVisitDialog({ isOpen, onClose, customers, onSave, currentUser
     supabase
       .from('crm_user_profiles')
       .select('id, full_name, salesman_code')
+      .eq('is_active', true)
       .not('salesman_code', 'is', null)
       .then(({ data }) => setRepProfiles((data ?? []).filter((p: any) => p.salesman_code)));
   }, []);
