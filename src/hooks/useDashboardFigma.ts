@@ -97,13 +97,28 @@ export function buildPeriods(syncDate: string, invoiceDate?: string): Period[] {
 export const PERIODS = buildPeriods(toLocalDateString(_now));
 
 /* ===================== LIKE-FOR-LIKE ===================== */
-// "Without new items": items activated on the B2B since 1 Jan of the COMPARISON
-// year, dropped from both periods, so 2026 vs 2025 compares the same range of
-// items. "Without new customers": customers whose card was opened in the ERP
-// during the current period. The API takes the cut-off dates as given.
-export function likeForLikeQuery(period: Period, excludeItems: boolean, excludeCustomers: boolean): Record<string, string> {
+// "Without new items" has two scopes:
+//   'current' - the main one: drop the items launched in the CURRENT period's
+//               year (on the B2B since 1 Jan of it) and keep everything that
+//               existed before, i.e. this year's sales minus what the new
+//               range added.
+//   'both'    - for comparison: also drop the comparison year's launches, so
+//               both periods cover exactly the same range of items.
+// The cut-off applies to both periods. "Without new customers": customers whose
+// card was opened in the ERP during the current period. The API takes the
+// cut-off dates as given.
+export type NewItemsMode = 'off' | 'current' | 'both';
+
+export function newItemsSinceFor(period: { from: string; compareFrom: string }, mode: NewItemsMode): string | null {
+  if (mode === 'current') return `${period.from.slice(0, 4)}-01-01`;
+  if (mode === 'both') return `${period.compareFrom.slice(0, 4)}-01-01`;
+  return null;
+}
+
+export function likeForLikeQuery(period: Period, itemsMode: NewItemsMode, excludeCustomers: boolean): Record<string, string> {
   const q: Record<string, string> = {};
-  if (excludeItems) q.newItemsSince = `${period.compareFrom.slice(0, 4)}-01-01`;
+  const since = newItemsSinceFor(period, itemsMode);
+  if (since) q.newItemsSince = since;
   if (excludeCustomers) q.newCustomersSince = period.from;
   return q;
 }
@@ -195,7 +210,10 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null, viewAsTenu
   const [customerSortMode, setCustomerSortMode] = useState<'name' | 'area_then_name'>(savedFilters.customerSortMode ?? 'name');
   // Unlike the filters above these change the revenue figures themselves, so
   // they are applied server-side and every sales figure on the page follows them.
-  const [excludeNewItems, setExcludeNewItems] = useState<boolean>(savedFilters.excludeNewItems === true);
+  const [newItemsMode, setNewItemsMode] = useState<NewItemsMode>(
+    ['current', 'both'].includes(savedFilters.newItemsMode) ? savedFilters.newItemsMode : 'off'
+  );
+  const excludeNewItems = newItemsMode !== 'off';
   const [excludeNewCustomers, setExcludeNewCustomers] = useState<boolean>(savedFilters.excludeNewCustomers === true);
 
   // The Total Revenue tile always shows the "other" figure too: like-for-like
@@ -280,9 +298,9 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null, viewAsTenu
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
 const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const modeParam = `&mode=${attributionMode}`;
-      const lflParam = toQueryTail(likeForLikeQuery(period, excludeNewItems, excludeNewCustomers));
+      const lflParam = toQueryTail(likeForLikeQuery(period, newItemsMode, excludeNewCustomers));
       const anyLfl = excludeNewItems || excludeNewCustomers;
-      const altLflParam = anyLfl ? '' : toQueryTail(likeForLikeQuery(period, true, true));
+      const altLflParam = anyLfl ? '' : toQueryTail(likeForLikeQuery(period, 'current', true));
       const [current, compare, areas, altCurrent, altCompare] = await Promise.all([
         authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}${modeParam}${lflParam}`),
         authedFetch(`/api/erp/sales?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}${modeParam}${lflParam}`),
@@ -303,7 +321,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
     } finally {
       if (reqId === salesReqId.current) setSalesLoading(false);
     }
- }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode, excludeNewItems, excludeNewCustomers]);
+ }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode, newItemsMode, excludeNewCustomers]);
 
   useEffect(() => { fetchSales(selectedPeriod); }, [selectedPeriod, fetchSales]);
 
@@ -313,7 +331,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
       const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const modeParam = `&mode=${attributionMode}`;
-      const lflParam = toQueryTail(likeForLikeQuery(period, excludeNewItems, excludeNewCustomers));
+      const lflParam = toQueryTail(likeForLikeQuery(period, newItemsMode, excludeNewCustomers));
       const [current, compare] = await Promise.all([
         authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}${modeParam}${lflParam}`),
         authedFetch(`/api/erp/sales/monthly?from=${period.compareFrom}&to=${period.compareTo}${salesmanParam}${modeParam}${lflParam}`),
@@ -325,7 +343,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
     } finally {
       setMonthlySalesLoading(false);
     }
-  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode, excludeNewItems, excludeNewCustomers]);
+  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode, newItemsMode, excludeNewCustomers]);
 
   useEffect(() => {
     if (monthlySalesExpanded) fetchMonthlySales(selectedPeriod);
@@ -343,7 +361,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
       const params = new URLSearchParams({
         from: period.from, to: period.to,
         prevFrom: period.compareFrom, prevTo: period.compareTo,
-        ...likeForLikeQuery(period, excludeNewItems, excludeNewCustomers),
+        ...likeForLikeQuery(period, newItemsMode, excludeNewCustomers),
       });
       if (areas.length === 1) params.set('area', areas[0]);
       if (cities.length === 1) params.set('city', cities[0]);
@@ -356,7 +374,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     } finally {
       setSalesByCategoryLoading(false);
     }
-  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, excludeNewItems, excludeNewCustomers]);
+  }, [repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, newItemsMode, excludeNewCustomers]);
 
   // Collapsed, the category section is only fetched again when it is empty, so
   // drop what it holds when the like-for-like toggles change.
@@ -364,7 +382,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     setSalesByCategory([]);
     setDashboardSkuData({});
     setTopCustomersData({});
-  }, [excludeNewItems, excludeNewCustomers]);
+  }, [newItemsMode, excludeNewCustomers]);
 
   useEffect(() => {
     if (salesByCategoryExpanded) {
@@ -387,7 +405,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     if (dashboardSkuData[categoryId] || dashboardSkuLoading.has(categoryId)) return;
     const params = new URLSearchParams({
       from: selectedPeriod.from, to: selectedPeriod.to,
-      ...likeForLikeQuery(selectedPeriod, excludeNewItems, excludeNewCustomers),
+      ...likeForLikeQuery(selectedPeriod, newItemsMode, excludeNewCustomers),
     });
     if (selectedAreas.length === 1) params.set('area', selectedAreas[0]);
     if (selectedCities.length === 1) params.set('city', selectedCities[0]);
@@ -402,7 +420,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     } finally {
       setDashboardSkuLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
     }
-  }, [selectedPeriod, selectedAreas, selectedCities, dashboardSkuData, dashboardSkuLoading, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, excludeNewItems, excludeNewCustomers]);
+  }, [selectedPeriod, selectedAreas, selectedCities, dashboardSkuData, dashboardSkuLoading, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, newItemsMode, excludeNewCustomers]);
 
   /* ===================== FETCH TOP CUSTOMERS ===================== */
   const fetchTopCustomers = useCallback(async (categoryId: string) => {
@@ -411,7 +429,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
       from: selectedPeriod.from, to: selectedPeriod.to,
       prevFrom: selectedPeriod.compareFrom, prevTo: selectedPeriod.compareTo,
       categoryId,
-      ...likeForLikeQuery(selectedPeriod, excludeNewItems, excludeNewCustomers),
+      ...likeForLikeQuery(selectedPeriod, newItemsMode, excludeNewCustomers),
     });
     if (selectedAreas.length === 1) params.set('area', selectedAreas[0]);
     if (selectedCities.length === 1) params.set('city', selectedCities[0]);
@@ -426,7 +444,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     } finally {
       setTopCustomersLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; });
     }
-  }, [selectedPeriod, selectedAreas, selectedCities, topCustomersData, topCustomersLoading, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, excludeNewItems, excludeNewCustomers]);
+  }, [selectedPeriod, selectedAreas, selectedCities, topCustomersData, topCustomersLoading, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, newItemsMode, excludeNewCustomers]);
 
   /* ===================== PERIOD SETTER ===================== */
   const setSelectedPeriod = useCallback((periodKey: string) => {
@@ -459,7 +477,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
 const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const modeParam = `&mode=${attributionMode}`;
-      const lflParam = toQueryTail(likeForLikeQuery(selectedPeriod, excludeNewItems, excludeNewCustomers));
+      const lflParam = toQueryTail(likeForLikeQuery(selectedPeriod, newItemsMode, excludeNewCustomers));
       const data = await authedFetch(
         `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}${salesmanParam}${modeParam}${lflParam}`
       );
@@ -469,7 +487,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesman
     } finally {
       setCityLoading(false);
     }
-  }, [selectedPeriod, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode, excludeNewItems, excludeNewCustomers]);
+  }, [selectedPeriod, repModeOverride, currentUser.salesman_code, viewAsSalesmanCode, attributionMode, newItemsMode, excludeNewCustomers]);
 
   const backToAreas = useCallback(() => { setSelectedGeoArea(null); setCityStats([]); }, []);
 
@@ -787,7 +805,7 @@ const areaStats = useMemo(() => {
     displayedCustomers,
     customersTotal: scopedCustomers.length,
     totalRevenue, compareRevenue, revenueGrowth, customersWithSales, comparisonPredatesTenure,
-    excludeNewItems, setExcludeNewItems, excludeNewCustomers, setExcludeNewCustomers,
+    newItemsMode, setNewItemsMode, excludeNewItems, excludeNewCustomers, setExcludeNewCustomers,
     altRevenue: altTotals.current, altCompareRevenue: altTotals.compare, altRevenueGrowth: altTotals.growth,
     salesLoading, areaStats, cityStats, cityLoading,
     attributionMode, setAttributionMode,

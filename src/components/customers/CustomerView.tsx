@@ -15,6 +15,7 @@ import { ProfileEditor } from '../ui/ProfileEditor';
 import { SmartDateInput, dateToISO, isoToDisplay } from '../ui/SmartDateInput';
 import { CategorySelector } from '../ui/CategorySelector';
 import { CategoryIntelligence } from './CategoryIntelligence';
+import { newItemsSinceFor, type NewItemsMode } from '../../hooks/useDashboardFigma';
 
 import { CustomerMap } from '../customers/CustomerMap';
 
@@ -189,13 +190,16 @@ export function CustomerView({ customer, onBack, backLabel, currentUser: propCur
   const [lastInvoiceDate, setLastInvoiceDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [salesByBranch, setSalesByBranch] = useState<any[]>([]);
   const [salesByBranchLoading, setSalesByBranchLoading] = useState(false);
-  // "Without new items": drops items activated on the B2B since 1 Jan of the
-  // comparison year from both periods. Starts from the dashboard's setting,
-  // which the dashboard saves just before opening the card.
-  const [excludeNewItems, setExcludeNewItems] = useState<boolean>(() => {
-    try { return JSON.parse(sessionStorage.getItem('dashboardFilters') ?? '{}').excludeNewItems === true; }
-    catch { return false; }
+  // "Without new items", same two scopes as the dashboard (see newItemsSinceFor):
+  // this year's launches only, or the comparison year's too. Starts from the
+  // dashboard's setting, which the dashboard saves just before opening the card.
+  const [newItemsMode, setNewItemsMode] = useState<NewItemsMode>(() => {
+    try {
+      const m = JSON.parse(sessionStorage.getItem('dashboardFilters') ?? '{}').newItemsMode;
+      return m === 'current' || m === 'both' ? m : 'off';
+    } catch { return 'off'; }
   });
+  const excludeNewItems = newItemsMode !== 'off';
   // The other variant of the totals, shown under the headline figure.
   const [altDayTotals, setAltDayTotals] = useState<{ current: number; prev: number } | null>(null);
   // Monthly rows without new items, for the details breakdown (null = not loaded).
@@ -290,9 +294,14 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
     ];
   }, [lastSyncDate, lastInvoiceDate]);
 
-  // Same cut-off as the dashboard (likeForLikeQuery): 1 Jan of the comparison year.
-  const newItemsSinceFor = (p: { prevDateFrom: string }) => `${p.prevDateFrom.slice(0, 4)}-01-01`;
-  const lflQs = (p: { prevDateFrom: string }) => excludeNewItems ? `&newItemsSince=${newItemsSinceFor(p)}` : '';
+  // Same cut-offs as the dashboard.
+  type SalesPeriod = { dateFrom: string; prevDateFrom: string };
+  const sinceFor = (p: SalesPeriod, mode: NewItemsMode) =>
+    newItemsSinceFor({ from: p.dateFrom, compareFrom: p.prevDateFrom }, mode);
+  const lflQs = (p: SalesPeriod) => {
+    const since = sinceFor(p, newItemsMode);
+    return since ? `&newItemsSince=${since}` : '';
+  };
 
   useEffect(() => {
     authedFetch('/api/categories')
@@ -339,7 +348,7 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
     authedFetch(`/api/erp/customers/${customer.code}/sales-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}${lflQs(p)}`)
       .then(data => setSalesByCategory(data.grouped ?? []))
       .catch(console.error).finally(() => setSalesByCategoryLoading(false));
-  }, [customer.code, salesPeriodIdx, SALES_PERIODS, excludeNewItems]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, newItemsMode]);
 
   useEffect(() => {
     setFilteredMonthly(null);
@@ -350,7 +359,7 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
       .then(data => { if (!cancelled) setFilteredMonthly(Array.isArray(data) ? data : []); })
       .catch(console.error);
     return () => { cancelled = true; };
-  }, [customer.code, salesPeriodIdx, SALES_PERIODS, excludeNewItems]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, newItemsMode]);
 
   useEffect(() => {
     setSalesByBranchLoading(true);
@@ -360,7 +369,7 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
       .then(data => setSalesByBranch(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setSalesByBranchLoading(false));
-  }, [customer.code, salesPeriodIdx, SALES_PERIODS, excludeNewItems]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, newItemsMode]);
 
   useEffect(() => {
     const p = SALES_PERIODS[salesPeriodIdx];
@@ -372,9 +381,10 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
       p_prev_from: prevDateFrom,
       p_prev_to: prevDateTo,
     };
-    // The parameter is only sent when set, so the call still works against a
-    // database that predates it.
-    const withNewItems = { ...base, p_new_items_since: newItemsSinceFor(p) };
+    // The parameter is only sent when set. The line under the headline shows
+    // "without this year's new items" when the filter is off, and everything
+    // when it is on.
+    const withNewItems = { ...base, p_new_items_since: sinceFor(p, excludeNewItems ? newItemsMode : 'current') };
     let cancelled = false;
     setDayTotals(null);
     setAltDayTotals(null);
@@ -410,7 +420,7 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
       }
     })();
     return () => { cancelled = true; };
-  }, [customer.code, salesPeriodIdx, SALES_PERIODS, refreshKey, excludeNewItems]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, refreshKey, newItemsMode]);
 
   useEffect(() => {
     setDocsLoading(true);
@@ -524,6 +534,12 @@ useEffect(() => {
   const isUp = growthPct !== null && growthPct >= 0;
   const diffAbs = currentTotal - prevTotal;
   const totalsLoading = (dayTotalsLoading && !dayTotals) || (!canFallBack && !dayTotals);
+  const spCurYear = sp.dateFrom.slice(0, 4);
+  const spCmpYear = sp.prevDateFrom.slice(0, 4);
+  const newItemsLabel = {
+    current: `Χωρίς νέα είδη ${spCurYear}`,
+    both: `Χωρίς νέα είδη ${spCmpYear}–${spCurYear}`,
+  };
   const altGrowthPct = altDayTotals && altDayTotals.prev > 0
     ? ((altDayTotals.current - altDayTotals.prev) / altDayTotals.prev) * 100 : null;
 
@@ -1267,18 +1283,26 @@ const startEditVisitInCustomer = (v: any) => {
               <span className="text-xs text-slate-400 whitespace-nowrap">{sp.label} vs {sp.prevLabel}</span>
               {excludeNewItems && (
                 <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-medium flex items-center gap-1">
-                  Χωρίς νέα είδη (από 1/1/{sp.prevDateFrom.slice(0, 4)})
-                  <button onClick={() => setExcludeNewItems(false)} className="ml-1 hover:text-amber-950" aria-label="Αφαίρεση φίλτρου νέων ειδών">×</button>
+                  {newItemsLabel[newItemsMode as 'current' | 'both']}
+                  <button onClick={() => setNewItemsMode('off')} className="ml-1 hover:text-amber-950" aria-label="Αφαίρεση φίλτρου νέων ειδών">×</button>
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => setExcludeNewItems(v => !v)} aria-pressed={excludeNewItems}
-                title={`Βγάζει από ΚΑΙ τις δύο περιόδους τα είδη που ενεργοποιήθηκαν στο B2B από 1/1/${sp.prevDateFrom.slice(0, 4)}`}
-                className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${excludeNewItems ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-600 border-slate-300 hover:border-amber-400'}`}>
-                <span className={`inline-block w-2.5 h-2.5 rounded-sm border ${excludeNewItems ? 'bg-white border-white' : 'border-slate-400'}`} />
-                Χωρίς νέα είδη
-              </button>
+              {/* Mutually exclusive: picking one replaces the other, clicking the active one turns it off. */}
+              {(['current', 'both'] as const).map(mode => {
+                const on = newItemsMode === mode;
+                return (
+                  <button key={mode} onClick={() => setNewItemsMode(m => m === mode ? 'off' : mode)} aria-pressed={on}
+                    title={mode === 'current'
+                      ? `Οι πωλήσεις χωρίς τα είδη που μπήκαν στο B2B μέσα στο ${spCurYear}. Όσα υπήρχαν έως 31/12/${Number(spCurYear) - 1} μετράνε κανονικά.`
+                      : `Για σύγκριση: βγάζει και τα νέα είδη του ${spCmpYear}, ώστε οι δύο περίοδοι να έχουν ακριβώς τα ίδια είδη.`}
+                    className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${on ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-600 border-slate-300 hover:border-amber-400'}`}>
+                    <span className={`inline-block w-2.5 h-2.5 rounded-sm border ${on ? 'bg-white border-white' : 'border-slate-400'}`} />
+                    {newItemsLabel[mode]}
+                  </button>
+                );
+              })}
               <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))} className="text-xs border border-slate-300 rounded-lg px-2 py-1 text-slate-600 focus:ring-2 focus:ring-indigo-500">
                 {SALES_PERIODS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
               </select>
@@ -1312,7 +1336,7 @@ const startEditVisitInCustomer = (v: any) => {
                           without toggling. */}
                       {altDayTotals && (
                         <div className="mt-2 pt-2 border-t border-indigo-100 text-xs text-indigo-500">
-                          {excludeNewItems ? 'Με νέα είδη: ' : 'Χωρίς νέα είδη: '}
+                          {excludeNewItems ? 'Με όλα τα είδη: ' : `${newItemsLabel.current}: `}
                           <span className="font-semibold text-indigo-700">{fmtEur(altDayTotals.current)}</span>
                           {altGrowthPct !== null && (
                             <span className={`ml-1 font-semibold ${altGrowthPct >= 0 ? 'text-green-600' : 'text-red-500'}`}>

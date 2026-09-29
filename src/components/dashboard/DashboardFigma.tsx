@@ -263,7 +263,7 @@ export function DashboardFigma() {
   const viewAsRep = repList.find(r => r.id === viewAsRepId) ?? null;
   const {
     customers, customersTotal, totalRevenue, compareRevenue, revenueGrowth, comparisonPredatesTenure,
-    excludeNewItems, setExcludeNewItems, excludeNewCustomers, setExcludeNewCustomers,
+    newItemsMode, setNewItemsMode, excludeNewItems, excludeNewCustomers, setExcludeNewCustomers,
     altRevenue, altRevenueGrowth,
     customersWithSales, salesLoading, areaStats, cityStats, cityLoading,
     attributionMode, setAttributionMode,
@@ -428,15 +428,20 @@ useEffect(() => {
     setPerformanceFilter('all');
     setActiveFilter('all');
     setJoinedPeriod(null);
-    setExcludeNewItems(false);
+    setNewItemsMode('off');
     setExcludeNewCustomers(false);
   }
 
-  // Cut-offs as the API applies them (see likeForLikeQuery), for the labels.
-  const newItemsSinceLabel = `1/1/${selectedPeriod.compareFrom.slice(0, 4)}`;
+  // Labels for the cut-offs the API applies (see likeForLikeQuery).
+  const curYear = selectedPeriod.from.slice(0, 4);
+  const cmpYear = selectedPeriod.compareFrom.slice(0, 4);
+  const newItemsLabel: Record<'current' | 'both', string> = {
+    current: `Χωρίς νέα είδη ${curYear}`,
+    both: `Χωρίς νέα είδη ${cmpYear}–${curYear}`,
+  };
   const newCustomersSinceLabel = selectedPeriod.from.split('-').reverse().map(Number).join('/');
   const likeForLikeChips = [
-    excludeNewItems && { key: 'items', label: `Χωρίς νέα είδη (από ${newItemsSinceLabel})`, clear: () => setExcludeNewItems(false) },
+    newItemsMode !== 'off' && { key: 'items', label: newItemsLabel[newItemsMode], clear: () => setNewItemsMode('off') },
     excludeNewCustomers && { key: 'custs', label: `Χωρίς νέους πελάτες (καρτέλα από ${newCustomersSinceLabel})`, clear: () => setExcludeNewCustomers(false) },
   ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
 
@@ -721,8 +726,11 @@ if (currentUser.role === 'claims_exec') {
                   <TrendingUp className="w-3.5 h-3.5" />Σύγκριση ίδια-με-ίδια
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {/* The two new-item scopes are mutually exclusive: picking one
+                      replaces the other, clicking the active one turns it off. */}
                   {([
-                    { label: 'Χωρίς νέα είδη', hint: `Βγάζει από ΚΑΙ τις δύο περιόδους τα είδη που ενεργοποιήθηκαν στο B2B από ${newItemsSinceLabel}`, on: excludeNewItems, toggle: () => setExcludeNewItems(v => !v) },
+                    { label: newItemsLabel.current, hint: `Οι πωλήσεις χωρίς τα είδη που μπήκαν στο B2B μέσα στο ${curYear}. Όσα υπήρχαν έως 31/12/${Number(curYear) - 1} μετράνε κανονικά.`, on: newItemsMode === 'current', toggle: () => setNewItemsMode(m => m === 'current' ? 'off' : 'current') },
+                    { label: newItemsLabel.both, hint: `Για σύγκριση: βγάζει και τα νέα είδη του ${cmpYear}, ώστε οι δύο περίοδοι να έχουν ακριβώς τα ίδια είδη.`, on: newItemsMode === 'both', toggle: () => setNewItemsMode(m => m === 'both' ? 'off' : 'both') },
                     { label: 'Χωρίς νέους πελάτες', hint: `Βγάζει τους πελάτες που άνοιξαν καρτέλα από ${newCustomersSinceLabel}`, on: excludeNewCustomers, toggle: () => setExcludeNewCustomers(v => !v) },
                   ]).map(opt => (
                     <button key={opt.label} onClick={opt.toggle} title={opt.hint} aria-pressed={opt.on}
@@ -904,7 +912,7 @@ if (currentUser.role === 'claims_exec') {
                     joinedPeriod,
                     customerSortMode,
                     filtersExpanded,
-                    excludeNewItems,
+                    newItemsMode,
                     excludeNewCustomers,
                     periodKey: selectedPeriod.key,
                   }));
@@ -972,7 +980,7 @@ if (currentUser.role === 'claims_exec') {
                           visible without toggling: like-for-like when no toggle is
                           on, all sales when one is. */}
                       <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap items-center gap-x-1.5">
-                        <span>{likeForLikeChips.length > 0 ? 'Με όλα (νέα είδη & πελάτες):' : 'Ίδια-με-ίδια (χωρίς νέα είδη & πελάτες):'}</span>
+                        <span>{likeForLikeChips.length > 0 ? 'Με όλα (νέα είδη & πελάτες):' : `Χωρίς νέα είδη ${curYear} & νέους πελάτες:`}</span>
                         <span className="font-semibold text-slate-700">€{altRevenue.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                         {altRevenueGrowth !== null && (
                           <span className={`font-semibold ${altRevenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
