@@ -449,15 +449,26 @@ const scopedCustomers = useMemo(() => {
   }, [scopedCustomers]);
 
   /* ===================== SCOPED SALES ===================== */
+  // In 'sales' mode the server has ALREADY scoped these rows by who wrote the
+  // invoice. Re-filtering them by who owns the customer today would silently
+  // delete a rep's own work: Neris, who holds no customers any more, would show
+  // EUR 0 instead of the EUR 83,495 he actually earned, and Vakouftshs would
+  // lose EUR 30,113. That is the exact distortion the attribution work exists
+  // to remove, so ownership scoping is skipped in that mode.
+  // 'book' mode is unchanged - there, scoping by current owner IS the question.
+  const scopeSalesByOwner = attributionMode !== 'sales';
+
   const scopedSales = useMemo(() => {
+    if (!scopeSalesByOwner) return sales;
     const ids = new Set(scopedCustomers.map(c => String(c.trdr_id)));
     return sales.filter(s => ids.has(String(s.customerCode)));
-  }, [sales, scopedCustomers]);
+  }, [sales, scopedCustomers, scopeSalesByOwner]);
 
   const scopedCompareSales = useMemo(() => {
+    if (!scopeSalesByOwner) return compareSales;
     const ids = new Set(scopedCustomers.map(c => String(c.trdr_id)));
     return compareSales.filter(s => ids.has(String(s.customerCode)));
-  }, [compareSales, scopedCustomers]);
+  }, [compareSales, scopedCustomers, scopeSalesByOwner]);
 
   /* ===================== GEO OPTIONS ===================== */
   const areas = useMemo(() => Array.from(new Set(scopedCustomers.map(c => c.area))).sort(), [scopedCustomers]);
@@ -472,6 +483,29 @@ const scopedCustomers = useMemo(() => {
   }, [scopedCustomers, selectedAreas]);
 
   /* ===================== FILTERED CUSTOMERS (area/city/search) ===================== */
+  // The geo + search filters, applied to whichever customer list is relevant.
+  // Extracted so the sales aggregates can run them over ALL customers rather
+  // than only the ones the viewed rep currently owns.
+  const applyCustomerFilters = useCallback((base: Customer[]) => {
+    const geoFiltered = base.filter(c => {
+      if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
+      if (selectedCities.length > 0 && !selectedCities.includes(c.city)) return false;
+      return true;
+    });
+    if (!searchQuery.trim()) return geoFiltered;
+    const q = searchQuery.trim();
+    if (/^\d+$/.test(q)) {
+      const exact = geoFiltered.filter(c => String(c.code ?? '') === q);
+      if (exact.length > 0) return exact;
+      const prefix = geoFiltered.filter(c => String(c.code ?? '').startsWith(q));
+      if (prefix.length > 0) return prefix;
+    }
+    return geoFiltered.filter(c =>
+      smartMatch(c.name, q) || smartMatch(c.code, q) ||
+      smartMatch(c.city ?? '', q) || smartMatch(c.afm ?? '', q)
+    );
+  }, [selectedAreas, selectedCities, searchQuery]);
+
   const filteredCustomers = useMemo(() => {
     const geoFiltered = scopedCustomers.filter(c => {
       if (selectedAreas.length > 0 && !selectedAreas.includes(c.area)) return false;
@@ -560,14 +594,35 @@ const scopedCustomers = useMemo(() => {
   ]);
 
   /* ===================== GEO+ALL FILTERED SALES ===================== */
+  // fullyFilteredCustomerIds is derived from scopedCustomers, so it carries the
+  // same ownership scoping that must not apply to 'sales' mode. There, the
+  // explicit area/city/search filters are re-run against the full customer list
+  // instead, so filtering still works without re-introducing ownership.
+  // null means "do not filter at all". In 'sales' mode with no explicit filter
+  // applied, that is the only correct answer: a rep's own customer list does
+  // not contain accounts that have since moved to someone else, so filtering
+  // by ANY customer list would drop their own invoices to those accounts.
+  const salesAggregateIds = useMemo(() => {
+    if (scopeSalesByOwner) return fullyFilteredCustomerIds;
+    const hasExplicitFilter =
+      selectedAreas.length > 0 || selectedCities.length > 0 || searchQuery.trim() !== '';
+    if (!hasExplicitFilter) return null;
+    return new Set(applyCustomerFilters(customers).map(c => String(c.trdr_id)));
+  }, [scopeSalesByOwner, fullyFilteredCustomerIds, applyCustomerFilters, customers,
+      selectedAreas, selectedCities, searchQuery]);
+
   const geoFilteredSales = useMemo(() =>
-    scopedSales.filter(s => fullyFilteredCustomerIds.has(String(s.customerCode))),
-    [scopedSales, fullyFilteredCustomerIds]
+    salesAggregateIds === null
+      ? scopedSales
+      : scopedSales.filter(s => salesAggregateIds.has(String(s.customerCode))),
+    [scopedSales, salesAggregateIds]
   );
 
   const geoFilteredCompareSales = useMemo(() =>
-    scopedCompareSales.filter(s => fullyFilteredCustomerIds.has(String(s.customerCode))),
-    [scopedCompareSales, fullyFilteredCustomerIds]
+    salesAggregateIds === null
+      ? scopedCompareSales
+      : scopedCompareSales.filter(s => salesAggregateIds.has(String(s.customerCode))),
+    [scopedCompareSales, salesAggregateIds]
   );
 
   /* ===================== KPIs ===================== */
