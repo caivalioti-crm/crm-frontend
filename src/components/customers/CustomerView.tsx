@@ -189,6 +189,17 @@ export function CustomerView({ customer, onBack, backLabel, currentUser: propCur
   const [lastInvoiceDate, setLastInvoiceDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [salesByBranch, setSalesByBranch] = useState<any[]>([]);
   const [salesByBranchLoading, setSalesByBranchLoading] = useState(false);
+  // "Without new items": drops items activated on the B2B since 1 Jan of the
+  // comparison year from both periods. Starts from the dashboard's setting,
+  // which the dashboard saves just before opening the card.
+  const [excludeNewItems, setExcludeNewItems] = useState<boolean>(() => {
+    try { return JSON.parse(sessionStorage.getItem('dashboardFilters') ?? '{}').excludeNewItems === true; }
+    catch { return false; }
+  });
+  // The other variant of the totals, shown under the headline figure.
+  const [altDayTotals, setAltDayTotals] = useState<{ current: number; prev: number } | null>(null);
+  // Monthly rows without new items, for the details breakdown (null = not loaded).
+  const [filteredMonthly, setFilteredMonthly] = useState<any[] | null>(null);
 
   const [expandedL1s, setExpandedL1s] = useState<Set<string>>(new Set());
   const [expandedL2s, setExpandedL2s] = useState<Set<string>>(new Set());
@@ -279,6 +290,10 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
     ];
   }, [lastSyncDate, lastInvoiceDate]);
 
+  // Same cut-off as the dashboard (likeForLikeQuery): 1 Jan of the comparison year.
+  const newItemsSinceFor = (p: { prevDateFrom: string }) => `${p.prevDateFrom.slice(0, 4)}-01-01`;
+  const lflQs = (p: { prevDateFrom: string }) => excludeNewItems ? `&newItemsSince=${newItemsSinceFor(p)}` : '';
+
   useEffect(() => {
     authedFetch('/api/categories')
       .then((data: any[]) => {
@@ -318,36 +333,61 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
   useEffect(() => {
     setSalesByCategoryLoading(true);
     setExpandedL1s(new Set()); setExpandedL2s(new Set()); setExpandedL3s(new Set());
-    setSkuData({}); setRankData({});
-    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
-    authedFetch(`/api/erp/customers/${customer.code}/sales-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}`)
+    setSkuData({}); setRankData({}); setTopCustData({});
+    const p = SALES_PERIODS[salesPeriodIdx];
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = p;
+    authedFetch(`/api/erp/customers/${customer.code}/sales-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}${lflQs(p)}`)
       .then(data => setSalesByCategory(data.grouped ?? []))
       .catch(console.error).finally(() => setSalesByCategoryLoading(false));
-  }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, excludeNewItems]);
+
+  useEffect(() => {
+    setFilteredMonthly(null);
+    if (!excludeNewItems) return;
+    const p = SALES_PERIODS[salesPeriodIdx];
+    let cancelled = false;
+    authedFetch(`/api/erp/customers/${customer.code}/sales?from=${p.prevDateFrom}&to=${p.dateTo}${lflQs(p)}`)
+      .then(data => { if (!cancelled) setFilteredMonthly(Array.isArray(data) ? data : []); })
+      .catch(console.error);
+    return () => { cancelled = true; };
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, excludeNewItems]);
 
   useEffect(() => {
     setSalesByBranchLoading(true);
-    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
-    authedFetch(`/api/erp/customers/${customer.code}/sales-by-branch?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}`)
+    const p = SALES_PERIODS[salesPeriodIdx];
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = p;
+    authedFetch(`/api/erp/customers/${customer.code}/sales-by-branch?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}${lflQs(p)}`)
       .then(data => setSalesByBranch(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setSalesByBranchLoading(false));
-  }, [customer.code, salesPeriodIdx, SALES_PERIODS]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, excludeNewItems]);
 
   useEffect(() => {
-    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
+    const p = SALES_PERIODS[salesPeriodIdx];
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = p;
+    const base = {
+      p_trdr_code: String(customer.code),
+      p_from: dateFrom,
+      p_to: dateTo,
+      p_prev_from: prevDateFrom,
+      p_prev_to: prevDateTo,
+    };
+    // The parameter is only sent when set, so the call still works against a
+    // database that predates it.
+    const withNewItems = { ...base, p_new_items_since: newItemsSinceFor(p) };
     let cancelled = false;
     setDayTotals(null);
+    setAltDayTotals(null);
     setDayTotalsLoading(true);
+    // The other variant, for the line under the headline. Failure only hides it.
+    supabase.rpc('get_customer_sales_totals', excludeNewItems ? base : withNewItems)
+      .then(({ data, error }) => {
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!cancelled && !error && row) setAltDayTotals({ current: Number(row.current_net) || 0, prev: Number(row.prev_net) || 0 });
+      });
     (async () => {
       try {
-        const { data, error } = await supabase.rpc('get_customer_sales_totals', {
-          p_trdr_code: String(customer.code),
-          p_from: dateFrom,
-          p_to: dateTo,
-          p_prev_from: prevDateFrom,
-          p_prev_to: prevDateTo,
-        });
+        const { data, error } = await supabase.rpc('get_customer_sales_totals', excludeNewItems ? withNewItems : base);
         if (error) throw error;
         const row = Array.isArray(data) ? data[0] : data;
         if (!cancelled && row) {
@@ -370,7 +410,7 @@ const [allCategories, setAllCategories] = useState<any[]>([]);
       }
     })();
     return () => { cancelled = true; };
-  }, [customer.code, salesPeriodIdx, SALES_PERIODS, refreshKey]);
+  }, [customer.code, salesPeriodIdx, SALES_PERIODS, refreshKey, excludeNewItems]);
 
   useEffect(() => {
     setDocsLoading(true);
@@ -424,28 +464,30 @@ useEffect(() => {
 
   function fetchSkus(categoryId: string) {
     if (skuData[categoryId] || skuLoading.has(categoryId)) return;
-    const { dateFrom, dateTo } = SALES_PERIODS[salesPeriodIdx];
+    const p = SALES_PERIODS[salesPeriodIdx];
+    const { dateFrom, dateTo } = p;
     setSkuLoading(prev => new Set(prev).add(categoryId));
-    authedFetch(`/api/erp/customers/${customer.code}/skus-by-category?from=${dateFrom}&to=${dateTo}&categoryId=${categoryId}`)
+    authedFetch(`/api/erp/customers/${customer.code}/skus-by-category?from=${dateFrom}&to=${dateTo}&categoryId=${categoryId}${lflQs(p)}`)
       .then(data => setSkuData(prev => ({ ...prev, [categoryId]: data[categoryId] ?? [] })))
       .catch(console.error)
       .finally(() => setSkuLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; }));
   }
 
   function fetchRank(categoryId: string) {
-    const { dateFrom, dateTo } = SALES_PERIODS[salesPeriodIdx];
+    const p = SALES_PERIODS[salesPeriodIdx];
+    const { dateFrom, dateTo } = p;
     const areaKey = `${categoryId}-area`;
     const greeceKey = `${categoryId}-greece`;
     if (!rankData[areaKey] && !rankLoading.has(areaKey) && customer.area) {
       setRankLoading(prev => new Set(prev).add(areaKey));
-      authedFetch(`/api/erp/customer-category-rank?from=${dateFrom}&to=${dateTo}&customerCode=${customer.code}&categoryId=${categoryId}&area=${encodeURIComponent(customer.area)}`)
+      authedFetch(`/api/erp/customer-category-rank?from=${dateFrom}&to=${dateTo}&customerCode=${customer.code}&categoryId=${categoryId}&area=${encodeURIComponent(customer.area)}${lflQs(p)}`)
         .then(data => setRankData(prev => ({ ...prev, [areaKey]: data })))
         .catch(console.error)
         .finally(() => setRankLoading(prev => { const n = new Set(prev); n.delete(areaKey); return n; }));
     }
     if (!rankData[greeceKey] && !rankLoading.has(greeceKey)) {
       setRankLoading(prev => new Set(prev).add(greeceKey));
-      authedFetch(`/api/erp/customer-category-rank?from=${dateFrom}&to=${dateTo}&customerCode=${customer.code}&categoryId=${categoryId}`)
+      authedFetch(`/api/erp/customer-category-rank?from=${dateFrom}&to=${dateTo}&customerCode=${customer.code}&categoryId=${categoryId}${lflQs(p)}`)
         .then(data => setRankData(prev => ({ ...prev, [greeceKey]: data })))
         .catch(console.error)
         .finally(() => setRankLoading(prev => { const n = new Set(prev); n.delete(greeceKey); return n; }));
@@ -454,9 +496,10 @@ useEffect(() => {
 
   function fetchTopCust(categoryId: string) {
     if (topCustData[categoryId] || topCustLoading.has(categoryId)) return;
-    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = SALES_PERIODS[salesPeriodIdx];
+    const p = SALES_PERIODS[salesPeriodIdx];
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = p;
     setTopCustLoading(prev => new Set(prev).add(categoryId));
-    authedFetch(`/api/erp/top-customers-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}&categoryId=${categoryId}`)
+    authedFetch(`/api/erp/top-customers-by-category?from=${dateFrom}&to=${dateTo}&prevFrom=${prevDateFrom}&prevTo=${prevDateTo}&categoryId=${categoryId}${lflQs(p)}`)
       .then(data => setTopCustData(prev => ({ ...prev, [categoryId]: Array.isArray(data) ? data : [] })))
       .catch(console.error)
       .finally(() => setTopCustLoading(prev => { const n = new Set(prev); n.delete(categoryId); return n; }));
@@ -470,14 +513,19 @@ useEffect(() => {
   const sp = SALES_PERIODS[salesPeriodIdx];
   // Headline totals: day-accurate από το RPC (ταυτίζονται πάντα με το dashboard),
   // fallback σε monthly όσο φορτώνει ή αν αποτύχει.
-  const currentTotal = dayTotals ? dayTotals.current : sumPeriod(sales, sp.from, sp.to);
-  const prevTotal = dayTotals ? dayTotals.prev : sumPeriod(sales, sp.prevFrom, sp.prevTo);
-  const currentQty = dayTotals ? dayTotals.currentQty : sumQtyPeriod(sales, sp.from, sp.to);
-  const prevQty = dayTotals ? dayTotals.prevQty : sumQtyPeriod(sales, sp.prevFrom, sp.prevTo);
+  // The monthly fallback has no item dimension, so with the filter on there is
+  // nothing to fall back to: show the loading state rather than unfiltered numbers.
+  const canFallBack = !excludeNewItems;
+  const currentTotal = dayTotals ? dayTotals.current : canFallBack ? sumPeriod(sales, sp.from, sp.to) : 0;
+  const prevTotal = dayTotals ? dayTotals.prev : canFallBack ? sumPeriod(sales, sp.prevFrom, sp.prevTo) : 0;
+  const currentQty = dayTotals ? dayTotals.currentQty : canFallBack ? sumQtyPeriod(sales, sp.from, sp.to) : 0;
+  const prevQty = dayTotals ? dayTotals.prevQty : canFallBack ? sumQtyPeriod(sales, sp.prevFrom, sp.prevTo) : 0;
   const growthPct = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : null;
   const isUp = growthPct !== null && growthPct >= 0;
   const diffAbs = currentTotal - prevTotal;
-  const totalsLoading = dayTotalsLoading && !dayTotals;
+  const totalsLoading = (dayTotalsLoading && !dayTotals) || (!canFallBack && !dayTotals);
+  const altGrowthPct = altDayTotals && altDayTotals.prev > 0
+    ? ((altDayTotals.current - altDayTotals.prev) / altDayTotals.prev) * 100 : null;
 
   const filteredDocs = docTypeFilter === 'all' ? documents : documents.filter(d => d.type === docTypeFilter);
   const visibleDocs = docsExpanded ? filteredDocs : filteredDocs.slice(0, 8);
@@ -1217,10 +1265,24 @@ const startEditVisitInCustomer = (v: any) => {
               <BarChart2 className="w-5 h-5 text-blue-600 shrink-0" />
               <h2 className="text-base font-semibold">Sales Analysis</h2>
               <span className="text-xs text-slate-400 whitespace-nowrap">{sp.label} vs {sp.prevLabel}</span>
+              {excludeNewItems && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-medium flex items-center gap-1">
+                  Χωρίς νέα είδη (από 1/1/{sp.prevDateFrom.slice(0, 4)})
+                  <button onClick={() => setExcludeNewItems(false)} className="ml-1 hover:text-amber-950" aria-label="Αφαίρεση φίλτρου νέων ειδών">×</button>
+                </span>
+              )}
             </div>
-            <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))} className="text-xs border border-slate-300 rounded-lg px-2 py-1 text-slate-600 focus:ring-2 focus:ring-indigo-500">
-              {SALES_PERIODS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
-            </select>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => setExcludeNewItems(v => !v)} aria-pressed={excludeNewItems}
+                title={`Βγάζει από ΚΑΙ τις δύο περιόδους τα είδη που ενεργοποιήθηκαν στο B2B από 1/1/${sp.prevDateFrom.slice(0, 4)}`}
+                className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${excludeNewItems ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-600 border-slate-300 hover:border-amber-400'}`}>
+                <span className={`inline-block w-2.5 h-2.5 rounded-sm border ${excludeNewItems ? 'bg-white border-white' : 'border-slate-400'}`} />
+                Χωρίς νέα είδη
+              </button>
+              <select value={salesPeriodIdx} onChange={e => setSalesPeriodIdx(Number(e.target.value))} className="text-xs border border-slate-300 rounded-lg px-2 py-1 text-slate-600 focus:ring-2 focus:ring-indigo-500">
+                {SALES_PERIODS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
+              </select>
+            </div>
           </div>
 
           {salesLoading ? <div className="text-sm text-slate-400">Φόρτωση...</div> : (
@@ -1244,6 +1306,19 @@ const startEditVisitInCustomer = (v: any) => {
                         <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-green-600' : 'text-red-500'}`}>
                           {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                           {isUp ? '+' : ''}{growthPct.toFixed(1)}% vs {sp.prevLabel}
+                        </div>
+                      )}
+                      {/* The other variant, so the effect of new items is visible
+                          without toggling. */}
+                      {altDayTotals && (
+                        <div className="mt-2 pt-2 border-t border-indigo-100 text-xs text-indigo-500">
+                          {excludeNewItems ? 'Με νέα είδη: ' : 'Χωρίς νέα είδη: '}
+                          <span className="font-semibold text-indigo-700">{fmtEur(altDayTotals.current)}</span>
+                          {altGrowthPct !== null && (
+                            <span className={`ml-1 font-semibold ${altGrowthPct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {altGrowthPct >= 0 ? '+' : ''}{altGrowthPct.toFixed(1)}%
+                            </span>
+                          )}
                         </div>
                       )}
                     </>
@@ -1281,9 +1356,12 @@ const startEditVisitInCustomer = (v: any) => {
 
               {salesExpanded && <>
                 {(() => {
-                  const months = sales.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
+                  // With the filter on, the rows come from the filtered endpoint
+                  // (empty until loaded) instead of the all-items summary.
+                  const monthlyRows: any[] = excludeNewItems ? (filteredMonthly ?? []) : sales;
+                  const months = monthlyRows.filter(s => s.month >= sp.from && s.month <= sp.to).sort((a, b) => a.month.localeCompare(b.month));
                   const prevMonthMap = new Map<string, number>();
-                  sales.filter(s => s.month >= sp.prevFrom && s.month <= sp.prevTo).forEach(s => prevMonthMap.set(s.month, s.netamnt));
+                  monthlyRows.filter(s => s.month >= sp.prevFrom && s.month <= sp.prevTo).forEach(s => prevMonthMap.set(s.month, s.netamnt));
                   function toPrevMonth(curMonth: string): string {
                     const [y, m] = curMonth.split('-').map(Number);
                     const [py] = sp.prevFrom.split('-').map(Number);
