@@ -67,6 +67,10 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const dragMarkerRef = useRef<any>(null);
   const preserveViewRef = useRef(false);
   const hasFitBoundsRef = useRef(false);
+  // Single-customer view: centre on the customer ONCE. The marker effect re-runs
+  // on every zoom (mapZoom is a dependency), and re-centring there snapped the
+  // map back to zoom 15 after each zoom in/out.
+  const singleCenteredRef = useRef<string | null>(null);
 
   const isPrivileged = FULL_ACCESS_ROLES.includes(currentUser.role);
   // Coordinate-cleanup account (Periklis Christou): no sales figures, tier-based
@@ -357,8 +361,9 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
         hasFitBoundsRef.current = true;
       }
       preserveViewRef.current = false;
-    } else if (bounds.length === 1) {
+    } else if (bounds.length === 1 && singleCustomer && singleCenteredRef.current !== singleCustomer.code) {
       map.setView(bounds[0], 15);
+      singleCenteredRef.current = singleCustomer.code;
     }
   }, [customers, search, coordFilter, colorMode, mapZoom, customerRevenue, categoryCustomers, isPrivileged, currentUser.salesman_code, singleCustomer, revenueLoading]);
 
