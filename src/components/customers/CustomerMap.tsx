@@ -48,7 +48,17 @@ type Props = {
   dateTo?: string;
 };
 
-const FULL_ACCESS_ROLES = ['admin', 'manager', 'exec'];
+const FULL_ACCESS_ROLES = ['admin', 'manager', 'exec', 'coords'];
+
+// Invoice-cadence tiers — same scale as Smart Planning (SuggestionsPanel).
+// Money-free: driven purely by how often a customer is invoiced.
+const TIER_LABELS: Record<number, { label: string; sub: string; color: string; bg: string }> = {
+  0: { label: 'Ανενεργός',     sub: '0 τιμολ.',  color: 'text-slate-400',  bg: 'bg-slate-700' },
+  1: { label: 'Σπάνιος',       sub: '<1/μήνα',   color: 'text-orange-300', bg: 'bg-orange-900/60' },
+  2: { label: 'Περιστασιακός', sub: '1-3/μήνα',  color: 'text-yellow-300', bg: 'bg-yellow-900/60' },
+  3: { label: 'Τακτικός',      sub: '4+/μήνα',   color: 'text-blue-300',   bg: 'bg-blue-900/60' },
+  4: { label: 'Εβδομαδιαίος',  sub: 'κάθε εβδ.', color: 'text-green-300',  bg: 'bg-green-900/60' },
+};
 
 export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCustomer, repList = [], dateFrom, dateTo }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -59,6 +69,9 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const hasFitBoundsRef = useRef(false);
 
   const isPrivileged = FULL_ACCESS_ROLES.includes(currentUser.role);
+  // Coordinate-cleanup account (Periklis Christou): no sales figures, tier-based
+  // prioritisation only. Lands straight on the "customers without coords" list.
+  const isCoords = currentUser.role === 'coords';
 
   const [customers, setCustomers] = useState<CustomerCoord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,7 +79,10 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
   const [filterRep, setFilterRep] = useState('');
   const [filterArea, setFilterArea] = useState('');
   const [filterCity, setFilterCity] = useState('');
-  const [coordFilter, setCoordFilter] = useState<'all' | 'no_coords' | 'unverified'>('all');
+  const [coordFilter, setCoordFilter] = useState<'all' | 'no_coords' | 'unverified'>(isCoords ? 'no_coords' : 'all');
+  // customer_code → invoice-cadence tier (0–4), for prioritising coord cleanup.
+  const [tierMap, setTierMap] = useState<Map<string, { tier: number; invoices6m: number }>>(new Map());
+  const [tierFilter, setTierFilter] = useState<Set<number>>(new Set());
   const [colorMode, setColorMode] = useState<'revenue' | 'accuracy'>('revenue');
   const [mapZoom, setMapZoom] = useState(6);
   const [areas, setAreas] = useState<string[]>([]);
@@ -145,8 +161,22 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
 
  const [revenueLoading, setRevenueLoading] = useState(!!dateFrom);
 
+  // Invoice-cadence tiers (money-free) for the coord-cleanup prioritisation list.
   useEffect(() => {
-    if (!dateFrom || !dateTo) return;
+    authedFetch('/api/coordinate-tiers')
+      .then(data => {
+        if (Array.isArray(data))
+          setTierMap(new Map(data.map((t: any) => [
+            String(t.customer_code),
+            { tier: t.tier ?? 0, invoices6m: t.invoices_6m ?? 0 },
+          ])));
+      })
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    // coords accounts must never hit the revenue endpoint (403 by design).
+    if (isCoords || !dateFrom || !dateTo) return;
     setRevenueLoading(true);
     authedFetch(`/api/erp/revenue-map?from=${dateFrom}&to=${dateTo}`)
       .then(data => {
@@ -639,7 +669,7 @@ useEffect(() => {
                 </button>
               </div>
             )}
-             {colorMode === 'revenue' ? (<>
+             {colorMode === 'revenue' && customerRevenue.size > 0 ? (<>
               <div className="text-slate-400 font-medium mb-1">Τζίρος περιόδου</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1E3A8A] inline-block" />Top 10%</div>
               <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#0284C7] inline-block" />75–90%</div>
@@ -758,25 +788,60 @@ useEffect(() => {
           </div>
         )}
 
-        {/* No-coords list (when toggle active) */}
-        {coordFilter === 'no_coords' && !popup && (
+        {/* No-coords list (when toggle active) — tier-prioritised */}
+        {coordFilter === 'no_coords' && !popup && (() => {
+          const noCoord = customers
+            .filter(c => !c.has_coords)
+            .map(c => ({ c, tier: tierMap.get(String(c.customer_code))?.tier ?? 0 }))
+            .filter(({ tier }) => tierFilter.size === 0 || tierFilter.has(tier))
+            .sort((a, b) => b.tier - a.tier); // highest cadence first
+          return (
           <div className="w-72 bg-slate-800 text-white flex flex-col shrink-0 border-l border-slate-700 overflow-y-auto">
             <div className="px-4 py-3 border-b border-slate-700 text-sm font-medium text-amber-400">
-              Χωρίς συντεταγμένες ({noCoordCount})
+              Χωρίς συντεταγμένες ({noCoord.length})
             </div>
-            {customers.filter(c => !c.has_coords).map(c => (
+            {/* Tier filter — prioritise the customers that order most often */}
+            <div className="flex flex-wrap gap-1 px-3 py-2 border-b border-slate-700/50">
+              {[4, 3, 2, 1, 0].map(t => {
+                const active = tierFilter.has(t);
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setTierFilter(prev => {
+                      const next = new Set(prev);
+                      next.has(t) ? next.delete(t) : next.add(t);
+                      return next;
+                    })}
+                    title={`${TIER_LABELS[t].label} (${TIER_LABELS[t].sub})`}
+                    className={`px-1.5 py-0.5 rounded text-xs font-medium border transition-colors ${
+                      active ? `${TIER_LABELS[t].bg} ${TIER_LABELS[t].color} border-transparent`
+                             : 'bg-transparent text-slate-400 border-slate-600 hover:border-slate-400'
+                    }`}
+                  >
+                    T{t}
+                  </button>
+                );
+              })}
+            </div>
+            {noCoord.map(({ c, tier }) => (
               <button
                 key={c.customer_code}
                 onClick={() => setPopup(c)}
                 className="flex flex-col items-start px-4 py-3 border-b border-slate-700/50 hover:bg-white/5 text-left"
               >
-                <span className="text-sm font-medium text-white truncate w-full">{c.customer_name}</span>
-                <span className="text-xs text-slate-400">{c.city} · {c.area}</span>
+                <div className="flex items-center gap-2 w-full">
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${TIER_LABELS[tier].bg} ${TIER_LABELS[tier].color}`}>
+                    T{tier}
+                  </span>
+                  <span className="text-sm font-medium text-white truncate">{c.customer_name}</span>
+                </div>
+                <span className="text-xs text-slate-400 mt-0.5">{c.city} · {c.area}</span>
                 <span className="text-xs text-slate-500 font-mono">{c.customer_code}</span>
               </button>
             ))}
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

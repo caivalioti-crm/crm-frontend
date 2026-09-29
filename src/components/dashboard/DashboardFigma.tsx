@@ -305,6 +305,18 @@ if ((currentUser.role as string) === 'claims_exec') {
   );
 }
 
+// coords (π.χ. Periklis Christou): ΜΟΝΟ ο χάρτης — καμία πρόσβαση σε τζίρο/πωλήσεις.
+// Χωρίς dateFrom/dateTo ώστε να μην ζητηθεί ποτέ το revenue endpoint.
+if ((currentUser.role as string) === 'coords') {
+  return (
+    <CustomerMap
+      currentUser={currentUser as any}
+      onClose={() => supabase.auth.signOut()}
+      repList={[]}
+    />
+  );
+}
+
   useEffect(() => {
   if (!['admin', 'manager', 'exec'].includes(currentUser.role)) return;
 const load = async () => {
