@@ -133,8 +133,19 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
     setLoading(true);
     try {
       if (singleCustomer) {
-        const data = await authedFetch(`/api/coordinates?customer_code=${singleCustomer.code}`);
-        setCustomers(Array.isArray(data) ? data : [data]);
+        // The customer plus everyone else the user can see, so the neighbours
+        // show around them in the usual coordinate colours. The customer is
+        // fetched on its own too: the full list is scoped to the user's book
+        // and may not contain it.
+        const [one, all] = await Promise.all([
+          authedFetch(`/api/coordinates?customer_code=${singleCustomer.code}`),
+          authedFetch('/api/coordinates').catch(() => []),
+        ]);
+        const own: CustomerCoord[] = (Array.isArray(one) ? one : [one]).filter(Boolean);
+        const ownCodes = new Set(own.map(c => String(c.customer_code)));
+        const others: CustomerCoord[] = (Array.isArray(all) ? all : [])
+          .filter((c: CustomerCoord) => !ownCodes.has(String(c.customer_code)));
+        setCustomers([...own, ...others]);
       } else {
         const params = new URLSearchParams();
         if (filterRep) params.set('salesman_code', filterRep);
@@ -347,7 +358,11 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
           weight: isTop10 ? 2.5 : 1.5,
         }).addTo(map);
         marker.bindTooltip(tooltip, { sticky: false });
-        marker.on('click', () => setPopup(c));
+        // In a customer's own map the neighbours are context only (name on
+        // hover), so a stray click cannot start editing someone else's coords.
+        if (!singleCustomer || String(c.customer_code) === String(singleCustomer.code)) {
+          marker.on('click', () => setPopup(c));
+        }
         markersRef.current.set(c.customer_code, marker);
         bounds.push([c.lat, c.lng]);
       });
@@ -361,9 +376,14 @@ export function CustomerMap({ currentUser, singleCustomer, onClose, onSelectCust
         hasFitBoundsRef.current = true;
       }
       preserveViewRef.current = false;
-    } else if (bounds.length === 1 && singleCustomer && singleCenteredRef.current !== singleCustomer.code) {
-      map.setView(bounds[0], 15);
-      singleCenteredRef.current = singleCustomer.code;
+    } else if (singleCustomer && singleCenteredRef.current !== singleCustomer.code) {
+      // The neighbours are on the map too now, so centre on the customer
+      // itself rather than on "the only point".
+      const own = customers.find(c => String(c.customer_code) === String(singleCustomer.code));
+      if (own?.lat && own?.lng) {
+        map.setView([own.lat, own.lng], 15);
+        singleCenteredRef.current = singleCustomer.code;
+      }
     }
   }, [customers, search, coordFilter, colorMode, mapZoom, customerRevenue, categoryCustomers, isPrivileged, currentUser.salesman_code, singleCustomer, revenueLoading]);
 
