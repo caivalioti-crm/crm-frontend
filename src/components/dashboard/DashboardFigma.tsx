@@ -295,27 +295,11 @@ export function DashboardFigma() {
 
   usePushNotifications(currentUser.id);
 
-// claims_exec βλέπει ΜΟΝΟ τα claims
-if ((currentUser.role as string) === 'claims_exec') {
-  return (
-    <ClaimsView
-      currentUser={currentUser as any}
-      onBack={null}
-    />
-  );
-}
-
-// coords (π.χ. Periklis Christou): ΜΟΝΟ ο χάρτης — καμία πρόσβαση σε τζίρο/πωλήσεις.
-// Χωρίς dateFrom/dateTo ώστε να μην ζητηθεί ποτέ το revenue endpoint.
-if ((currentUser.role as string) === 'coords') {
-  return (
-    <CustomerMap
-      currentUser={currentUser as any}
-      onClose={() => supabase.auth.signOut()}
-      repList={[]}
-    />
-  );
-}
+  // The role-specific screens (claims_exec, coords) are returned further down,
+  // AFTER every hook. Returning here, before the hooks below, crashed the page
+  // with React error #300: the role is unknown on the first render ('rep' while
+  // /api/me loads), so that render ran every hook and the next one, once the
+  // role arrived, ran fewer.
 
   useEffect(() => {
   if (!['admin', 'manager', 'exec'].includes(currentUser.role)) return;
@@ -479,8 +463,22 @@ useEffect(() => {
     return areaStats.filter(a => selectedAreas.includes(a.area));
   }, [areaStats, selectedAreas]);
 
-if (currentUser.role === 'claims_exec') {
+  // Role-specific screens. Must stay below every hook in this component.
+  // claims_exec βλέπει ΜΟΝΟ τα claims.
+  if (currentUser.role === 'claims_exec') {
     return <ClaimsView currentUser={currentUser} onBack={null} />;
+  }
+
+  // coords (π.χ. Periklis Christou): ΜΟΝΟ ο χάρτης — καμία πρόσβαση σε τζίρο/πωλήσεις.
+  // Χωρίς dateFrom/dateTo ώστε να μην ζητηθεί ποτέ το revenue endpoint.
+  if ((currentUser.role as string) === 'coords') {
+    return (
+      <CustomerMap
+        currentUser={currentUser as any}
+        onClose={() => supabase.auth.signOut()}
+        repList={[]}
+      />
+    );
   }
 
   return (
