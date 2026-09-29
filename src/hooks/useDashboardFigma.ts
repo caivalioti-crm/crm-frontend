@@ -253,7 +253,7 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
     setSalesLoading(true);
     try {
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
-const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=` : '';
+const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const modeParam = `&mode=${attributionMode}`;
       const [current, compare, areas] = await Promise.all([
         authedFetch(`/api/erp/sales?from=${period.from}&to=${period.to}${salesmanParam}${modeParam}`),
@@ -279,7 +279,7 @@ const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=` : '';
     setMonthlySalesLoading(true);
     try {
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
-      const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=` : '';
+      const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const modeParam = `&mode=${attributionMode}`;
       const [current, compare] = await Promise.all([
         authedFetch(`/api/erp/sales/monthly?from=${period.from}&to=${period.to}${salesmanParam}${modeParam}`),
@@ -411,7 +411,7 @@ if (effectiveSalesmanCode) params.set('salesmanCode', effectiveSalesmanCode);
     setCityLoading(true);
     try {
       const effectiveSalesmanCode = viewAsSalesmanCode ?? (repModeOverride ? currentUser.salesman_code : null);
-const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=` : '';
+const salesmanParam = effectiveSalesmanCode ? `&salesmanCode=${effectiveSalesmanCode}` : '';
       const modeParam = `&mode=${attributionMode}`;
       const data = await authedFetch(
         `/api/erp/sales/by-city?from=${selectedPeriod.from}&to=${selectedPeriod.to}&compareFrom=${selectedPeriod.compareFrom}&compareTo=${selectedPeriod.compareTo}&area=${encodeURIComponent(area)}${salesmanParam}${modeParam}`
