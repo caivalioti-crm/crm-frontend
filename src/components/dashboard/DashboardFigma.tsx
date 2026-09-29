@@ -262,7 +262,7 @@ export function DashboardFigma() {
   const [repList, setRepList] = useState<any[]>([]);
   const viewAsRep = repList.find(r => r.id === viewAsRepId) ?? null;
   const {
-    customers, customersTotal, totalRevenue, compareRevenue, revenueGrowth,
+    customers, customersTotal, totalRevenue, compareRevenue, revenueGrowth, comparisonPredatesTenure,
     customersWithSales, salesLoading, areaStats, cityStats, cityLoading,
     attributionMode, setAttributionMode,
     selectedGeoArea, drillDownToArea, backToAreas, selectedPeriod, setSelectedPeriod,
@@ -289,7 +289,7 @@ export function DashboardFigma() {
     taskFilter, setTaskFilter,
     commentFilter, setCommentFilter, 
 
-  } = useDashboardFigma(viewAsRep?.salesman_code ?? null);
+  } = useDashboardFigma(viewAsRep?.salesman_code ?? null, (viewAsRep as any)?.tenure_from ?? null);
 
   usePushNotifications(currentUser.id);
 
@@ -914,6 +914,11 @@ if (currentUser.role === 'claims_exec') {
                           {revenueGrowth >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                           {revenueGrowth >= 0 ? '+' : ''}{revenueGrowth.toFixed(1)}%
                           <span className="text-slate-400 font-normal text-xs ml-1">{selectedPeriod.compareLabel}</span>
+                        </div>
+                      )}
+                      {comparisonPredatesTenure && (
+                        <div className="text-xs text-amber-600 mt-1">
+                          Χωρίς ποσοστό — ο κωδικός πωλητή δεν υπήρχε στη συγκριτική περίοδο
                         </div>
                       )}
                       {compareRevenue > 0 && <div className="text-xs text-slate-400 mt-0.5">vs €{compareRevenue.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}

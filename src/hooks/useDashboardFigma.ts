@@ -15,6 +15,7 @@ type SalesRep = {
   name: string;
   role: 'rep' | 'manager' | 'admin' | 'exec' | 'claims_exec';
   salesman_code: string | null;
+  tenure_from?: string | null;
 };
 
 export type Period = {
@@ -108,7 +109,7 @@ async function authedFetch(url: string) {
   return res.json();
 }
 
-export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
+export function useDashboardFigma(viewAsSalesmanCode?: string | null, viewAsTenureFrom?: string | null) {
   /* ===================== SAVED FILTERS (session restore) ===================== */
   const savedFilters = useMemo(() => {
     try { return JSON.parse(sessionStorage.getItem('dashboardFilters') ?? '{}'); }
@@ -213,7 +214,7 @@ export function useDashboardFigma(viewAsSalesmanCode?: string | null) {
 
   useEffect(() => {
     authedFetch('/api/me')
-      .then(profile => setCurrentUser({ id: profile.id, name: profile.full_name, role: profile.role, salesman_code: profile.salesman_code }))
+      .then(profile => setCurrentUser({ id: profile.id, name: profile.full_name, role: profile.role, salesman_code: profile.salesman_code, tenure_from: profile.tenure_from ?? null }))
       .catch(console.error);
   }, []);
 
@@ -628,7 +629,26 @@ const scopedCustomers = useMemo(() => {
   /* ===================== KPIs ===================== */
   const totalRevenue   = useMemo(() => geoFilteredSales.reduce((sum, s) => sum + s.netAmount, 0), [geoFilteredSales]);
   const compareRevenue = useMemo(() => geoFilteredCompareSales.reduce((sum, s) => sum + s.netAmount, 0), [geoFilteredCompareSales]);
-  const revenueGrowth  = useMemo(() => compareRevenue === 0 ? null : ((totalRevenue - compareRevenue) / compareRevenue) * 100, [totalRevenue, compareRevenue]);
+  // A Softone code can be younger than the comparison period. Code 1849 only
+  // exists from 2026-01-29, so "my sales" for 2026 has nothing real to compare
+  // against in 2025 - whatever comes back for that window is either zero or, as
+  // here, EUR 9,703 of branch-document estimates, which renders as +3,800%.
+  // Suppress the percentage rather than print a number that means nothing.
+  // 'book' mode is unaffected: it counts what this rep's current customers
+  // bought in 2025 whoever sold to them, which is a real comparison.
+  const activeTenureFrom = viewAsSalesmanCode
+    ? (viewAsTenureFrom ?? null)
+    : (currentUser.salesman_code ? (currentUser.tenure_from ?? null) : null);
+
+  const comparisonPredatesTenure =
+    attributionMode === 'sales' && !!activeTenureFrom && selectedPeriod.compareTo < activeTenureFrom;
+
+  const revenueGrowth  = useMemo(
+    () => (compareRevenue === 0 || comparisonPredatesTenure)
+      ? null
+      : ((totalRevenue - compareRevenue) / compareRevenue) * 100,
+    [totalRevenue, compareRevenue, comparisonPredatesTenure]
+  );
   const customersWithSales = useMemo(() => new Set(geoFilteredSales.map(s => s.customerCode)).size, [geoFilteredSales]);
   const customersWithSalesSet = useMemo(() => new Set(geoFilteredSales.map(s => String(s.customerCode))), [geoFilteredSales]);
 
@@ -706,7 +726,7 @@ const areaStats = useMemo(() => {
     allCustomers: customers,
     displayedCustomers,
     customersTotal: scopedCustomers.length,
-    totalRevenue, compareRevenue, revenueGrowth, customersWithSales,
+    totalRevenue, compareRevenue, revenueGrowth, customersWithSales, comparisonPredatesTenure,
     salesLoading, areaStats, cityStats, cityLoading,
     attributionMode, setAttributionMode,
     selectedGeoArea, drillDownToArea, backToAreas,
