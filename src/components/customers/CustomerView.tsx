@@ -1276,8 +1276,10 @@ const startEditVisitInCustomer = (v: any) => {
 
         {/* SALES ANALYSIS */}
         <section id="section-sales" className="bg-white rounded-xl shadow p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 flex-wrap">
+          {/* Wraps on phones: the new-item buttons plus the period select are
+              wider than a phone screen and, unwrapped, pushed the whole page sideways. */}
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <BarChart2 className="w-5 h-5 text-blue-600 shrink-0" />
               <h2 className="text-base font-semibold">Sales Analysis</h2>
               <span className="text-xs text-slate-400 whitespace-nowrap">{sp.label} vs {sp.prevLabel}</span>
@@ -1288,7 +1290,7 @@ const startEditVisitInCustomer = (v: any) => {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-wrap">
               {/* Mutually exclusive: picking one replaces the other, clicking the active one turns it off. */}
               {(['current', 'both'] as const).map(mode => {
                 const on = newItemsMode === mode;
